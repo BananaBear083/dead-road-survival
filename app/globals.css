@@ -1,0 +1,517 @@
+@import "tailwindcss";
+
+:root {
+  --ink: #0b0f0d;
+  --paper: #e9e5d8;
+  --signal: #f1c643;
+  --blood: #c83439;
+  --muted: #9ea69a;
+}
+
+* { box-sizing: border-box; }
+
+html, body { margin: 0; min-height: 100%; background: var(--ink); color: var(--paper); }
+
+/* 页面级永不滚动：所有界面（菜单/商店/装备/战斗/结算）几何恒定，滚动条不出现 → 舞台宽度稳定 */
+body { font-family: Arial, "Microsoft YaHei", sans-serif; overflow: hidden; }
+
+button, a { font: inherit; }
+
+button { -webkit-tap-highlight-color: transparent; }
+
+.game-shell {
+  min-height: 100vh;
+  min-height: 100dvh;
+  height: 100vh;
+  height: 100dvh;
+  position: relative;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  background:
+    radial-gradient(circle at 85% 12%, rgba(103, 123, 79, .22), transparent 28%),
+    linear-gradient(130deg, #131a16, #090c0a 55%, #151512);
+  overflow: hidden;
+}
+
+.noise {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  opacity: .23;
+  z-index: 10;
+  background-image:
+    repeating-linear-gradient(19deg, transparent 0 3px, rgba(255,255,255,.025) 4px 5px),
+    repeating-linear-gradient(109deg, transparent 0 7px, rgba(0,0,0,.08) 8px 9px);
+  mix-blend-mode: soft-light;
+}
+
+.masthead {
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 clamp(20px, 4vw, 72px);
+  border-bottom: 1px solid rgba(233, 229, 216, .16);
+  position: relative;
+  z-index: 2;
+}
+
+.brand { color: var(--paper); text-decoration: none; display: flex; align-items: center; gap: 13px; font-size: 18px; font-weight: 1000; letter-spacing: .12em; }
+.brand-mark { display: grid; place-items: center; width: 37px; height: 37px; background: var(--signal); color: var(--ink); font-size: 13px; letter-spacing: -.06em; clip-path: polygon(0 12%, 88% 0, 100% 88%, 13% 100%); }
+.edition { color: #879087; font-size: 11px; font-weight: 800; letter-spacing: .2em; text-transform: uppercase; }
+.masthead-side { display: flex; align-items: center; gap: 16px; }
+.mute-toggle { display: grid; place-items: center; width: 37px; height: 37px; padding: 0; background: #1d241f; border: 1px solid #465047; border-bottom-width: 3px; border-radius: 4px; cursor: pointer; font-size: 16px; line-height: 1; transition: border-color .15s ease, transform .1s ease; }
+.mute-toggle:hover { border-color: var(--signal); }
+.mute-toggle:active { transform: translateY(1px); border-bottom-width: 1px; }
+.mute-toggle[aria-pressed="true"] { border-color: var(--blood); background: #241d1d; }
+.volume-control { display: flex; align-items: center; gap: 9px; height: 37px; padding: 0 11px; background: #1d241f; border: 1px solid #465047; border-bottom-width: 3px; border-radius: 4px; cursor: pointer; }
+.volume-control input[type="range"] { -webkit-appearance: none; appearance: none; width: 104px; height: 26px; margin: 0; background: transparent; cursor: pointer; touch-action: pan-x; }
+.volume-control input[type="range"]::-webkit-slider-runnable-track { height: 6px; background: linear-gradient(90deg, var(--signal) var(--fill, 85%), #39403a var(--fill, 85%)); border-radius: 3px; }
+.volume-control input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; margin-top: -6px; background: var(--signal); border: 2px solid #0b0f0d; border-radius: 50%; }
+.volume-control input[type="range"]::-moz-range-track { height: 6px; background: #39403a; border-radius: 3px; }
+.volume-control input[type="range"]::-moz-range-progress { height: 6px; background: var(--signal); border-radius: 3px; }
+.volume-control input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; background: var(--signal); border: 2px solid #0b0f0d; border-radius: 50%; }
+.volume-control b { min-width: 26px; color: var(--signal); font-size: 10px; font-weight: 900; text-align: right; }
+@media (max-width: 580px) {
+  .volume-control { padding: 0 8px; gap: 6px; }
+  .volume-control input[type="range"] { width: 66px; }
+  .volume-control b { display: none; }
+}
+
+.game-stage {
+  /* 舞台填满页头/底栏之间的全部区域（任意屏幕比例）；画布位图由 JS 跟随舞台实际宽高比
+     （动态世界宽度：高恒 720、宽 = 720 × 比例）→ 任何视口满屏无黑边、无拉伸；
+     min-width/height: 0 使 grid 轨道不被画布固有尺寸撑开（杜绝页面垂直滚动） */
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+  background: #202721;
+  border: 1px solid rgba(238, 230, 208, .24);
+}
+
+.game-stage::before { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; box-shadow: inset 0 0 100px rgba(0,0,0,.38); }
+/* 画布绝对定位脱离文档流：不向 grid 轨道贡献 min-content（否则 720px 位图高度撑破 100vh 产生页面滚动条） */
+.game-stage > canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; outline: none; cursor: crosshair; }
+
+.overlay-panel { position: absolute; inset: 0; z-index: 2; }
+
+.menu-panel {
+  padding: clamp(42px, 6vw, 95px) clamp(35px, 7vw, 112px);
+  overflow-y: auto;
+  background:
+    linear-gradient(90deg, rgba(10, 14, 11, .98) 0%, rgba(10, 14, 11, .91) 48%, rgba(10, 14, 11, .25) 78%, transparent),
+    repeating-linear-gradient(115deg, transparent 0 38px, rgba(241,198,67,.03) 39px 40px);
+}
+
+.menu-panel::after {
+  content: "";
+  position: absolute;
+  right: 7%; bottom: 5%;
+  width: 31%; height: 76%;
+  background:
+    radial-gradient(circle at 49% 18%, #829265 0 6%, transparent 6.5%),
+    linear-gradient(67deg, transparent 0 42%, #252e27 42.5% 57%, transparent 57.5%),
+    linear-gradient(110deg, transparent 0 42%, #151b17 42.5% 54%, transparent 54.5%);
+  opacity: .74;
+  filter: drop-shadow(28px 15px 0 rgba(0,0,0,.42));
+  clip-path: polygon(41% 0, 59% 1%, 66% 25%, 83% 53%, 69% 61%, 74% 100%, 22% 100%, 32% 57%, 16% 49%, 33% 25%);
+}
+
+.eyebrow { margin: 0 0 15px; color: var(--signal); font-size: clamp(10px, 1.1vw, 14px); font-weight: 900; letter-spacing: .2em; text-transform: uppercase; }
+.menu-panel h1, .gameover-panel h2 { margin: 0; max-width: 760px; font-size: clamp(50px, 7.2vw, 108px); line-height: .89; letter-spacing: -.075em; font-weight: 1000; transform: skewY(-1deg); text-shadow: 4px 4px 0 rgba(0,0,0,.4); }
+.menu-panel h1 em, .gameover-panel h2 em { color: var(--blood); font-style: normal; }
+.menu-copy { max-width: 620px; margin: clamp(23px, 3vw, 42px) 0 28px; color: #b5b9b1; font-size: clamp(13px, 1.35vw, 18px); line-height: 1.75; }
+.menu-actions { display: flex; align-items: stretch; gap: 14px; position: relative; z-index: 3; }
+
+.primary-button {
+  border: 0;
+  min-width: 245px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 28px;
+  padding: 18px 20px 18px 27px;
+  background: var(--signal);
+  color: #11150f;
+  font-size: 17px;
+  font-weight: 1000;
+  letter-spacing: .1em;
+  cursor: pointer;
+  box-shadow: 6px 6px 0 #6c5a22;
+  transition: transform .16s, box-shadow .16s, background .16s;
+}
+.primary-button:hover { background: #ffdb61; transform: translate(-2px, -2px); box-shadow: 9px 9px 0 #6c5a22; }
+.primary-button:active { transform: translate(4px, 4px); box-shadow: 2px 2px 0 #6c5a22; }
+.primary-button b { font-size: 27px; line-height: 1; }
+.primary-button.compact { min-width: 260px; padding-block: 14px; }
+.range-button { min-width: 245px; display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto auto; align-content: center; column-gap: 18px; padding: 12px 18px 12px 22px; color: var(--paper); text-align: left; background: #17241e; border: 2px solid #6a8d77; box-shadow: 6px 6px 0 #24362d; cursor: pointer; transition: transform .16s, background .16s, box-shadow .16s; }
+.range-button:hover { background: #21372c; transform: translate(-2px, -2px); box-shadow: 9px 9px 0 #24362d; }
+.range-button > span { font-size: 16px; font-weight: 1000; letter-spacing: .09em; }
+.range-button > small { grid-column: 1; margin-top: 3px; color: #93b09f; font-size: 9px; font-weight: 900; }
+.range-button > b { grid-column: 2; grid-row: 1 / 3; align-self: center; color: var(--signal); font-size: 29px; }
+
+/* 关卡模式入口：与 range-button 同构的菜单按钮，暗金色调区分于靶场的墨绿 */
+.level-button { min-width: 245px; display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto auto; align-content: center; column-gap: 18px; padding: 12px 18px 12px 22px; color: var(--paper); text-align: left; background: #241d17; border: 2px solid #a08444; box-shadow: 6px 6px 0 #36301f; cursor: pointer; transition: transform .16s, background .16s, box-shadow .16s; }
+.level-button:hover { background: #332a1d; transform: translate(-2px, -2px); box-shadow: 9px 9px 0 #36301f; }
+.level-button > span { font-size: 16px; font-weight: 1000; letter-spacing: .09em; }
+.level-button > small { grid-column: 1; margin-top: 3px; color: #b0a08a; font-size: 9px; font-weight: 900; }
+.level-button > b { grid-column: 2; grid-row: 1 / 3; align-self: center; color: var(--signal); font-size: 29px; }
+
+/* 关卡模式占位页：居中面板 + 占位关卡卡列表（预留关卡选择结构，卡片禁用态） */
+.levels-panel { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; overflow-y: auto; padding: 24px; background: rgba(7, 10, 8, .86); backdrop-filter: blur(2px); }
+.levels-panel h2 { margin: 0; font-size: clamp(38px, 5.4vw, 72px); line-height: .95; letter-spacing: -.05em; font-weight: 1000; }
+.levels-copy { max-width: 560px; margin: 0; color: #b5b9b1; font-size: clamp(12px, 1.3vw, 16px); line-height: 1.75; }
+.levels-list { display: grid; gap: 8px; width: min(560px, 100%); margin-top: 6px; }
+.level-card { display: flex; align-items: center; gap: 14px; padding: 10px 14px; text-align: left; background: #141a16; border: 1px solid #354038; opacity: .72; }
+.level-order { flex: 0 0 auto; color: var(--signal); font-family: monospace; font-size: 20px; font-weight: 1000; }
+.level-card-info { flex: 1 1 auto; min-width: 0; }
+.level-card-info strong { display: block; color: var(--paper); font-size: 14px; letter-spacing: .06em; }
+.level-card-info small { display: block; margin-top: 2px; color: #8f978d; font-size: 11px; line-height: 1.5; }
+.level-badge { flex: 0 0 auto; padding: 3px 10px; color: #10130f; background: var(--signal); font-size: 10px; font-weight: 1000; font-style: normal; letter-spacing: .12em; transform: skewX(-7deg); }
+/* 已开放关卡卡：可点击、提亮、hover 上浮 */
+.level-card-playable { opacity: 1; border-color: var(--signal); cursor: pointer; font: inherit; color: inherit; transition: transform .14s ease, background .14s ease, box-shadow .14s ease; }
+.level-card-playable:hover { transform: translateY(-3px); background: #202820; box-shadow: 0 8px 22px rgba(0, 0, 0, .45); }
+.level-badge-go { background: #72ef9a; }
+/* 关卡通关结算面板（复用 pause-panel 布局风格） */
+.levelcomplete-panel { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; background: rgba(7, 10, 8, .86); backdrop-filter: blur(2px); }
+.levelcomplete-panel h2 { margin: 0; font-size: clamp(38px, 5.4vw, 72px); line-height: .95; letter-spacing: -.05em; font-weight: 1000; }
+.levelcomplete-panel h2 em { color: var(--signal); font-style: normal; }
+
+.record-card { min-width: 145px; display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto 1fr; column-gap: 5px; padding: 11px 18px; border: 1px solid rgba(233,229,216,.25); background: rgba(15,19,16,.78); }
+.record-card span { grid-column: 1 / 3; color: #8f978d; font-size: 10px; font-weight: 900; letter-spacing: .16em; }
+.record-card strong { font-size: 35px; line-height: 1; align-self: end; }
+.record-card small { color: var(--signal); font-weight: 900; align-self: end; }
+.danger-tape { position: absolute; z-index: 3; left: 0; bottom: 0; right: 0; height: 35px; display: flex; align-items: center; justify-content: space-around; background: repeating-linear-gradient(135deg, #d0a82f 0 18px, #151713 18px 36px); color: #10130f; overflow: hidden; }
+.danger-tape span { background: var(--signal); padding: 4px 17px; font-size: 10px; font-weight: 1000; letter-spacing: .14em; transform: skewX(-7deg); }
+
+.shop-panel { padding: clamp(18px, 2.7vw, 40px); background: rgba(8, 12, 9, .97); display: flex; flex-direction: column; }
+.shop-heading { display: flex; flex: 0 0 auto; align-items: end; justify-content: space-between; border-bottom: 1px solid #465045; padding-bottom: 13px; }
+.shop-heading h2 { margin: 0; font-size: clamp(30px, 3.8vw, 52px); line-height: 1; letter-spacing: -.05em; }
+.wallet { text-align: right; }
+.wallet span { display: block; color: #879087; font-size: 10px; letter-spacing: .15em; }
+.wallet strong { color: var(--signal); font-size: 28px; }
+.loadout-readout { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; padding-top: 10px; color: #778078; font-size: 9px; font-weight: 900; letter-spacing: .06em; }
+.loadout-readout span { padding: 6px 9px; border: 1px solid #343d36; background: #121713; }
+.loadout-readout b { color: var(--paper); margin-left: 5px; }
+.loadout-readout em { margin-left: auto; color: var(--signal); font-style: normal; }
+.shop-tabs { display: flex; flex: 0 0 auto; flex-wrap: wrap; gap: 7px; margin-top: 9px; border-bottom: 1px solid #3d473f; }
+.shop-tabs button { padding: 8px 14px 9px; color: #929a91; background: #111612; border: 1px solid #323a34; border-bottom: 0; font-size: 11px; font-weight: 900; cursor: pointer; }
+.shop-tabs button:hover, .shop-tabs button.active { color: #15190f; background: var(--signal); border-color: var(--signal); }
+.shop-tabs b { margin-left: 5px; font-family: monospace; font-size: 9px; }
+.shop-content { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; }
+.shop-section-label { display: flex; align-items: baseline; gap: 12px; margin-top: 10px; color: #818a80; font-size: 9px; letter-spacing: .08em; }
+.shop-section-label b { color: var(--paper); font-size: 13px; }
+.shop-section-label.weapon-label { margin-top: 8px; }
+.armor-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-top: 6px; flex: 0 0 auto; }
+.armor-grid-full { grid-template-columns: repeat(3, minmax(0, 1fr)); align-content: start; gap: 12px; padding: 5px 5px 12px 0; overflow-y: auto; min-height: 0; }
+.armor-grid-full .armor-card { min-height: 142px; padding: 15px; grid-template-columns: 55px minmax(0,1fr); }
+.armor-grid-full .armor-figure { transform: scale(1.22); transform-origin: top left; }
+.armor-card { position: relative; min-height: 105px; display: grid; grid-template-columns: 43px minmax(0,1fr); gap: 8px; padding: 9px; color: var(--paper); text-align: left; background: #141a16; border: 1px solid #354038; cursor: pointer; }
+.armor-card:hover:not(:disabled), .armor-card.selected { border-color: var(--signal); background: #202820; }
+.armor-card:disabled { opacity: .43; cursor: not-allowed; }
+.armor-card > div:nth-child(2) strong { display: block; font-size: 12px; }
+.armor-card > div:nth-child(2) span { display: block; margin-top: 2px; color: #d5dfd5; font-size: 9px; font-weight: 900; }
+.armor-card small { display: block; margin-top: 3px; color: #818a80; font-size: 8px; line-height: 1.2; }
+.armor-card em { position: absolute; left: 9px; bottom: 6px; color: #8f998e; font-size: 8px; font-style: normal; font-weight: 900; }
+.armor-cost { position: absolute; right: 8px; bottom: 6px; color: var(--signal); font-size: 10px; }
+.armor-figure { position: relative; width: 40px; height: 68px; }
+.armor-figure i { position: absolute; display: block; }
+.armor-head { left: 13px; top: 1px; width: 15px; height: 15px; border-radius: 50% 50% 35% 35%; }
+.armor-head.hardhat { width: 21px; left: 10px; height: 11px; border-radius: 9px 9px 2px 2px; }
+.armor-head.riot, .armor-head.combat, .armor-head.tactical { width: 19px; left: 11px; height: 17px; border-radius: 9px 9px 3px 3px; box-shadow: inset 0 -5px rgba(60,91,100,.65); }
+.armor-body { left: 8px; top: 18px; width: 24px; height: 28px; border: 2px solid; clip-path: polygon(10% 0,90% 0,100% 100%,0 100%); }
+.armor-legs { left: 10px; top: 45px; width: 20px; height: 22px; clip-path: polygon(0 0,45% 0,43% 100%,18% 100%,16% 25%,0 100%,0 0,100% 0,100% 100%,82% 100%,57% 25%,57% 100%,55% 0); }
+.shop-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin: 5px 0 10px; padding: 3px 5px 10px 0; overflow-y: auto; min-height: 0; scrollbar-color: var(--signal) #151a17; }
+.weapon-card { position: relative; min-height: 216px; text-align: left; padding: 13px; color: var(--paper); background: #161c18; border: 1px solid #3b443c; cursor: pointer; transition: transform .16s, border-color .16s, background .16s; overflow: hidden; }
+.weapon-card:hover:not(:disabled), .weapon-card.selected { transform: translateY(-5px); border-color: var(--signal); background: #202820; }
+.weapon-card.carried { box-shadow: inset 0 -3px 0 #617c66; }
+.weapon-card:disabled { opacity: .43; cursor: not-allowed; }
+.weapon-card.selected::after { content: "已装备"; position: absolute; top: 0; right: 0; padding: 6px 9px; background: var(--signal); color: #10130f; font-size: 9px; font-weight: 1000; }
+.weapon-index { display: block; color: #626b62; font-size: 11px; font-weight: 900; }
+.weapon-preview { display: block; width: 100%; height: auto; aspect-ratio: 220 / 92; margin: 3px 0 4px; filter: drop-shadow(5px 6px 0 #080a08); }
+.weapon-price-badge { position: absolute; right: 9px; top: 42px; z-index: 2; padding: 5px 7px; color: #15190f; background: var(--signal); border: 1px solid #fff1a4; font-size: 11px; font-weight: 1000; box-shadow: 3px 3px 0 #66551d; }
+.weapon-card strong { display: block; font-size: 17px; }
+.weapon-caliber { display: block; color: var(--signal); margin-top: 4px; font-family: monospace; font-size: 10px; font-weight: 900; letter-spacing: .04em; }
+.weapon-cost { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; padding: 5px 7px; color: #b9c0b6; background: #0e120f; border: 1px solid #353d36; font-size: 10px; font-weight: 800; }
+.weapon-cost b { color: #f1c643; font-size: 12px; white-space: nowrap; }
+.weapon-card small { display: block; color: #8f978d; line-height: 1.35; min-height: 30px; margin-top: 4px; font-size: 10px; }
+.weapon-price { color: var(--signal); font-weight: 1000; font-size: 14px; }
+.supply-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-content: start; gap: 13px; padding-top: 10px; overflow-y: auto; min-height: 0; }
+.supply-card { position: relative; min-height: 180px; display: grid; grid-template-columns: 76px minmax(0,1fr); gap: 15px; padding: 20px; color: var(--paper); text-align: left; background: #151b17; border: 1px solid #3e4a40; cursor: pointer; }
+.supply-card:hover:not(:disabled) { border-color: #d94a43; background: #202820; transform: translateY(-3px); }
+.supply-card:disabled { opacity: .48; cursor: not-allowed; }
+.medkit-icon { position: relative; width: 72px; height: 58px; margin-top: 7px; background: #c8c9bc; border: 5px solid #555d55; border-radius: 8px; box-shadow: 5px 6px 0 #080a08; }
+.medkit-icon::before { content: ""; position: absolute; left: 20px; top: -17px; width: 23px; height: 12px; border: 5px solid #555d55; border-bottom: 0; border-radius: 6px 6px 0 0; }
+.medkit-icon i, .medkit-icon b { position: absolute; display: block; left: 26px; top: 10px; width: 13px; height: 30px; background: #b82429; }
+.medkit-icon b { left: 18px; top: 18px; width: 30px; height: 13px; }
+.supply-copy strong { display: block; font-size: 19px; }
+.supply-copy em { display: block; margin-top: 7px; color: #e36e64; font-size: 13px; font-style: normal; font-weight: 1000; }
+.supply-copy small { display: block; margin-top: 8px; color: #8f988e; }
+.supply-price { position: absolute; right: 16px; bottom: 15px; color: var(--signal); font-size: 14px; font-weight: 1000; }
+.supply-action { position: absolute; left: 20px; bottom: 15px; color: #b9c1b7; font-size: 10px; font-weight: 900; }
+.item-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 11px; padding: 8px 5px 12px 0; overflow-y: auto; min-height: 0; }
+.item-card { position: relative; min-height: 164px; display: grid; grid-template-columns: 76px minmax(0,1fr); grid-template-rows: auto auto 1fr auto; column-gap: 13px; padding: 15px; color: var(--paper); text-align: left; background: #151b17; border: 1px solid #3d473f; cursor: pointer; }
+.item-card:hover:not(:disabled) { border-color: var(--signal); background: #202820; transform: translateY(-3px); }
+.item-card:disabled { opacity: .43; cursor: not-allowed; }
+.item-card > strong { grid-column: 2; display: block; margin-top: 3px; font-size: 18px; }
+.item-card > small { grid-column: 2; color: #8e978d; line-height: 1.35; font-size: 10px; }
+.item-card > em { position: absolute; left: 15px; bottom: 12px; color: #aab2a8; font-size: 9px; font-style: normal; font-weight: 900; }
+.item-hotkey { grid-column: 2; color: var(--signal); font-family: monospace; font-size: 10px; font-weight: 900; }
+.item-stock { grid-column: 2; align-self: end; color: #aeb6ac; font-size: 10px; font-weight: 900; }
+.item-stock b { color: #fff1a4; font-size: 14px; }
+.item-price { position: absolute; right: 13px; bottom: 11px; color: var(--signal); font-size: 13px; font-weight: 1000; }
+.item-icon { --item-color: #d1b04a; position: relative; grid-row: 1 / 5; display: block; width: 66px; height: 78px; margin-top: 5px; filter: drop-shadow(5px 6px 0 #080a08); }
+.item-icon::before, .item-icon::after, .item-icon i, .item-icon b { content: ""; position: absolute; display: block; background: var(--item-color); }
+.item-icon-molotov::before { left: 22px; top: 15px; width: 25px; height: 52px; border: 4px solid #3d2718; border-radius: 7px 7px 12px 12px; box-sizing: border-box; }
+.item-icon-molotov::after { left: 28px; top: 5px; width: 13px; height: 15px; background: #d9c59a; border-radius: 3px; }
+.item-icon-molotov i { left: 37px; top: 0; width: 25px; height: 6px; background: #c84a2f; transform: rotate(-25deg); }
+.item-icon-barricade::before, .item-icon-barricade::after { left: 4px; top: 23px; width: 60px; height: 14px; border: 3px solid #5f4326; transform: rotate(12deg); box-sizing: border-box; }
+.item-icon-barricade::after { top: 47px; transform: rotate(-12deg); }
+.item-icon-barricade i, .item-icon-barricade b { left: 13px; top: 18px; width: 6px; height: 56px; background: #555d56; transform: rotate(8deg); }
+.item-icon-barricade b { left: 49px; transform: rotate(-8deg); }
+.item-icon-frag::before { left: 14px; top: 21px; width: 42px; height: 46px; border: 4px solid #30382f; border-radius: 48% 48% 42% 42%; box-sizing: border-box; background: repeating-linear-gradient(0deg, var(--item-color) 0 8px, #56654f 8px 10px); }
+.item-icon-frag::after { left: 27px; top: 9px; width: 18px; height: 15px; background: #363d36; border-radius: 3px; }
+.item-icon-claymore::before { left: 7px; top: 24px; width: 55px; height: 35px; border: 4px solid #30372f; clip-path: polygon(8% 0,92% 0,100% 100%,0 100%); }
+.item-icon-claymore::after { left: 16px; top: 36px; width: 37px; height: 5px; background: #d6c74d; }
+.item-icon-claymore i, .item-icon-claymore b { left: 17px; top: 55px; width: 4px; height: 22px; background: #555e55; transform: rotate(15deg); }
+.item-icon-claymore b { left: 49px; transform: rotate(-15deg); }
+.item-icon-flashbang::before { left: 19px; top: 18px; width: 34px; height: 50px; border: 4px solid #555b54; border-radius: 5px 5px 12px 12px; box-sizing: border-box; background: repeating-linear-gradient(0deg, #d9d7c6 0 9px, #a8a99f 9px 11px); }
+.item-icon-flashbang::after { left: 27px; top: 7px; width: 18px; height: 14px; background: #4c524c; }
+.item-icon-airstrike::before { left: 26px; top: 8px; width: 18px; height: 58px; border: 4px solid #343b38; border-radius: 50% 50% 35% 35%; box-sizing: border-box; }
+.item-icon-airstrike::after { left: 10px; top: 16px; width: 50px; height: 16px; clip-path: polygon(0 80%,42% 20%,48% 0,52% 0,58% 20%,100% 80%,100% 100%,0 100%); }
+.item-icon-airstrike i { left: 13px; top: 48px; width: 44px; height: 14px; clip-path: polygon(0 100%,35% 15%,65% 15%,100% 100%,70% 72%,30% 72%); }
+.item-icon-impact::before { left: 14px; top: 21px; width: 42px; height: 46px; border: 4px solid #3a2413; border-radius: 48% 48% 42% 42%; box-sizing: border-box; background: repeating-linear-gradient(0deg, var(--item-color) 0 8px, #8a5426 8px 10px); }
+.item-icon-impact::after { left: 27px; top: 9px; width: 18px; height: 15px; background: #2b2f2b; border-radius: 3px; }
+.item-icon-impact i { left: 15px; top: 39px; width: 40px; height: 9px; background: #8c2f24; }
+.item-icon-impact b { left: 32px; top: 3px; width: 7px; height: 7px; background: #c9cdd2; border-radius: 1px; }
+.shop-footer { display: flex; flex: 0 0 auto; justify-content: space-between; align-items: center; gap: 25px; color: #858d83; font-size: 12px; }
+
+.gameover-panel { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; overflow-y: auto; background: radial-gradient(circle, rgba(104,21,24,.32), rgba(7,10,8,.97) 65%); }
+.gameover-panel h2 { font-size: clamp(56px, 8vw, 110px); }
+.end-stats { display: flex; gap: 28px; margin: 35px 0; color: #8f978d; }
+.end-stats b { color: var(--paper); }
+.settlement-board { display: flex; flex-direction: column; gap: 7px; min-width: 340px; margin: 26px 0 30px; padding: 16px 20px; background: rgba(10, 14, 11, .72); border: 1px solid #354038; text-align: left; }
+.settlement-row { display: flex; align-items: baseline; gap: 12px; color: #8f978d; font-size: 12px; font-weight: 800; letter-spacing: .05em; }
+.settlement-row > span { min-width: 68px; color: #77806f; font-size: 10px; }
+.settlement-row > b { color: var(--paper); font-size: 19px; }
+.settlement-row > small { margin-left: auto; color: #6d766b; font-size: 10px; }
+.settlement-coin-lines { display: flex; flex-direction: column; gap: 3px; margin-left: auto; }
+.settlement-coin-lines em { display: flex; justify-content: space-between; gap: 18px; color: #8f978d; font-size: 11px; font-style: normal; }
+.settlement-coin-lines b { color: #f1c643; }
+.end-actions { display: flex; gap: 17px; }
+.ghost-button { border: 1px solid #5a635a; color: var(--paper); background: transparent; padding: 15px 26px; font-weight: 900; cursor: pointer; }
+.ghost-button:hover { border-color: var(--paper); }
+
+.pause-panel { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; overflow-y: auto; background: rgba(7, 10, 8, .82); backdrop-filter: blur(2px); }
+.pause-panel h2 { font-size: clamp(38px, 5.4vw, 72px); }
+.pause-panel h2 em { color: var(--signal); font-style: normal; }
+.pause-hint { margin-top: 14px; color: #77806f; font-size: 10px; letter-spacing: .06em; }
+
+.loadout-panel { gap: 10px; }
+.loadout-columns { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; overflow-y: auto; }
+.loadout-column { display: flex; flex-direction: column; min-height: 0; }
+/* 各栏顶端对齐：卡片紧跟标签下方（标签两行节奏统一），各栏卡片顶部位于同一水平线 */
+.loadout-column .shop-section-label { flex-direction: column; align-items: flex-start; gap: 3px; }
+.loadout-list { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; padding-right: 4px; overflow-y: auto; min-height: 0; scrollbar-color: var(--signal) #151a17; }
+.loadout-list .weapon-card { min-height: 0; padding: 10px; }
+.loadout-list .weapon-card strong { font-size: 13px; margin-top: 2px; }
+.loadout-list .weapon-card .weapon-price { display: block; margin-top: 4px; font-size: 11px; }
+.loadout-list .armor-card { min-height: 86px; grid-template-columns: 34px minmax(0, 1fr); }
+.loadout-list .armor-card em { position: static; display: block; margin-top: 3px; }
+.loadout-actions { display: flex; align-items: center; gap: 12px; }
+.continue-button { background: #8fd49a; }
+
+/* 搭档卡片与汉字图标 */
+.partner-card.selected { border-color: var(--signal); background: #202820; }
+.partner-icon { grid-row: 1 / 5; display: flex; align-items: center; justify-content: center; width: 66px; height: 78px; margin-top: 5px; color: #10130f; background: var(--signal); border: 3px solid #10130f; box-shadow: 5px 6px 0 #080a08; font-size: 34px; font-weight: 1000; font-style: normal; }
+.partner-icon.large { width: 84px; height: 84px; margin-top: 0; font-size: 42px; flex: 0 0 auto; }
+
+/* 商店详情面板（覆盖在商店面板内，点击背板关闭） */
+.shop-detail-backdrop { position: absolute; inset: 0; z-index: 6; display: flex; align-items: center; justify-content: center; background: rgba(4, 7, 5, .72); }
+.shop-detail { width: min(520px, 92%); max-height: 92%; overflow-y: auto; padding: 22px; color: var(--paper); background: #111712; border: 1px solid var(--signal); box-shadow: 0 18px 60px rgba(0, 0, 0, .6); scrollbar-color: var(--signal) #151a17; }
+.shop-detail-head { display: flex; align-items: center; gap: 16px; }
+.shop-detail-head > div strong { display: block; font-size: 22px; }
+.shop-detail-head > div span { display: block; margin-top: 3px; color: #d5dfd5; font-size: 11px; font-weight: 900; }
+.shop-detail-head > div small { display: block; margin-top: 6px; color: #8e978d; font-size: 11px; line-height: 1.45; }
+.shop-detail-head .weapon-preview { flex: 0 0 auto; margin-block: 0; }
+.shop-detail-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin-top: 16px; }
+.shop-detail-stats span { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 8px 10px; background: #182019; border: 1px solid #314034; color: #93a093; font-size: 11px; font-weight: 900; }
+.shop-detail-stats b { color: var(--paper); font-size: 12px; }
+.shop-detail-actions { display: flex; gap: 10px; margin-top: 18px; }
+.shop-detail-actions .ghost-button { padding: 12px 18px; }
+
+/* 装备整备：当前装备大卡 + 展开列表 */
+.loadout-current { margin-top: 6px; }
+.loadout-collapse { margin-top: 2px; padding: 9px 12px; font-size: 11px; }
+.loadout-empty { margin: 8px 0; color: #8e978d; font-size: 11px; line-height: 1.5; }
+.loadout-column.open .shop-section-label b { color: var(--signal); }
+
+/* 战斗服 + 搭档同栏上下堆叠：两组均顶端对齐、标签样式与"标签→卡片"间距和其它栏完全一致
+   （标签同样保留两行提示、卡片 margin-top 6px）；内容超出时栏区内部滚动，不遮挡出发按钮 */
+.loadout-column-stack { display: flex; flex-direction: column; gap: 8px; min-height: 0; justify-content: flex-start; }
+.loadout-stack-group { display: flex; flex: 0 0 auto; flex-direction: column; }
+.loadout-stack-group .shop-section-label { flex-direction: column; align-items: flex-start; gap: 3px; }
+.loadout-stack-group .loadout-current { flex: 0 0 auto; }
+.loadout-columns .loadout-column-stack .armor-card.loadout-current { min-height: 96px; }
+.loadout-columns .loadout-column-stack .partner-card.loadout-current { min-height: 106px; grid-template-columns: 64px minmax(0, 1fr); }
+.loadout-columns .loadout-column-stack .partner-card .partner-preview { width: 58px; }
+
+
+/* 搭档建模预览：与武器预览同一呈现思路——CSS 盒子宽高比恒等于画布位图（150×200 竖幅，契合人像/无人机/猎犬体型），
+   各容器只调宽度，高度由 aspect-ratio 推出，全程等比不压扁、不裁切 */
+.partner-preview { display: block; width: 76px; height: auto; aspect-ratio: 150 / 200; filter: drop-shadow(5px 6px 0 #080a08); }
+.partner-card .partner-preview { grid-row: 1 / 5; margin-top: 5px; }
+.shop-detail-head .partner-preview { width: 118px; flex: 0 0 auto; }
+.loadout-columns .partner-card .partner-preview { width: 88px; }
+.select-grid .partner-card .partner-preview { width: 76px; }
+
+/* 装备整备二级选择界面 */
+.select-panel { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
+.select-title { margin-top: 4px; margin-bottom: 4px; }
+.select-title b { font-size: 17px; }
+.select-title span { color: var(--signal); font-weight: 900; }
+.select-grid { flex: 1 1 auto; min-height: 0; }
+.select-grid .weapon-card { min-height: 196px; }
+.loadout-panel .shop-content { overflow-y: auto; min-height: 0; scrollbar-color: var(--signal) #151a17; }
+
+.loadout-list .item-card { min-height: 96px; grid-template-columns: 56px minmax(0, 1fr); grid-template-rows: auto auto 1fr; padding: 10px; }
+.loadout-list .item-card .partner-icon { width: 48px; height: 56px; font-size: 24px; }
+.loadout-list .item-card > strong { font-size: 14px; }
+.loadout-list .item-card > em { position: static; display: block; margin-top: 4px; }
+.loadout-list .partner-card.loadout-current { min-height: 130px; }
+
+
+.controls-bar { min-height: 60px; display: flex; align-items: center; gap: clamp(10px, 1.5vw, 24px); padding: 8px clamp(16px, 3vw, 56px); color: #8e968c; position: relative; z-index: 2; overflow-x: auto; }
+.controls-bar div { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+.controls-bar kbd { min-width: 28px; padding: 4px 7px; color: var(--paper); background: #1d241f; border: 1px solid #465047; border-bottom-width: 2px; border-radius: 4px; text-align: center; font-size: 9px; font-weight: 900; }
+.controls-bar span { font-size: 9px; font-weight: 800; letter-spacing: .05em; }
+.controls-bar p { margin-left: auto; color: var(--signal); font-size: 9px; letter-spacing: .08em; }
+
+/* 非战斗界面（菜单/商店/装备/结算）：紧凑页头 + 隐藏底栏按键条，舞台面板向下扩展约 110px；
+   战斗/暂停保持完整底栏，舞台几何不变 */
+.panel-mode .masthead { height: 52px; }
+.panel-mode .controls-bar { display: none; }
+
+/* 防重叠：窄空间下页脚/汇总/操作组允许换行；菜单装饰剪影永不拦截点击 */
+.shop-footer { flex-wrap: wrap; row-gap: 10px; }
+.loadout-actions { flex-wrap: wrap; }
+.spawn-summary { flex-wrap: wrap; }
+.menu-actions { flex-wrap: wrap; }
+.end-actions { flex-wrap: wrap; justify-content: center; }
+.menu-panel::after { pointer-events: none; }
+
+@media (max-width: 900px) {
+  .edition, .controls-bar p { display: none; }
+  .menu-panel::after { opacity: .3; right: -8%; }
+  .shop-panel { overflow: hidden; }
+  .shop-grid { grid-template-columns: repeat(3, 1fr); }
+  .armor-grid { grid-template-columns: repeat(3, 1fr); overflow-y: auto; }
+  .supply-grid { grid-template-columns: repeat(2, 1fr); }
+  .item-grid { grid-template-columns: repeat(2, 1fr); }
+  .weapon-card { min-height: 204px; }
+  .weapon-preview { margin-block: 3px; }
+  .shop-footer { align-items: stretch; }
+  .loadout-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); overflow-y: auto; }
+  .select-grid { grid-template-columns: repeat(2, 1fr); }
+  .controls-bar { overflow-x: auto; }
+}
+
+@media (max-width: 580px) {
+  .masthead { height: 58px; }
+  .game-shell { display: flex; flex-direction: column; justify-content: center; }
+  /* flex 布局下舞台改为弹性填充页头/底栏之间区域（height:100% 会压出底栏） */
+  .game-stage { height: auto; flex: 1 1 auto; min-height: 0; }
+  .menu-panel { padding: 30px 25px 55px; }
+  .menu-panel h1 { font-size: 43px; }
+  .menu-copy { line-height: 1.45; margin: 15px 0; }
+  .menu-actions { gap: 8px; }
+  .primary-button, .range-button, .level-button { min-width: 0; flex: 1; padding: 13px 14px; font-size: 13px; }
+  .range-button > small, .level-button > small { display: none; }
+  .record-card { min-width: 105px; }
+  .shop-heading { align-items: center; }
+  .shop-tabs button { flex: 1; padding-inline: 6px; }
+  .shop-grid { grid-template-columns: repeat(2, 1fr); gap: 7px; margin: 12px 0; }
+  .armor-grid { grid-template-columns: repeat(2, 1fr); }
+  .supply-grid { grid-template-columns: 1fr; }
+  .item-grid { grid-template-columns: 1fr; }
+  .weapon-card { min-height: 174px; padding: 11px; }
+  .weapon-card small { display: none; }
+  .shop-footer span { display: none; }
+  .controls-bar { min-height: 54px; padding: 8px 13px; }
+  .controls-bar div { flex-direction: column; gap: 2px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
+}
+
+/* 靶场"僵尸生成"页签：行式列表（预览 + 信息 + 步进器），底部合计与模式操作 */
+.spawn-list { display: flex; flex: 1 1 auto; flex-direction: column; gap: 6px; min-height: 0; margin-top: 8px; padding-right: 4px; overflow-y: auto; scrollbar-color: var(--signal) #151a17; }
+.spawn-row { display: flex; align-items: center; gap: 12px; padding: 7px 10px; background: #141a16; border: 1px solid #354038; }
+.spawn-row:hover { border-color: #46594a; }
+.spawn-preview { display: block; width: 46px; height: auto; aspect-ratio: 150 / 200; flex: 0 0 auto; filter: drop-shadow(3px 4px 0 #080a08); }
+.spawn-info { flex: 1 1 auto; min-width: 0; }
+.spawn-info strong { display: block; color: var(--paper); font-size: 13px; }
+.spawn-info small { display: block; margin-top: 2px; color: #9aa89a; font-size: 10px; font-weight: 700; }
+.spawn-trait { display: block; margin-top: 2px; color: #7d877c; font-size: 10px; }
+.spawn-stepper { display: flex; align-items: center; gap: 7px; flex: 0 0 auto; }
+.spawn-stepper button { width: 32px; height: 32px; color: var(--paper); background: #1d241f; border: 1px solid #465047; font-size: 16px; font-weight: 900; cursor: pointer; }
+.spawn-stepper button:hover:not(:disabled) { border-color: var(--signal); color: var(--signal); }
+.spawn-stepper button:disabled { opacity: .35; cursor: not-allowed; }
+.spawn-stepper b { min-width: 30px; color: var(--signal); font-family: monospace; font-size: 15px; text-align: center; }
+.spawn-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; padding: 10px 12px; background: #111612; border: 1px solid #323a34; }
+.spawn-summary > span { color: #9aa89a; font-size: 11px; font-weight: 700; }
+.spawn-summary > span b { color: var(--signal); font-family: monospace; font-size: 14px; }
+.spawn-actions { display: flex; gap: 8px; }
+
+@media (max-width: 580px) {
+  .spawn-row { gap: 8px; padding: 6px 8px; }
+  .spawn-trait { display: none; }
+  .spawn-summary { flex-direction: column; align-items: stretch; }
+}
+
+/* 僵尸图鉴：主菜单书本造型入口（黄色书脊 + 深色封面 + 右侧书页边），贴合黑黄末日 UI */
+.codex-book-button { display: flex; align-items: stretch; min-width: 168px; padding: 0; color: var(--paper); text-align: left; background: linear-gradient(135deg, #232b25, #161c18); border: 2px solid #5a6350; border-left: 0; box-shadow: 6px 6px 0 #20261f; cursor: pointer; transition: transform .16s, background .16s, box-shadow .16s, border-color .16s; }
+.codex-book-button:hover { background: #2a352d; transform: translate(-2px, -2px); box-shadow: 9px 9px 0 #20261f; border-color: var(--signal); }
+.codex-book-button:active { transform: translate(3px, 3px); box-shadow: 2px 2px 0 #20261f; }
+.codex-book-spine { width: 14px; flex: 0 0 auto; background: repeating-linear-gradient(180deg, var(--signal) 0 10px, #c9a22f 10px 14px); border-right: 2px solid rgba(0,0,0,.45); }
+.codex-book-cover { display: flex; flex: 1 1 auto; flex-direction: column; justify-content: center; gap: 5px; padding: 12px 16px 12px 13px; background: linear-gradient(90deg, transparent 0 90%, rgba(233,229,216,.13) 90% 94%, transparent 94% 97%, rgba(233,229,216,.13) 97%); }
+.codex-book-cover b { font-size: 16px; font-weight: 1000; letter-spacing: .14em; }
+.codex-book-cover small { color: var(--signal); font-size: 10px; font-weight: 900; letter-spacing: .12em; }
+
+/* 图鉴面板：摊开的书本（中书脊压痕），一页一种；面板居中适配舞台、自身不溢出滚动 */
+.codex-panel { display: flex; align-items: center; justify-content: center; padding: clamp(12px, 3vh, 30px) clamp(14px, 4vw, 56px); overflow: hidden; background: rgba(7, 10, 8, .86); backdrop-filter: blur(2px); }
+.codex-book { width: min(880px, 100%); max-height: 100%; overflow: hidden; padding: clamp(16px, 2.8vh, 30px) clamp(16px, 3.2vw, 42px); background: linear-gradient(90deg, #161c18 0, #1b221c 47.5%, #10140f 50%, #1b221c 52.5%, #161c18 100%); border: 2px solid #4a5244; box-shadow: 0 0 0 6px rgba(10,13,10,.6), 14px 16px 0 rgba(0,0,0,.45); }
+.codex-title { margin: 0 0 10px; font-size: clamp(28px, 3.4vw, 44px); line-height: 1; letter-spacing: -.03em; font-weight: 1000; }
+.codex-spread { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: clamp(8px, 1.8vw, 20px); }
+.codex-page { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: clamp(12px, 2.8vw, 32px); min-height: 300px; padding: clamp(8px, 1.8vh, 18px) clamp(4px, 1.2vw, 16px); border-top: 1px solid rgba(233,229,216,.14); border-bottom: 1px solid rgba(233,229,216,.14); }
+.codex-figure { display: grid; place-items: center; padding: 8px 4px; background: radial-gradient(circle at 50% 76%, rgba(241,198,67,.1), transparent 62%); }
+.codex-preview { display: block; filter: drop-shadow(4px 5px 0 #080a08); }
+.codex-info strong { display: block; font-size: clamp(20px, 2.3vw, 29px); letter-spacing: .05em; }
+.codex-info p { margin: 8px 0 12px; color: #b5b9b1; font-size: clamp(12px, 1.15vw, 15px); line-height: 1.7; }
+.codex-info dl { margin: 0; display: grid; gap: 7px; }
+.codex-info dl > div { display: grid; grid-template-columns: 84px 1fr; gap: 10px; align-items: baseline; }
+.codex-info dt { color: #8f978d; font-size: 11px; font-weight: 900; letter-spacing: .14em; }
+.codex-info dd { margin: 0; font-size: clamp(12px, 1.2vw, 15px); font-weight: 800; }
+.codex-info dd small { margin-left: 6px; color: var(--muted); font-size: 10px; font-weight: 600; }
+.codex-flip { width: 46px; height: 64px; padding: 0; color: var(--signal); background: #1d241f; border: 1px solid #465047; border-bottom-width: 3px; font-size: 30px; font-weight: 1000; line-height: 1; cursor: pointer; }
+.codex-flip:hover:not(:disabled) { border-color: var(--signal); background: #24302a; }
+.codex-flip:disabled { opacity: .3; cursor: not-allowed; }
+.codex-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; }
+.codex-pageno { color: var(--signal); font-family: monospace; font-size: 15px; font-weight: 1000; letter-spacing: .18em; }
+.codex-footer small { color: #8f978d; font-size: 11px; font-weight: 700; }
+.codex-empty { display: grid; place-items: center; gap: 8px; min-height: 260px; color: #b5b9b1; text-align: center; }
+.codex-empty b { color: var(--paper); font-size: 24px; letter-spacing: .12em; }
+
+@media (max-height: 640px) {
+  .codex-page { min-height: 216px; }
+  .codex-preview { width: 158px; height: 216px; }
+}
+@media (max-width: 640px) {
+  .codex-page { grid-template-columns: 1fr; min-height: 0; }
+  .codex-figure { padding: 0; }
+  .codex-preview { width: 132px; height: 180px; }
+}
