@@ -175,6 +175,13 @@ button { -webkit-tap-highlight-color: transparent; }
 .level-card-playable { opacity: 1; border-color: var(--signal); cursor: pointer; font: inherit; color: inherit; transition: transform .14s ease, background .14s ease, box-shadow .14s ease; }
 .level-card-playable:hover { transform: translateY(-3px); background: #202820; box-shadow: 0 8px 22px rgba(0, 0, 0, .45); }
 .level-badge-go { background: #72ef9a; }
+/* 锁定态关卡卡：灰化 + 🔒 徽章，不可点击 */
+.level-card-locked { opacity: .5; border-style: dashed; filter: grayscale(.55); }
+.level-card-locked .level-order { color: #5d675e; }
+.level-card-locked .level-card-info strong { color: #8f978d; }
+.level-badge-lock { background: #454e47; color: #c8cdc6; }
+/* 已通关标记：标题旁 ✓ 徽章 */
+.level-cleared-mark { display: inline-block; margin-left: 8px; padding: 0 6px; font-style: normal; font-weight: 1000; color: #10130f; background: #72ef9a; border-radius: 999px; font-size: 11px; vertical-align: 1px; }
 /* 关卡通关结算面板（复用 pause-panel 布局风格） */
 .levelcomplete-panel { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; background: rgba(7, 10, 8, .86); backdrop-filter: blur(2px); }
 .levelcomplete-panel h2 { margin: 0; font-size: clamp(38px, 5.4vw, 72px); line-height: .95; letter-spacing: -.05em; font-weight: 1000; }

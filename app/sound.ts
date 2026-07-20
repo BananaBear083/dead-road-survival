@@ -891,6 +891,48 @@ export const soundManager = {
     tone({ type: "sine", from: 990, to: 990, duration: 0.22, volume: 0.3 * v, delay: 0.12 });
   },
 
+  /** 军用卡车驶近：低沉柴油引擎轰鸣渐强后减速（救援事件开场）。 */
+  truckEngine(options: PlayOptions = {}) {
+    const v = options.volume ?? 1;
+    tone({ type: "sawtooth", from: 48, to: 88, duration: 1.6, volume: 0.32 * v, filter: { type: "lowpass", frequency: 240 } });
+    tone({ type: "sawtooth", from: 88, to: 56, duration: 1.2, volume: 0.3 * v, delay: 1.6, filter: { type: "lowpass", frequency: 210 } });
+    noise({ duration: 2.6, volume: 0.16 * v, filter: { type: "lowpass", from: 140 }, playbackRate: 0.6 });
+    tone({ type: "square", from: 120, to: 150, duration: 1.4, volume: 0.06 * v, delay: 0.2, filter: { type: "lowpass", frequency: 300 } });
+  },
+
+  /** 卡车刹车停稳：气压泄压嘶声 + 制动尖鸣。 */
+  truckBrake(options: PlayOptions = {}) {
+    const v = options.volume ?? 1;
+    noise({ duration: 0.5, volume: 0.22 * v, filter: { type: "bandpass", from: 3200, q: 1.1 }, playbackRate: 1.1 });
+    tone({ type: "square", from: 1500, to: 950, duration: 0.22, volume: 0.1 * v, filter: { type: "bandpass", frequency: 1800, q: 3 } });
+    noise({ duration: 0.7, volume: 0.14 * v, delay: 0.22, filter: { type: "highpass", from: 2400 }, playbackRate: 0.9 });
+  },
+
+  /** 基地警报渐强：真实空袭/基地警报的缓慢起伏 wail——主音锯齿波 400↔690 慢速扫频，
+      叠加 +1% 失谐层（电机拍频颤抖）与低八度三角波厚度层，低通滤波给出空间距离感；
+      每个 wail 周期音量递增，实现由小渐大的开场。 */
+  alarmCrescendo(durationSec = 6, options: PlayOptions = {}) {
+    const v = options.volume ?? 1;
+    const wailSec = 3.2;
+    const cycles = Math.max(1, Math.round(durationSec / wailSec));
+    for (let i = 0; i < cycles; i++) {
+      const t = cycles === 1 ? 1 : i / (cycles - 1);
+      const vol = (0.05 + 0.3 * t) * v;
+      const delay = i * wailSec;
+      const up = wailSec * 0.46;
+      const down = wailSec * 0.54;
+      // 主音层：缓慢升起 → 落下的长音 wail（包络拖尾与下半周期交叠，保持连续）
+      tone({ type: "sawtooth", from: 400, to: 690, duration: up * 1.6, volume: vol, delay, attack: up * 0.55, filter: { type: "lowpass", frequency: 1400 } });
+      tone({ type: "sawtooth", from: 690, to: 400, duration: down * 1.6, volume: vol, delay: delay + up, attack: down * 0.25, filter: { type: "lowpass", frequency: 1400 } });
+      // 失谐层：+1% 频率差产生缓慢拍频（警报电机的颤抖感）
+      tone({ type: "sawtooth", from: 404, to: 697, duration: up * 1.6, volume: vol * 0.65, delay, attack: up * 0.55, filter: { type: "lowpass", frequency: 1150 } });
+      tone({ type: "sawtooth", from: 697, to: 404, duration: down * 1.6, volume: vol * 0.65, delay: delay + up, attack: down * 0.25, filter: { type: "lowpass", frequency: 1150 } });
+      // 低八度厚度层：填补空间感与体量感
+      tone({ type: "triangle", from: 200, to: 345, duration: up * 1.6, volume: vol * 0.5, delay, attack: up * 0.55, filter: { type: "lowpass", frequency: 850 } });
+      tone({ type: "triangle", from: 345, to: 200, duration: down * 1.6, volume: vol * 0.5, delay: delay + up, attack: down * 0.25, filter: { type: "lowpass", frequency: 850 } });
+    }
+  },
+
   /** 盾牌 HP 归零被击碎：低频冲击 + 多声部失谐金属崩响 + 碎块散落的高频飞溅噪声。 */
   shieldShatter(options: PlayOptions = {}) {
     const v = options.volume ?? 1;

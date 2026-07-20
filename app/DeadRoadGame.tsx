@@ -556,8 +556,22 @@ const ZOMBIE_KIND_SPECS: Record<Exclude<ZombieKind, "normal" | "brute">, {
   army: { unlockDay: 9, weight: 12, hp: 350, damageReduction: .5 },
   armyRunner: { unlockDay: 11, weight: 10, hp: 350, damageReduction: .5, speedFactor: 3 },
   shield: { unlockDay: 15, weight: 9, hp: 350, damageReduction: .5 },
-  juggernaut: { unlockDay: 20, weight: 7, hp: 400, radius: 35, attack: 16, damageReduction: .5 },
+  juggernaut: { unlockDay: 20, weight: 7, hp: 500, radius: 35, attack: 16, damageReduction: .7 },
 };
+// 重甲弱点严格限制在上胸的受损装甲板；腹部与其余部位仍由完整重甲覆盖。
+const JUGGERNAUT_CHEST_WEAK_HALF_WIDTH = 15;
+const JUGGERNAUT_CHEST_WEAK_TOP_Y = -100;
+const JUGGERNAUT_CHEST_WEAK_BOTTOM_Y = -76;
+const JUGGERNAUT_BODY_HIT_RADIUS = 25;
+
+function isJuggernautChestWeakHit(region: HitRegion, localX: number, localY: number): boolean {
+  if (region !== "body") return false;
+  const centerY = (JUGGERNAUT_CHEST_WEAK_TOP_Y + JUGGERNAUT_CHEST_WEAK_BOTTOM_Y) / 2;
+  const halfHeight = (JUGGERNAUT_CHEST_WEAK_BOTTOM_Y - JUGGERNAUT_CHEST_WEAK_TOP_Y) / 2;
+  const weakX = localX / JUGGERNAUT_CHEST_WEAK_HALF_WIDTH;
+  const weakY = (localY - centerY) / halfHeight;
+  return weakX * weakX + weakY * weakY <= 1;
+}
 /** 盾兵僵尸金属盾的独立 HP：子弹/爆炸震伤盾牌，归零后碎裂（永久消失，此后按无盾处理） */
 const SHIELD_HP = 500;
 // 靶场"僵尸生成"页签的信息表：展示名 / 生存模式解锁天数 / 第 1 天基数 HP / 速度档位 / 关键特性
@@ -572,7 +586,7 @@ const ZOMBIE_KIND_INFO: Record<ZombieKind, { name: string; unlockDay: number; hp
   army: { name: "军队僵尸", unlockDay: 9, hp: 350, speed: "中速", trait: "防弹衣头盔，伤害减免 50%" },
   armyRunner: { name: "军队奔跑僵尸", unlockDay: 11, hp: 350, speed: "3× 疾速", trait: "3 倍奔跑 + 减免 50%" },
   shield: { name: "盾兵僵尸", unlockDay: 15, hp: 350, speed: "中速", trait: "全身金属盾 500 HP，击碎后失效；仅眼平观察窗可命中，踹可落盾，减免 50%" },
-  juggernaut: { name: "重甲僵尸", unlockDay: 20, hp: 400, speed: "中速", trait: "仅胸口可伤、免疫打腿倒地，减免 50%" },
+  juggernaut: { name: "重甲僵尸", unlockDay: 20, hp: 500, speed: "中速", trait: "仅胸口可伤、免疫打腿倒地，减免 70%；高穿透武器可削弱减伤" },
 };
 const ZOMBIE_CONFIG_KINDS = Object.keys(ZOMBIE_KIND_INFO) as ZombieKind[];
 
@@ -588,7 +602,7 @@ const CODEX_DESCRIPTIONS: Record<ZombieKind, string> = {
   army: "生前是封锁区驻军，防弹衣与头盔仍在发挥作用，受到的所有伤害减半；高穿透武器可部分无视其防护。",
   armyRunner: "军队感染者的快速变体：3 倍速度外加伤害减半，是尸潮里最该优先处理的目标。",
   shield: "举着全身防暴盾的特警感染者，盾牌拥有独立 500 HP，击碎后失效；眼平观察窗是唯一命中通道，踹击可以把整面盾踹飞。",
-  juggernaut: "全身重甲的行走堡垒，只有胸口能造成有效伤害，且免疫打腿倒地。把最贵的那把枪留给它。",
+  juggernaut: "全身重甲的行走堡垒，拥有 500 HP，只有胸口能造成有效伤害，且基础减伤 70%、免疫打腿倒地；武器穿透力越强，受到减伤的影响越小。",
 };
 
 /** 图鉴"见过"记录：生存模式生成上场即登记，localStorage 持久化（独立于进度存档，死亡/重开不清除）；靶场生成不计入 */
@@ -630,16 +644,65 @@ type LevelDef = {
   playable?: boolean;
 };
 
-/** 关卡列表：01「逃出小区」已开放；其余为制作中占位（禁用态，不可进入） */
-const LEVEL_DEFS: LevelDef[] = [
-  { id: "level-escape-home", order: 1, title: "逃出小区", briefing: "僵尸爆发，所在小区已经沦陷——从家中出发，穿过走廊与街道，抵达保安亭。", unlockedByDay: 1, playable: true },
-  { id: "level-join-army", order: 2, title: "加入军队", briefing: "逃出小区后在公路上遭遇尸群，被军队救下并邀请加入——抵达军事基地。", unlockedByDay: 1, playable: true },
-  { id: "level-03", order: 3, title: "天亮之前", briefing: "最后一座撤离点在城市的另一端，穿过沦陷区才能抵达。", unlockedByDay: 20 },
-];
-
-/** 关卡地面武器拾取物：掉落/摆放的武器，关卡结束前不清除（无生存模式地面道具的 10 秒计时） */
 const LEVEL1_ID = "level-escape-home";
 const LEVEL1_TITLE = "逃出小区";
+const LEVEL2_ID = "level-join-army";
+const LEVEL2_TITLE = "加入军队";
+const LEVEL3_ID = "level-defend-base";
+const LEVEL3_TITLE = "防守基地";
+const LEVEL4_ID = "level-capture-radio";
+const LEVEL4_TITLE = "占领电台";
+const LEVEL5_ID = "level-rescue-operation";
+const LEVEL5_TITLE = "解救行动";
+const LEVEL6_ID = "level-occupy-building";
+const LEVEL6_TITLE = "攻占大楼";
+const LEVEL7_ID = "level-seize-warehouse";
+const LEVEL7_TITLE = "夺取仓库";
+const LEVEL8_ID = "level-clear-highway";
+const LEVEL8_TITLE = "清理高速";
+
+/** 关卡列表：01—08 均为可玩的连续战役，按上一关通关记录逐关解锁。 */
+const LEVEL_DEFS: LevelDef[] = [
+  { id: LEVEL1_ID, order: 1, title: LEVEL1_TITLE, briefing: "僵尸爆发，所在小区已经沦陷——从家中出发，穿过走廊与街道，抵达保安亭。", unlockedByDay: 1, playable: true },
+  { id: LEVEL2_ID, order: 2, title: LEVEL2_TITLE, briefing: "逃出小区后在公路上遭遇尸群，被军队救下并邀请加入——抵达军事基地。", unlockedByDay: 1, playable: true },
+  { id: LEVEL3_ID, order: 3, title: LEVEL3_TITLE, briefing: "驻守军事基地的深夜，尸群撞上外墙——与队友守住围墙，再独自走进黑暗，查清墙外的东西。", unlockedByDay: 1, playable: true },
+  { id: LEVEL4_ID, order: 4, title: LEVEL4_TITLE, briefing: "被僵尸占领的电台价值极为重要——小队乘车出发，突破门口、逐层清剿，把人类的信号重新接回来。", unlockedByDay: 1, playable: true },
+  { id: LEVEL5_ID, order: 5, title: LEVEL5_TITLE, briefing: "队友在通讯基地发现了隧道里的求救信号——乘直升机赶往入口，恢复电力，找到幸存者并开通撤离道路。", unlockedByDay: 1, playable: true },
+  { id: LEVEL6_ID, order: 6, title: LEVEL6_TITLE, briefing: "小队将对被感染者占领的市政大楼发起进攻——恢复楼内供电，逐层夺回档案室与中央大厅。", unlockedByDay: 1, playable: true },
+  { id: LEVEL7_ID, order: 7, title: LEVEL7_TITLE, briefing: "基地物资正在告急——与小队夺取城外仓库，清除重甲感染者并掩护物资装车。", unlockedByDay: 1, playable: true },
+  { id: LEVEL8_ID, order: 8, title: LEVEL8_TITLE, briefing: "高速公路仍被尸群封锁——驾驶装甲车清理沿线感染者，夺回前方收费站。", unlockedByDay: 1, playable: true },
+];
+
+/** 已通关关卡记录：独立 localStorage 键，与进度存档/图鉴记录互不影响（容错读取） */
+const LEVELS_CLEARED_KEY = "dead-road-levels-cleared";
+
+function readClearedLevels(): string[] {
+  try {
+    if (typeof window === "undefined") return [];
+    const raw = window.localStorage.getItem(LEVELS_CLEARED_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((id): id is string => typeof id === "string" && LEVEL_DEFS.some((def) => def.id === id));
+  } catch {
+    return [];
+  }
+}
+
+/** 登记已通关关卡；返回最新记录（重复通关不重复写入） */
+function markLevelCleared(levelId: string): string[] {
+  const cleared = readClearedLevels();
+  if (!cleared.includes(levelId)) cleared.push(levelId);
+  try { window.localStorage.setItem(LEVELS_CLEARED_KEY, JSON.stringify(cleared)); } catch { /* 存储不可用时不阻断游戏 */ }
+  return cleared;
+}
+
+/** 解锁链：第一关始终可玩；第 N 关需通关第 N-1 关（按 LEVEL_DEFS 顺序） */
+function isLevelUnlocked(levelId: string, cleared: string[]): boolean {
+  const index = LEVEL_DEFS.findIndex((def) => def.id === levelId);
+  if (index < 0) return false;
+  return index === 0 || cleared.includes(LEVEL_DEFS[index - 1].id);
+}
 
 type LevelTask = { id: string; text: string };
 type LevelSceneDef = {
@@ -699,8 +762,6 @@ const LEVEL1_SCENES: LevelSceneDef[] = [
 ];
 
 // ===== 第二关「加入军队」 =====
-const LEVEL2_ID = "level-join-army";
-const LEVEL2_TITLE = "加入军队";
 /** 场景 1：到达加油站所需击杀数 */
 const LEVEL2_ROAD_KILLS = 5;
 /** 加油站伏击：便利店涌出僵尸总数（10 头盔 + 20 普通，按 3 取 1 交错）与坚持时长 */
@@ -741,8 +802,618 @@ const LEVEL2_SCENES: LevelSceneDef[] = [
   },
 ];
 
+// ===== 第三关「防守基地」 =====
+/** 开场演出：警报渐强/屏幕渐亮时长与起身时长 */
+const LEVEL3_WAKE_MS = 6000;
+const LEVEL3_RISE_MS = 1400;
+/** 混凝土围墙共享 HP 池；判定段 id 起点（与玩家部署路障区分） */
+const LEVEL3_WALL_HP = 500;
+const LEVEL3_WALL_ID = 91000;
+/** 围墙在世界宽中的位置分数；射击孔中心 y（子弹仅经孔位越过围墙） */
+const LEVEL3_WALL_FX = 0.55;
+const LEVEL3_WALL_HOLES = [280, 420, 560];
+/** 围墙电机大门（夜防结束后开启，通往土路）：门洞 y 区间 */
+const LEVEL3_GATE_TOP = 462;
+const LEVEL3_GATE_BOTTOM = 578;
+/** 基地内路灯位置（世界宽分数）：沿道路与围墙内侧分布，接入黑夜光照 */
+const LEVEL3_LAMP_FX = [0.1, 0.3, 0.48];
+/** 第一波攻势：20 奔跑 + 20 头盔奔跑 + 15 军队奔跑（11 只一循环交错 ×5），上场节奏加快保持压迫感 */
+const LEVEL3_WAVE_TOTAL = 55;
+const LEVEL3_WAVE_EVERY_MS = 640;
+/** 盾兵先锋梯队：15 只盾兵最先上场（继承生存全部机制：金属盾 500 HP + 碎裂、仅眼平观察窗可命中、踹可落盾、减伤 50%，本体 HP 本关覆盖为 500），间隔略密形成"盾墙先行、速度僵尸后至"的层次 */
+const LEVEL3_VANGUARD_TOTAL = 15;
+const LEVEL3_VANGUARD_EVERY_MS = 480;
+/** 夜防总数 = 盾兵先锋 + 奔跑系主力 */
+const LEVEL3_DEFEND_TOTAL = LEVEL3_VANGUARD_TOTAL + LEVEL3_WAVE_TOTAL;
+const LEVEL3_WAVE_KINDS: ZombieKind[] = [
+  "runner", "helmetRunner", "armyRunner", "runner", "helmetRunner", "runner",
+  "helmetRunner", "armyRunner", "runner", "helmetRunner", "armyRunner",
+];
+/** 夜防精英强化：本关奔跑系与盾兵本体 HP 统一 500（仅第三关生成处覆盖，不改全局 ZOMBIE_KIND_SPECS；盾兵的金属盾 500 不变；maxHp 同步保证血条以 500 为满血） */
+const LEVEL3_ELITE_HP = 500;
+const LEVEL3_ELITE_KINDS: ReadonlySet<ZombieKind> = new Set(["runner", "helmetRunner", "armyRunner", "shield"]);
+/** 土路侦查：拦路突变强壮僵尸数 */
+const LEVEL3_MUTANTS = 5;
+
+const LEVEL3_SCENES: LevelSceneDef[] = [
+  {
+    name: "军营宿舍 · 夜",
+    extra: 300,
+    entryX: 230,
+    obstacles: [],
+    pickups: [],
+    zombies: [],
+    tasks: [
+      { id: "wake-up", text: "醒来" },
+      { id: "leave-barracks", text: "走出军营" },
+    ],
+  },
+  {
+    name: "基地外墙 · 夜",
+    extra: 1200,
+    entryX: 140,
+    obstacles: [],
+    pickups: [],
+    zombies: [],
+    tasks: [
+      { id: "take-position", text: "走到掩体后" },
+      { id: "defend-wave", text: "阻击第一波攻势" },
+      { id: "reach-gate", text: "走到基地大门" },
+    ],
+  },
+  {
+    name: "城外土路 · 夜",
+    extra: 3200,
+    entryX: 140,
+    obstacles: [],
+    pickups: [],
+    zombies: [0.22, 0.34, 0.46, 0.58, 0.7].map((fx) => ({ kind: "mutant" as ZombieKind, fx })),
+    tasks: [
+      { id: "scout", text: "探查（沿土路走到尽头）" },
+      { id: "kill-juggernaut", text: "击杀重甲僵尸" },
+    ],
+  },
+];
+
+// ===== 第四关「占领电台」 =====
+/** 场景 0：会议桌；场景 1：基地大门（上车点）在各自世界宽中的位置分数 */
+const LEVEL4_TABLE_FX = 0.16;
+const LEVEL4_GATE_FX = 0.88;
+/** 场景 2：军车停靠在电台门厅前，完全刹停后再下车；下车警戒队友数 */
+const LEVEL4_TRUCK_STOP_FX = 0.68;
+const LEVEL4_STATION_DOOR_FX = 0.82;
+const LEVEL4_SQUAD = 4;
+const LEVEL4_PLAYER_EXIT_DELAY_MS = 650;
+/** 楼梯可行走轨迹：绘制与移动共用同一组比例/高度，避免角色、台阶和出口门错位 */
+const LEVEL4_STAIR_LOWER_START_FX = 0.08;
+const LEVEL4_STAIR_LANDING_FX = 0.43;
+const LEVEL4_STAIR_LANDING_W_FX = 0.15;
+const LEVEL4_STAIR_UPPER_END_FX = 0.9;
+const LEVEL4_STAIR_BOTTOM_Y = 620;
+const LEVEL4_STAIR_LANDING_Y = 470;
+const LEVEL4_STAIR_EXIT_Y = 340;
+const LEVEL4_STAIR_MIN_WORLD_W = 620;
+/** 一/二层走廊清剿数：一层 5 突变 + 5 头盔奔跑 + 5 军队；二层 5 盾兵 + 5 军队奔跑 + 5 军队 */
+const LEVEL4_FLOOR1_TOTAL = 15;
+const LEVEL4_FLOOR2_TOTAL = 15;
+/** 天台通讯设备区防守战：军队奔跑僵尸自右冲击总数与间隔；设备共享 HP（参照第三关围墙体系，判定段 id 起点）；维修所需时长 */
+const LEVEL4_DEFEND_TOTAL = 30;
+const LEVEL4_DEFEND_EVERY_MS = 600;
+const LEVEL4_EQUIP_HP = 500;
+const LEVEL4_EQUIP_ID = 92000;
+const LEVEL4_EQUIP_FX = 0.6;
+const LEVEL4_REPAIR_MS = 20000;
+
+const LEVEL4_SCENES: LevelSceneDef[] = [
+  {
+    name: "军事基地 · 商讨室",
+    extra: 500,
+    entryX: 140,
+    obstacles: [{ kind: "table", fx: LEVEL4_TABLE_FX, y: 400, w: 240, h: 92, seed: 5 }],
+    pickups: [],
+    zombies: [],
+    patrols: [{ fx: LEVEL4_TABLE_FX + 0.05, y: 350 }],
+    tasks: [
+      { id: "find-teammate", text: "找到队友（走到会议桌旁）" },
+      { id: "leave-briefing", text: "走出商讨室" },
+    ],
+  },
+  {
+    name: "军事基地 · 集合区",
+    extra: 1400,
+    entryX: 140,
+    obstacles: [],
+    pickups: [],
+    zombies: [],
+    patrols: [{ fx: 0.28, y: 350 }, { fx: 0.48, y: 500 }],
+    tasks: [{ id: "board-truck", text: "上车（走到基地大门）" }],
+  },
+  {
+    name: "电台门口 · 白天",
+    extra: 1600,
+    entryX: 140,
+    obstacles: [],
+    pickups: [],
+    zombies: [],
+    tasks: [{ id: "breach", text: "突破（单人进入电台通讯基地）" }],
+  },
+  {
+    name: "电台 · 一层走廊",
+    extra: 2600,
+    entryX: 140,
+    obstacles: [],
+    pickups: [],
+    zombies: [
+      ...[0.3, 0.45, 0.6, 0.75, 0.88].map((fx) => ({ kind: "mutant" as ZombieKind, fx })),
+      ...[0.24, 0.4, 0.56, 0.72, 0.84].map((fx) => ({ kind: "helmetRunner" as ZombieKind, fx })),
+      ...[0.34, 0.5, 0.66, 0.8, 0.92].map((fx) => ({ kind: "army" as ZombieKind, fx })),
+    ],
+    tasks: [{ id: "clear-floor-1", text: "清剿一层走廊" }],
+  },
+  {
+    name: "楼梯间",
+    extra: 260,
+    entryX: 120,
+    obstacles: [],
+    pickups: [],
+    zombies: [],
+    tasks: [{ id: "climb-1", text: "上楼（前往二层）" }],
+  },
+  {
+    name: "电台 · 二层走廊",
+    extra: 2600,
+    entryX: 140,
+    obstacles: [],
+    pickups: [],
+    zombies: [
+      ...[0.28, 0.44, 0.6, 0.76, 0.9].map((fx) => ({ kind: "shield" as ZombieKind, fx })),
+      ...[0.24, 0.4, 0.56, 0.72, 0.86].map((fx) => ({ kind: "armyRunner" as ZombieKind, fx })),
+      ...[0.34, 0.5, 0.66, 0.8, 0.93].map((fx) => ({ kind: "army" as ZombieKind, fx })),
+    ],
+    tasks: [{ id: "clear-floor-2", text: "清剿二层走廊" }],
+  },
+  {
+    name: "楼梯间",
+    extra: 260,
+    entryX: 120,
+    obstacles: [],
+    pickups: [],
+    zombies: [],
+    tasks: [{ id: "climb-2", text: "上楼（前往天台）" }],
+  },
+  {
+    name: "天台 · 白天",
+    extra: 900,
+    entryX: 140,
+    obstacles: [],
+    pickups: [],
+    zombies: [{ kind: "juggernaut" as ZombieKind, fx: 0.62 }],
+    tasks: [{ id: "kill-juggernaut", text: "击杀重甲僵尸" }],
+  },
+  {
+    name: "天台 · 通讯设备区",
+    extra: 1400,
+    entryX: 140,
+    obstacles: [],
+    pickups: [],
+    zombies: [],
+    tasks: [{ id: "defend-radio", text: "维修通讯设备（坚守等待维修完成）" }],
+  },
+];
+
+// ===== 第五关「解救行动」 =====
+/**
+ * 第五关只编排场景、任务和出生表；玩家、NPC 与所有 ZombieKind 继续走生存模式同一套
+ * 绘制、步态、下砸攻击、血液/结构损伤、断肢和打腿倒地结算，不创建关卡专用简化实体。
+ */
+const LEVEL5_HELIPAD_FX = 0.78;
+const LEVEL5_HELI_STOP_FX = 0.34;
+const LEVEL5_SQUAD = 4;
+const LEVEL5_PLAYER_EXIT_DELAY_MS = 650;
+const LEVEL5_HELICOPTER_SCALE = 1.75;
+const LEVEL5_POWER_FX = 0.28;
+const LEVEL5_FENCE_FX = 0.43;
+const LEVEL5_FENCE_HP = 500;
+const LEVEL5_FENCE_DAMAGE_FACTOR = 0.35;
+const LEVEL5_FENCE_ID = 93000;
+const LEVEL5_REPAIR_MS = 15000;
+const LEVEL5_DEFEND_TOTAL = 36;
+const LEVEL5_DEFEND_EVERY_MS = 400;
+const LEVEL5_SURVIVOR_FX = 0.92;
+const LEVEL5_RESCUE_TOTAL = 20;
+const LEVEL5_ROAD_TOTAL = 50;
+const LEVEL5_VEHICLE_FX = 0.94;
+
+const LEVEL5_SCENES: LevelSceneDef[] = [
+  {
+    name: "通讯基地 · 无线电监听室",
+    extra: 900,
+    entryX: 140,
+    obstacles: [{ kind: "table", fx: 0.38, y: 402, w: 300, h: 94, seed: 51 }],
+    pickups: [],
+    zombies: [],
+    patrols: [{ fx: 0.3, y: 360 }],
+    tasks: [{ id: "find-radio-teammate", text: "找到队友" }],
+  },
+  {
+    name: "通讯基地 · 天台停机坪",
+    extra: 1600,
+    entryX: 140,
+    obstacles: [],
+    pickups: [],
+    zombies: [],
+    tasks: [{ id: "board-helicopter", text: "乘坐直升机" }],
+  },
+  {
+    name: "隧道入口 · 直升机降落区",
+    extra: 1400,
+    entryX: 140,
+    obstacles: [],
+    pickups: [],
+    zombies: [],
+    tasks: [{ id: "board-helicopter", text: "乘坐直升机" }],
+  },
+  {
+    name: "隧道 · 电力配置室",
+    extra: 2800,
+    entryX: 140,
+    obstacles: [],
+    pickups: [],
+    zombies: [],
+    tasks: [{ id: "repair-power", text: "维修电力系统" }],
+  },
+  {
+    name: "隧道 · 搜救区",
+    extra: 5200,
+    entryX: 140,
+    obstacles: [],
+    pickups: [],
+    zombies: [
+      ...[0.18, 0.24, 0.3, 0.36, 0.43, 0.5, 0.58, 0.66, 0.75, 0.84].map((fx) => ({ kind: "army" as ZombieKind, fx })),
+      ...[0.32, 0.45, 0.57, 0.71, 0.86].map((fx) => ({ kind: "armyRunner" as ZombieKind, fx })),
+      ...[0.38, 0.52, 0.64, 0.78, 0.9].map((fx) => ({ kind: "shield" as ZombieKind, fx })),
+    ],
+    tasks: [{ id: "find-survivor", text: "找到求救人员" }],
+  },
+  {
+    name: "隧道 · 撤离道路",
+    extra: 6500,
+    entryX: 140,
+    obstacles: [],
+    pickups: [],
+    zombies: Array.from({ length: LEVEL5_ROAD_TOTAL }, (_, i) => ({
+      kind: "army" as ZombieKind,
+      fx: 0.12 + (i / (LEVEL5_ROAD_TOTAL - 1)) * 0.78,
+    })),
+    tasks: [
+      { id: "clear-rescue-road", text: "开通道路" },
+      { id: "board-rescue-vehicle", text: "上车" },
+    ],
+  },
+];
+
+// ===== 第六关「攻占大楼」 =====
+/**
+ * 第六关继续复用生存模式的 Player / Zombie / LevelNpc 实体与完整伤害、动作和掉落系统；
+ * 这里只定义市政大楼的场景编排、两人突击小队与巨型变异 Boss 的专属参数。
+ */
+const LEVEL6_BRIEFING_TABLE_FX = 0.16;
+const LEVEL6_BASE_GATE_FX = 0.88;
+const LEVEL6_TRUCK_STOP_FX = 0.58;
+const LEVEL6_BUILDING_DOOR_FX = 0.82;
+const LEVEL6_PLAYER_EXIT_DELAY_MS = 650;
+const LEVEL6_SQUAD_SIZE = 2;
+const LEVEL6_SQUAD_HP = 100;
+const LEVEL6_POWER_SWITCH_FX = 0.9;
+const LEVEL6_CORRIDOR_ONE_TOTAL = 23;
+const LEVEL6_POWER_ROOM_TOTAL = 15;
+const LEVEL6_CORRIDOR_TWO_TOTAL = 10;
+const LEVEL6_ARCHIVE_TOTAL = 2;
+const LEVEL6_CENTRAL_HALL_TOTAL = 6;
+const LEVEL6_BOSS_SPEED = 52;
+const LEVEL6_BOSS_SPAWN_Y = 590;
+const LEVEL6_BOSS_SPIT_INTERVAL_MS = 5000;
+const LEVEL6_BOSS_SPIT_WINDUP_MS = 800;
+const LEVEL6_BOSS_SPIT_COUNT = 14;
+
+const LEVEL6_SCENES: LevelSceneDef[] = [
+  {
+    name: "军事基地 · 商讨室",
+    extra: 500,
+    entryX: 140,
+    obstacles: [{ kind: "table", fx: LEVEL6_BRIEFING_TABLE_FX, y: 400, w: 240, h: 92, seed: 61 }],
+    pickups: [],
+    zombies: [],
+    patrols: [{ fx: LEVEL6_BRIEFING_TABLE_FX + 0.05, y: 350 }],
+    tasks: [
+      { id: "find-assault-team", text: "找到队友" },
+      { id: "board-assault-truck", text: "上车（走出商讨室并前往基地大门）" },
+    ],
+  },
+  {
+    name: "军事基地 · 集合区",
+    extra: 1400,
+    entryX: 140,
+    obstacles: [],
+    pickups: [],
+    zombies: [],
+    patrols: [{ fx: 0.3, y: 350 }, { fx: 0.48, y: 500 }],
+    tasks: [{ id: "board-assault-truck", text: "上车" }],
+  },
+  {
+    name: "市政大楼 · 大门",
+    extra: 1800,
+    entryX: 140,
+    obstacles: [],
+    pickups: [],
+    zombies: [],
+    tasks: [{ id: "occupy-power-room", text: "占领配电室（进入市政大楼）" }],
+  },
+  {
+    name: "市政大楼 · 断电走廊",
+    extra: 5200,
+    entryX: 140,
+    obstacles: [],
+    pickups: [],
+    zombies: [
+      ...Array.from({ length: 10 }, (_, i) => ({ kind: "armyRunner" as ZombieKind, fx: 0.16 + i * 0.075 })),
+      ...[0.24, 0.48, 0.72].map((fx) => ({ kind: "juggernaut" as ZombieKind, fx })),
+      ...Array.from({ length: 10 }, (_, i) => ({ kind: "army" as ZombieKind, fx: 0.2 + i * 0.073 })),
+    ],
+    tasks: [{ id: "occupy-power-room", text: "占领配电室（清剿断电走廊）" }],
+  },
+  {
+    name: "市政大楼 · 配电室",
+    extra: 2400,
+    entryX: 140,
+    obstacles: [],
+    pickups: [],
+    zombies: [
+      ...Array.from({ length: 10 }, (_, i) => ({ kind: "army" as ZombieKind, fx: 0.18 + i * 0.07 })),
+      ...[0.38, 0.5, 0.62, 0.74, 0.84].map((fx) => ({ kind: "shield" as ZombieKind, fx })),
+    ],
+    tasks: [{ id: "occupy-power-room", text: "占领配电室（清剿并开启电闸）" }],
+  },
+  {
+    name: "市政大楼 · 二层走廊",
+    extra: 4800,
+    entryX: 140,
+    obstacles: [],
+    pickups: [],
+    zombies: [
+      ...[0.22, 0.36, 0.52, 0.68, 0.84].map((fx) => ({ kind: "shield" as ZombieKind, fx })),
+      ...[0.28, 0.43, 0.58, 0.73, 0.88].map((fx) => ({ kind: "juggernaut" as ZombieKind, fx })),
+    ],
+    tasks: [{ id: "occupy-archives", text: "占领档案室（清剿走廊）" }],
+  },
+  {
+    name: "市政大楼 · 档案室",
+    extra: 1800,
+    entryX: 140,
+    obstacles: [],
+    pickups: [],
+    zombies: [{ kind: "juggernaut", fx: 0.5 }, { kind: "juggernaut", fx: 0.76 }],
+    tasks: [{ id: "occupy-archives", text: "占领档案室" }],
+  },
+  {
+    name: "市政大楼 · 楼梯间",
+    extra: 260,
+    entryX: 120,
+    obstacles: [],
+    pickups: [],
+    zombies: [],
+    tasks: [{ id: "occupy-central-hall", text: "占领中央大厅（上楼）" }],
+  },
+  {
+    name: "市政大楼 · 中央大厅",
+    extra: 2200,
+    entryX: 140,
+    obstacles: [],
+    pickups: [],
+    zombies: [
+      { kind: "mutant", fx: 0.48 },
+      { kind: "mutant", fx: 0.58 },
+      { kind: "mutant", fx: 0.66 },
+      { kind: "mutant", fx: 0.74 },
+      { kind: "mutant", fx: 0.82 },
+      { kind: "mutant", fx: 0.9 },
+    ],
+    tasks: [{ id: "occupy-central-hall", text: "占领中央大厅" }],
+  },
+];
+
+// ===== 第七关「夺取仓库」 =====
+/**
+ * 第七关只增加仓库编排与剧情护甲参数；Zombie / Player / LevelNpc 仍复用生存模式的
+ * 姿势、结构损伤、血液、下砸攻击、断肢和打腿倒地等公共系统。
+ */
+const LEVEL7_BRIEFING_TABLE_FX = 0.16;
+const LEVEL7_BASE_GATE_FX = 0.88;
+const LEVEL7_TRUCK_STOP_FX = 0.3;
+const LEVEL7_WAREHOUSE_DOOR_FX = 0.82;
+const LEVEL7_PLAYER_EXIT_DELAY_MS = 650;
+const LEVEL7_SQUAD_SIZE = 4;
+const LEVEL7_JUGGERNAUTS = 2;
+const LEVEL7_SHIELDS = 5;
+const LEVEL7_ARMORED = 10;
+const LEVEL7_INITIAL_TOTAL = LEVEL7_JUGGERNAUTS + LEVEL7_SHIELDS + LEVEL7_ARMORED;
+const LEVEL7_ARMORED_HP = 100;
+const LEVEL7_ARMORED_REDUCTION = .99;
+const LEVEL7_ARMORED_SPEED_FACTOR = 1.5;
+const LEVEL7_FLINT_FX = .34;
+const LEVEL7_TRUCK_FX = .12;
+const LEVEL7_SUPPLY_FX = .38;
+const LEVEL7_WALL_FX = .6;
+const LEVEL7_WALL_HP = 500;
+const LEVEL7_WALL_ID = 94000;
+const LEVEL7_DEFENDERS = 2;
+const LEVEL7_TRANSPORT_BASE_LEG_MS = 4500;
+const LEVEL7_TRANSPORT_SPEED_FACTOR = .66;
+const LEVEL7_TRANSPORT_LEG_MS = LEVEL7_TRANSPORT_BASE_LEG_MS / LEVEL7_TRANSPORT_SPEED_FACTOR;
+const LEVEL7_TRANSPORT_LEGS = 4;
+const LEVEL7_DEFEND_SPAWN_MS = 460;
+const LEVEL7_MAX_ACTIVE_ATTACKERS = 28;
+const LEVEL7_ATTACKER_SPAWN_OFFSET = 900;
+
+const LEVEL7_SCENES: LevelSceneDef[] = [
+  {
+    name: "军事基地 · 商讨室",
+    extra: 500,
+    entryX: 140,
+    obstacles: [{ kind: "table", fx: LEVEL7_BRIEFING_TABLE_FX, y: 400, w: 240, h: 92, seed: 71 }],
+    pickups: [],
+    zombies: [],
+    patrols: [{ fx: LEVEL7_BRIEFING_TABLE_FX + .05, y: 350 }],
+    tasks: [
+      { id: "find-warehouse-team", text: "找到队友" },
+      { id: "board-warehouse-truck", text: "上车（走出商讨室并前往基地大门）" },
+    ],
+  },
+  {
+    name: "军事基地 · 集合区",
+    extra: 1400,
+    entryX: 140,
+    obstacles: [],
+    pickups: [],
+    zombies: [],
+    patrols: [{ fx: .3, y: 350 }, { fx: .48, y: 500 }],
+    tasks: [{ id: "board-warehouse-truck", text: "上车" }],
+  },
+  {
+    name: "物资仓库 · 大门",
+    extra: 1800,
+    entryX: 140,
+    obstacles: [],
+    pickups: [],
+    zombies: [],
+    tasks: [{ id: "enter-warehouse", text: "进入仓库" }],
+  },
+  {
+    name: "物资仓库 · 堆放区",
+    extra: 4200,
+    entryX: 140,
+    obstacles: [{ kind: "table", fx: LEVEL7_FLINT_FX, y: 404, w: 260, h: 104, seed: 72 }],
+    pickups: [{ weapon: "flint66", fx: LEVEL7_FLINT_FX, y: 365, onTable: true }],
+    zombies: [
+      ...[.58, .76].map((fx) => ({ kind: "juggernaut" as ZombieKind, fx })),
+      ...[.44, .52, .64, .72, .84].map((fx) => ({ kind: "shield" as ZombieKind, fx })),
+      ...Array.from({ length: LEVEL7_ARMORED }, (_, i) => ({ kind: "army" as ZombieKind, fx: .4 + i * .052 })),
+    ],
+    tasks: [
+      { id: "take-flint66", text: "拾取燧石66以对付护甲僵尸（走近物资箱后按右键）" },
+      { id: "clear-warehouse", text: "使用燧石66击杀仓库内的僵尸" },
+      { id: "protect-supplies", text: "保护队友运送物资" },
+    ],
+  },
+];
+
+// ===== 第八关「清理高速」 =====
+const LEVEL8_BRIEFING_TABLE_FX = .16;
+const LEVEL8_BASE_GATE_FX = .88;
+const LEVEL8_HIGHWAY_JUGGERNAUTS = 10;
+const LEVEL8_HIGHWAY_ARMY = 30;
+const LEVEL8_HIGHWAY_SHIELDS = 20;
+const LEVEL8_HIGHWAY_HELMETS = 30;
+const LEVEL8_HIGHWAY_TOTAL = LEVEL8_HIGHWAY_JUGGERNAUTS + LEVEL8_HIGHWAY_ARMY + LEVEL8_HIGHWAY_SHIELDS + LEVEL8_HIGHWAY_HELMETS;
+const LEVEL8_TOLL_ARMY = 10;
+const LEVEL8_TOLL_RUNNERS = 5;
+const LEVEL8_TOLL_SHIELDS = 5;
+const LEVEL8_TOLL_JUGGERNAUTS = 2;
+const LEVEL8_TOLL_TOTAL = LEVEL8_TOLL_ARMY + LEVEL8_TOLL_RUNNERS + LEVEL8_TOLL_SHIELDS + LEVEL8_TOLL_JUGGERNAUTS;
+const LEVEL8_TOLL_SQUAD_SIZE = 2;
+const LEVEL8_VEHICLE_HP = 500;
+const LEVEL8_VEHICLE_SPEED = 340;
+const LEVEL8_VEHICLE_START_X = 210;
+const LEVEL8_TOLL_FX = .93;
+const LEVEL8_HMG_DAMAGE = 80;
+const LEVEL8_HMG_MAGAZINE = 200;
+const LEVEL8_HMG_FIRE_MS = 86;
+const LEVEL8_HMG_RELOAD_MS = 2700;
+const LEVEL8_HMG_RANGE = 1420;
+const LEVEL8_HMG_PENETRATION = 7;
+const LEVEL8_HMG_PENETRATION_BYPASS = .8;
+const LEVEL8_HMG_STOPPING = 1;
+
+function level8ZombieLine(kind: ZombieKind, count: number, start: number, end: number): Array<{ kind: ZombieKind; fx: number }> {
+  return Array.from({ length: count }, (_, index) => ({ kind, fx: start + (end - start) * (count === 1 ? 0 : index / (count - 1)) }));
+}
+
+const LEVEL8_SCENES: LevelSceneDef[] = [
+  {
+    name: "军事基地 · 商讨室",
+    extra: 500,
+    entryX: 140,
+    obstacles: [{ kind: "table", fx: LEVEL8_BRIEFING_TABLE_FX, y: 400, w: 240, h: 92, seed: 81 }],
+    pickups: [],
+    zombies: [],
+    patrols: [{ fx: LEVEL8_BRIEFING_TABLE_FX + .05, y: 350 }],
+    tasks: [
+      { id: "find-highway-team", text: "找到队友" },
+      { id: "board-armored-vehicle", text: "上车（走出商讨室并前往基地大门）" },
+    ],
+  },
+  {
+    name: "军事基地 · 装甲车集结区",
+    extra: 1400,
+    entryX: 140,
+    obstacles: [],
+    pickups: [],
+    zombies: [],
+    patrols: [{ fx: .34, y: 350 }, { fx: .5, y: 500 }],
+    tasks: [{ id: "board-armored-vehicle", text: "上车" }],
+  },
+  {
+    name: "封锁高速",
+    extra: 11000,
+    entryX: LEVEL8_VEHICLE_START_X,
+    obstacles: [],
+    pickups: [],
+    zombies: [
+      ...level8ZombieLine("juggernaut", LEVEL8_HIGHWAY_JUGGERNAUTS, .16, .84),
+      ...level8ZombieLine("army", LEVEL8_HIGHWAY_ARMY, .1, .88),
+      ...level8ZombieLine("shield", LEVEL8_HIGHWAY_SHIELDS, .13, .86),
+      ...level8ZombieLine("helmet", LEVEL8_HIGHWAY_HELMETS, .11, .9),
+    ],
+    tasks: [{ id: "clear-highway", text: "清理僵尸并到达收费站" }],
+  },
+  {
+    name: "收费站 · 长走廊",
+    extra: 5200,
+    entryX: 150,
+    obstacles: [],
+    pickups: [],
+    zombies: [
+      ...level8ZombieLine("army", LEVEL8_TOLL_ARMY, .18, .82),
+      ...level8ZombieLine("armyRunner", LEVEL8_TOLL_RUNNERS, .25, .78),
+      ...level8ZombieLine("shield", LEVEL8_TOLL_SHIELDS, .3, .86),
+      ...level8ZombieLine("juggernaut", LEVEL8_TOLL_JUGGERNAUTS, .48, .76),
+    ],
+    tasks: [{ id: "clear-toll-station", text: "清理收费站" }],
+  },
+];
+
+function isLevel3WallSegment(id: number): boolean {
+  return id >= LEVEL3_WALL_ID && id < LEVEL4_EQUIP_ID;
+}
+
+function isLevel4EquipmentSegment(id: number): boolean {
+  return id >= LEVEL4_EQUIP_ID && id < LEVEL5_FENCE_ID;
+}
+
+function isLevel5FenceSegment(id: number): boolean {
+  return id >= LEVEL5_FENCE_ID && id < LEVEL5_FENCE_ID + 1000;
+}
+
+function isLevel7WallSegment(id: number): boolean {
+  return id >= LEVEL7_WALL_ID && id < LEVEL7_WALL_ID + 1000;
+}
+
+function isScriptedLevelStructure(id: number): boolean {
+  return isLevel3WallSegment(id) || isLevel4EquipmentSegment(id) || isLevel5FenceSegment(id) || isLevel7WallSegment(id);
+}
+
 function levelScenesFor(levelId: string): LevelSceneDef[] {
-  return levelId === LEVEL2_ID ? LEVEL2_SCENES : LEVEL1_SCENES;
+  return levelId === LEVEL8_ID ? LEVEL8_SCENES : levelId === LEVEL7_ID ? LEVEL7_SCENES : levelId === LEVEL6_ID ? LEVEL6_SCENES : levelId === LEVEL5_ID ? LEVEL5_SCENES : levelId === LEVEL4_ID ? LEVEL4_SCENES : levelId === LEVEL3_ID ? LEVEL3_SCENES : levelId === LEVEL2_ID ? LEVEL2_SCENES : LEVEL1_SCENES;
 }
 
 function levelTitleById(levelId: string | null): string {
@@ -750,22 +1421,65 @@ function levelTitleById(levelId: string | null): string {
   return def ? `第 ${def.order} 关 · ${def.title}` : "关卡";
 }
 
-/** 关卡 NPC（士兵）：field 复用搭档骨架（步态/持枪/换弹/后坐全通用）；combat=战斗型自动索敌射击，否则锚点巡逻 */
+/** 通关结算提示：下一关确实已解锁时才显示「已开放」（与解锁链联动；占位卡/无下一关则预告制作中） */
+function levelCompleteHint(levelId: string, cleared: string[]): string {
+  const currentDef = LEVEL_DEFS.find((def) => def.id === levelId);
+  const nextDef = LEVEL_DEFS.find((def) => def.order === (currentDef?.order ?? 0) + 1);
+  if (nextDef?.playable && isLevelUnlocked(nextDef.id, cleared)) return `第 ${nextDef.order} 关『${nextDef.title}』已开放 · 从关卡模式进入`;
+  return nextDef ? `第 ${nextDef.order} 关正在制作中，敬请期待` : "新关卡正在制作中，敬请期待";
+}
+
+/** 关卡 NPC（士兵）：field 复用搭档骨架（步态/持枪/换弹/后坐全通用）；combat=战斗型自动索敌射击，否则锚点巡逻；hold=钉在锚点射击不位移（夜防就位）；weapon=手持武器（默认 M16，夜防增援含 PKM 机枪手与燧石66 狙击手） */
 type LevelNpc = {
   field: PartnerField;
   combat: boolean;
   anchorX: number;
   anchorY: number;
+  hold?: boolean;
+  weapon: WeaponKey;
+  hp: number;
+  maxHp: number;
+  invulnerableUntil: number;
+  /** 第六关突击队：跨场景跟随玩家并成为僵尸可选择的攻击目标。 */
+  followPlayer?: boolean;
+  targetable?: boolean;
+  squadIndex?: number;
+  /** 剧情运输员：位置由关卡事件直接驱动，不进入普通巡逻/战斗 AI。 */
+  scripted?: boolean;
+  carryingCrate?: boolean;
 };
 
-function makeLevelNpc(x: number, y: number, combat: boolean): LevelNpc {
+function makeLevelNpc(
+  x: number,
+  y: number,
+  combat: boolean,
+  hold = false,
+  weapon: WeaponKey = "m16",
+  options: { hp?: number; maxHp?: number; followPlayer?: boolean; targetable?: boolean; squadIndex?: number; scripted?: boolean; carryingCrate?: boolean } = {},
+): LevelNpc {
   const field = freshPartnerField(x, y);
-  field.ammo = WEAPONS.m16.magazine;
-  return { field, combat, anchorX: x, anchorY: y };
+  field.ammo = WEAPONS[weapon].magazine;
+  const hp = options.hp ?? 100;
+  return {
+    field, combat, anchorX: x, anchorY: y, hold, weapon,
+    hp, maxHp: options.maxHp ?? hp, invulnerableUntil: 0,
+    followPlayer: options.followPlayer,
+    targetable: options.targetable,
+    squadIndex: options.squadIndex,
+    scripted: options.scripted,
+    carryingCrate: options.carryingCrate,
+  };
 }
 
 function levelZombieCount(scene: LevelSceneDef): number {
   return scene.zombies.length;
+}
+
+function levelSceneWorldWidth(levelId: string, sceneIndex: number, canvasW: number): number {
+  const scene = levelScenesFor(levelId)[sceneIndex];
+  const stairScene = (levelId === LEVEL4_ID && (sceneIndex === 4 || sceneIndex === 6)) || (levelId === LEVEL6_ID && sceneIndex === 7);
+  const minimum = stairScene ? LEVEL4_STAIR_MIN_WORLD_W : 1;
+  return Math.max(canvasW + scene.extra, minimum);
 }
 
 // 关卡预置僵尸：固定第 1 天基数（normal 62 / helmet 200），字段与 spawnZombie 生成结构保持一致
@@ -786,8 +1500,8 @@ function makeLevelZombie(id: number, kind: ZombieKind, x: number, y: number, now
     radius,
     attack: spec?.attack ?? 8.7,
     damageReduction: spec?.damageReduction ?? 0,
-    shieldIntact: false,
-    shieldHp: 0,
+    shieldIntact: kind === "shield",
+    shieldHp: kind === "shield" ? SHIELD_HP : 0,
     shieldDents: [],
     spitAt: 0,
     nextSpitAt: now + 1200 + Math.random() * 900,
@@ -811,15 +1525,71 @@ function makeLevelZombie(id: number, kind: ZombieKind, x: number, y: number, now
   };
 }
 
+/** 第六关 Boss：沿用 mutant 的绘制、步态、受伤和断肢，仅覆盖剧情指定的体型与战斗参数。 */
+function makeLevel6Boss(boss: Zombie, now: number): Zombie {
+  boss.bossKind = "giantMutant";
+  boss.hp = 1500;
+  boss.maxHp = 1500;
+  boss.radius = 54;
+  boss.speed = LEVEL6_BOSS_SPEED;
+  boss.y = LEVEL6_BOSS_SPAWN_Y;
+  boss.attack = 50;
+  boss.nextSpitAt = now + LEVEL6_BOSS_SPIT_INTERVAL_MS - LEVEL6_BOSS_SPIT_WINDUP_MS;
+  return boss;
+}
+
+/** 第六关切换建筑内部场景时，按保留 HP 把仍存活的两名队友放到玩家身后。 */
+function restoreLevel6Squad(g: GameState): void {
+  const level = g.level;
+  if (!level || level.levelId !== LEVEL6_ID || level.sceneIndex < 3 || level.squadHp.length === 0) return;
+  for (let squadIndex = 0; squadIndex < level.squadHp.length; squadIndex++) {
+    const hp = level.squadHp[squadIndex];
+    if (hp <= 0) continue;
+    g.npcs.push(makeLevelNpc(
+      g.player.x - 70 - squadIndex * 58,
+      g.player.y + (squadIndex === 0 ? -48 : 48),
+      true,
+      false,
+      "m16",
+      { hp, maxHp: LEVEL6_SQUAD_HP, followPlayer: true, targetable: true, squadIndex },
+    ));
+  }
+}
+
+// 第三关专属：本关生成的精英僵尸（奔跑系 + 盾兵本体）HP 覆盖为 500（生成处调用；生存/靶场/其他关卡不受影响）
+function applyLevel3ZombieHp(z: Zombie): Zombie {
+  if (LEVEL3_ELITE_KINDS.has(z.kind)) {
+    z.hp = LEVEL3_ELITE_HP;
+    z.maxHp = LEVEL3_ELITE_HP;
+  }
+  return z;
+}
+
+/** 第七关护甲僵尸：军队僵尸外形与公共动作不变，附加仓库重型插板及 99% 基础减伤。 */
+function applyLevel7ArmorZombie(z: Zombie): Zombie {
+  z.warehouseArmor = true;
+  z.hp = LEVEL7_ARMORED_HP;
+  z.maxHp = LEVEL7_ARMORED_HP;
+  z.damageReduction = LEVEL7_ARMORED_REDUCTION;
+  z.speed *= LEVEL7_ARMORED_SPEED_FACTOR;
+  return z;
+}
+
 // 载入关卡场景：重置世界宽度/摄像机/场景实体，清掉上一场景的战斗残留，玩家放回入口
 function loadLevelScene(g: GameState, sceneIndex: number, now: number, canvasW: number): void {
-  const scene = levelScenesFor(g.level?.levelId ?? LEVEL1_ID)[sceneIndex];
-  const worldW = canvasW + scene.extra;
+  const levelId = g.level?.levelId ?? LEVEL1_ID;
+  const scene = levelScenesFor(levelId)[sceneIndex];
+  const stairScene = (levelId === LEVEL4_ID && (sceneIndex === 4 || sceneIndex === 6)) || (levelId === LEVEL6_ID && sceneIndex === 7);
+  const worldW = levelSceneWorldWidth(levelId, sceneIndex, canvasW);
   g.worldW = worldW;
   g.cameraX = 0;
-  g.zombies = scene.zombies.map((z, i) =>
-    makeLevelZombie(1000 + sceneIndex * 100 + i, z.kind, Math.round(z.fx * worldW), 280 + ((i * 137) % 260), now),
-  );
+  g.zombies = scene.zombies.map((z, i) => {
+    const zombie = makeLevelZombie(1000 + sceneIndex * 100 + i, z.kind, Math.round(z.fx * worldW), 280 + ((i * 137) % 260), now);
+    if (g.level?.levelId === LEVEL3_ID) return applyLevel3ZombieHp(zombie);
+    if (g.level?.levelId === LEVEL6_ID && sceneIndex === 8 && i === 0) return makeLevel6Boss(zombie, now);
+    if (g.level?.levelId === LEVEL7_ID && sceneIndex === 3 && i >= LEVEL7_JUGGERNAUTS + LEVEL7_SHIELDS) return applyLevel7ArmorZombie(zombie);
+    return zombie;
+  });
   g.corpses = [];
   g.particles = [];
   g.tracers = [];
@@ -830,14 +1600,17 @@ function loadLevelScene(g: GameState, sceneIndex: number, now: number, canvasW: 
   g.spits = [];
   g.barricades = [];
   g.deployedItems = [];
-  g.pickups = scene.pickups.map((pk, i) => ({
-    id: sceneIndex * 10 + i + 1,
+  // 关卡掉落武器按 sceneIndex 留存在整局状态中；切场景只追加该场景预置物，不清除玩家此前丢下的武器。
+  g.pickups.push(...scene.pickups.map((pk, i) => ({
+    // 预置物使用稳定负数 ID，与运行时丢弃物的正数 ID 隔离；重复载入场景也不会复制或复活已拾取武器。
+    id: -(sceneIndex * 100 + i + 1),
+    sceneIndex,
     weapon: pk.weapon,
     x: Math.round(pk.fx * worldW),
     y: pk.y,
     onTable: Boolean(pk.onTable),
     taken: false,
-  }));
+  })).filter((preset) => !g.pickups.some((existing) => existing.id === preset.id)));
   g.obstacles = scene.obstacles.map((ob) => ({
     kind: ob.kind,
     x: Math.round(ob.fx * worldW),
@@ -855,9 +1628,30 @@ function loadLevelScene(g: GameState, sceneIndex: number, now: number, canvasW: 
   p.lastKick = 0;
   p.invulnerableUntil = now + 800;
   p.moving = false;
+  // 场景 NPC（军事基地巡逻士兵）；战斗型 NPC 由事件动态加入
+  g.npcs = (scene.patrols ?? []).map((pt) => makeLevelNpc(Math.round(pt.fx * worldW), pt.y, false));
   if (g.level) {
     g.level.sceneIndex = sceneIndex;
     g.level.sceneKills = 0;
+    g.level.eventStage = "none";
+    g.level.eventAt = 0;
+    g.level.eventCount = 0;
+    g.level.nextEventSpawnAt = 0;
+    g.level.truckX = -1;
+    g.level.truckY = -1;
+    g.level.truckStopX = 0;
+    g.level.wallHp = 0;
+    g.level.vehicleHp = 0;
+    g.level.vehicleAmmo = 0;
+    g.level.vehicleLastShot = 0;
+    g.level.vehicleReloadUntil = 0;
+    g.level.vehicleAimAngle = 0;
+    g.level.dialog = null;
+    if (stairScene) {
+      p.x = Math.max(52, worldW * LEVEL4_STAIR_LOWER_START_FX);
+      p.y = LEVEL4_STAIR_BOTTOM_Y;
+    }
+    restoreLevel6Squad(g);
   }
 }
 
@@ -884,27 +1678,684 @@ function collideObstacles(obstacles: LevelObstacle[], x: number, y: number, r: n
   return [nx, ny];
 }
 
-function levelTaskText(g: GameState): string {
+function levelTaskText(g: GameState, now: number): string {
   if (!g.level) return "";
-  const scene = LEVEL1_SCENES[g.level.sceneIndex];
+  const scene = levelScenesFor(g.level.levelId)[g.level.sceneIndex];
   const task = scene.tasks[g.level.taskIndex];
   if (!task) return "";
-  if (task.id === "clear-corridor") {
+  if (g.level.levelId === LEVEL8_ID) {
+    if (task.id === "clear-highway") return `${task.text}（击杀 ${Math.min(g.level.sceneKills, LEVEL8_HIGHWAY_TOTAL)}/${LEVEL8_HIGHWAY_TOTAL} · 装甲车 ${Math.ceil(g.level.vehicleHp)} HP）`;
+    if (task.id === "clear-toll-station") return `${task.text}（击杀 ${Math.min(g.level.sceneKills, LEVEL8_TOLL_TOTAL)}/${LEVEL8_TOLL_TOTAL}）`;
+  }
+  if (g.level.levelId === LEVEL7_ID) {
+    if (task.id === "clear-warehouse") return `${task.text}（击杀 ${Math.min(g.level.sceneKills, LEVEL7_INITIAL_TOTAL)}/${LEVEL7_INITIAL_TOTAL}）`;
+    if (task.id === "protect-supplies") {
+      return `${task.text}（运输 ${Math.min(2, Math.floor(g.level.eventCount / 2))}/2 · 围墙 ${Math.ceil(g.level.wallHp)} HP）`;
+    }
+  }
+  if (g.level.levelId === LEVEL6_ID) {
+    const livingSquad = g.level.squadHp.filter((hp) => hp > 0).length;
+    const squadSuffix = g.level.squadHp.length ? ` · 队友 ${livingSquad}/${LEVEL6_SQUAD_SIZE}` : "";
+    if (g.level.sceneIndex === 3) return `${task.text}（击杀 ${Math.min(g.level.sceneKills, LEVEL6_CORRIDOR_ONE_TOTAL)}/${LEVEL6_CORRIDOR_ONE_TOTAL}${squadSuffix}）`;
+    if (g.level.sceneIndex === 4) return `${task.text}（击杀 ${Math.min(g.level.sceneKills, LEVEL6_POWER_ROOM_TOTAL)}/${LEVEL6_POWER_ROOM_TOTAL}${squadSuffix}）`;
+    if (g.level.sceneIndex === 5) return `${task.text}（击杀 ${Math.min(g.level.sceneKills, LEVEL6_CORRIDOR_TWO_TOTAL)}/${LEVEL6_CORRIDOR_TWO_TOTAL}${squadSuffix}）`;
+    if (g.level.sceneIndex === 6) return `${task.text}（击杀 ${Math.min(g.level.sceneKills, LEVEL6_ARCHIVE_TOTAL)}/${LEVEL6_ARCHIVE_TOTAL}${squadSuffix}）`;
+    if (g.level.sceneIndex === 8) return `${task.text}（击杀 ${Math.min(g.level.sceneKills, LEVEL6_CENTRAL_HALL_TOTAL)}/${LEVEL6_CENTRAL_HALL_TOTAL}${squadSuffix}）`;
+  }
+  if (task.id === "clear-corridor" || task.id === "clear-street") {
     return `${task.text}（${Math.min(g.level.sceneKills, levelZombieCount(scene))}/${levelZombieCount(scene)}）`;
   }
-  if (task.id === "clear-street") {
-    return `${task.text}（${Math.min(g.level.sceneKills, levelZombieCount(scene))}/${levelZombieCount(scene)}）`;
+  if (task.id === "reach-gas") {
+    return `${task.text}（${Math.min(g.level.sceneKills, LEVEL2_ROAD_KILLS)}/${LEVEL2_ROAD_KILLS}）`;
+  }
+  if (task.id === "survive") {
+    const remain = Math.max(0, Math.ceil((LEVEL2_SURVIVE_MS - (now - g.level.eventAt)) / 1000));
+    return `${task.text}（增援抵达 ${remain} 秒）`;
+  }
+  if (task.id === "defend-wave") {
+    return `${task.text}（击杀 ${Math.min(g.level.sceneKills, LEVEL3_DEFEND_TOTAL)}/${LEVEL3_DEFEND_TOTAL} · 围墙 ${Math.ceil(g.level.wallHp)} HP）`;
+  }
+  if (task.id === "scout") {
+    return `${task.text}（突变僵尸 ${Math.min(g.level.sceneKills, LEVEL3_MUTANTS)}/${LEVEL3_MUTANTS}）`;
+  }
+  if (task.id === "kill-juggernaut") {
+    return `${task.text}（仅胸口可伤 · 减免 70% · 高穿透武器可削弱减伤 · 破片手榴弹有效）`;
+  }
+  if (task.id === "clear-floor-1" || task.id === "clear-floor-2") {
+    return `${task.text}（击杀 ${Math.min(g.level.sceneKills, levelZombieCount(scene))}/${levelZombieCount(scene)}）`;
+  }
+  if (task.id === "defend-radio" && g.level.eventStage === "repair") {
+    const remain = Math.max(0, Math.ceil((LEVEL4_REPAIR_MS - (now - g.level.eventAt)) / 1000));
+    return `${task.text}（维修剩余 ${remain} 秒 · 设备 ${Math.ceil(g.level.wallHp)} HP）`;
+  }
+  if (task.id === "repair-power" && g.level.eventStage === "power") {
+    const remain = Math.max(0, Math.ceil((LEVEL5_REPAIR_MS - (now - g.level.eventAt)) / 1000));
+    return `${task.text}（维修剩余 ${remain} 秒 · 围栏 ${Math.ceil(g.level.wallHp)} HP）`;
+  }
+  if (task.id === "find-survivor") {
+    return `${task.text}（清剿 ${Math.min(g.level.sceneKills, LEVEL5_RESCUE_TOTAL)}/${LEVEL5_RESCUE_TOTAL}）`;
+  }
+  if (task.id === "clear-rescue-road") {
+    return `${task.text}（击杀 ${Math.min(g.level.sceneKills, LEVEL5_ROAD_TOTAL)}/${LEVEL5_ROAD_TOTAL}）`;
   }
   return task.text;
 }
 
 // ===== 关卡模式：场景与道具绘制（世界坐标，drawWorld 已完成摄像机平移）=====
 
+function drawLevel8Highway(ctx: CanvasRenderingContext2D, g: GameState, now: number) {
+  const W = g.worldW;
+  const sky = ctx.createLinearGradient(0, 0, 0, 190);
+  sky.addColorStop(0, "#6e8994"); sky.addColorStop(1, "#c0b79d");
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, W, 190);
+  ctx.fillStyle = "#454944"; ctx.fillRect(0, 150, W, H - 150);
+  ctx.fillStyle = "#313531"; ctx.fillRect(0, 190, W, 430);
+  ctx.fillStyle = "#d8c248";
+  for (let x = 20; x < W; x += 260) ctx.fillRect(x, 390, 150, 9);
+  ctx.fillStyle = "#e8e4d5";
+  for (let x = 80; x < W; x += 340) { ctx.fillRect(x, 248, 190, 7); ctx.fillRect(x, 540, 190, 7); }
+  ctx.fillStyle = "#7d817b"; ctx.fillRect(0, 172, W, 20); ctx.fillRect(0, 615, W, 18);
+  ctx.strokeStyle = "#aeb2aa"; ctx.lineWidth = 5;
+  for (const y of [184, 620]) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+    for (let x = 40; x < W; x += 180) { ctx.beginPath(); ctx.moveTo(x, y - 10); ctx.lineTo(x, y + 22); ctx.stroke(); }
+  }
+  for (let x = 700; x < W - 900; x += 1500) {
+    ctx.fillStyle = "#315f55"; ctx.fillRect(x, 76, 300, 72);
+    ctx.strokeStyle = "#d8ddd5"; ctx.lineWidth = 4; ctx.strokeRect(x, 76, 300, 72);
+    drawText(ctx, "前方收费站", x + 150, 108, 20, "#eef1e8", "center");
+    drawText(ctx, `${Math.max(1, Math.ceil((W - x) / 1800))} KM`, x + 150, 136, 15, "#d9e4dc", "center");
+    ctx.fillStyle = "#59605b"; ctx.fillRect(x + 38, 148, 12, 70); ctx.fillRect(x + 250, 148, 12, 70);
+  }
+  const tollX = LEVEL8_TOLL_FX * W;
+  ctx.fillStyle = "#d4d0c3"; ctx.fillRect(tollX - 440, 82, 880, 128);
+  ctx.fillStyle = "#3c615b"; ctx.fillRect(tollX - 460, 62, 920, 38);
+  drawText(ctx, "17号高速收费站", tollX, 90, 24, "#f4f0dd", "center");
+  for (let lane = -3; lane <= 3; lane++) {
+    const boothX = tollX + lane * 112;
+    ctx.fillStyle = "#707b78"; ctx.fillRect(boothX - 35, 178, 70, 170);
+    ctx.fillStyle = "#9eb4b3"; ctx.fillRect(boothX - 25, 198, 50, 48);
+    ctx.fillStyle = "#1f2e2d"; ctx.fillRect(boothX - 29, 270, 58, 78);
+    ctx.fillStyle = lane % 2 ? "#d8b346" : "#a23c35"; ctx.fillRect(boothX - 35, 166, 70, 12);
+  }
+  drawText(ctx, "WASD 驾驶装甲车 · 左键操控重机枪 · R 换弹", Math.max(440, g.cameraX + 520), 680, 17, "#f1df9b", "center");
+  void now;
+}
+
+function drawLevel8TollCorridor(ctx: CanvasRenderingContext2D, g: GameState) {
+  const W = g.worldW;
+  ctx.fillStyle = "#555d5d"; ctx.fillRect(0, 0, W, 455);
+  ctx.fillStyle = "#2f3535"; ctx.fillRect(0, 455, W, H - 455);
+  ctx.fillStyle = "#3c4444"; ctx.fillRect(0, 0, W, 54);
+  for (let x = 110; x < W; x += 430) {
+    ctx.fillStyle = "#d8cf9c"; ctx.fillRect(x, 70, 220, 13);
+    ctx.fillStyle = "rgba(228,218,170,.12)"; ctx.beginPath(); ctx.moveTo(x - 35, 83); ctx.lineTo(x + 255, 83); ctx.lineTo(x + 320, 455); ctx.lineTo(x - 100, 455); ctx.closePath(); ctx.fill();
+  }
+  ctx.fillStyle = "#77807d";
+  for (let x = 60; x < W; x += 560) {
+    ctx.fillRect(x, 146, 230, 184);
+    ctx.fillStyle = "#30494b"; ctx.fillRect(x + 18, 166, 194, 86);
+    ctx.strokeStyle = "#99acab"; ctx.lineWidth = 3; ctx.strokeRect(x + 18, 166, 194, 86);
+    ctx.fillStyle = "#77807d";
+  }
+  ctx.fillStyle = "#252a2a"; ctx.fillRect(0, 445, W, 18);
+  ctx.fillStyle = "#c7aa3b"; for (let x = 0; x < W; x += 180) ctx.fillRect(x, 570, 105, 8);
+  drawText(ctx, "收费站管理走廊", 220, 122, 26, "#e1e5df", "center");
+  drawText(ctx, "出口 / 管理中心", W - 260, 120, 20, "#d3c982", "center");
+}
+
+function drawLevel8ArmoredVehicle(ctx: CanvasRenderingContext2D, level: LevelRunState, now: number, parkedX = level.truckX, parkedY = level.truckY) {
+  const x = parkedX;
+  const y = parkedY;
+  ctx.save(); ctx.translate(x, y);
+  ctx.fillStyle = "#252b27";
+  for (const wx of [-105, -35, 35, 105]) { ctx.beginPath(); ctx.arc(wx, 0, 34, 0, Math.PI * 2); ctx.fill(); }
+  ctx.fillStyle = "#59634e"; ctx.beginPath(); ctx.roundRect(-155, -112, 310, 108, 22); ctx.fill();
+  ctx.strokeStyle = "#2d352b"; ctx.lineWidth = 8; ctx.stroke();
+  ctx.fillStyle = "#657158"; ctx.beginPath(); ctx.moveTo(-112, -112); ctx.lineTo(-62, -166); ctx.lineTo(82, -166); ctx.lineTo(132, -112); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "#27322e"; ctx.fillRect(-45, -152, 62, 34); ctx.fillRect(35, -152, 48, 34);
+  ctx.fillStyle = "#414b3d"; ctx.beginPath(); ctx.ellipse(0, -172, 64, 29, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.save(); ctx.translate(0, -180); ctx.rotate(level.vehicleAimAngle);
+  ctx.fillStyle = "#1f2521"; ctx.fillRect(0, -8, 132, 16); ctx.fillRect(112, -12, 34, 24);
+  ctx.fillStyle = "#6d765f"; ctx.fillRect(-28, -24, 58, 48);
+  if (now - level.vehicleLastShot < 70) {
+    ctx.fillStyle = "#fff2a0"; ctx.beginPath(); ctx.moveTo(150, 0); ctx.lineTo(184, -14); ctx.lineTo(174, 0); ctx.lineTo(184, 14); ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+  ctx.fillStyle = "#eef1dc"; ctx.fillRect(-118, -88, 38, 24); drawText(ctx, "08", -99, -69, 15, "#253027", "center");
+  ctx.restore();
+}
+
 function drawLevelBackground(ctx: CanvasRenderingContext2D, g: GameState, now: number) {
   const sceneIndex = g.level?.sceneIndex ?? 0;
+  if (g.level?.levelId === LEVEL8_ID) {
+    if (sceneIndex === 0) drawLevel4Briefing(ctx, g, now);
+    else if (sceneIndex === 1) drawLevel4BaseYard(ctx, g, now);
+    else if (sceneIndex === 2) drawLevel8Highway(ctx, g, now);
+    else drawLevel8TollCorridor(ctx, g);
+    return;
+  }
+  if (g.level?.levelId === LEVEL7_ID) {
+    if (sceneIndex === 0) drawLevel4Briefing(ctx, g, now);
+    else if (sceneIndex === 1) drawLevel4BaseYard(ctx, g, now);
+    else if (sceneIndex === 2) drawLevel7WarehouseExterior(ctx, g, now);
+    else drawLevel7WarehouseInterior(ctx, g, now);
+    return;
+  }
+  if (g.level?.levelId === LEVEL6_ID) {
+    if (sceneIndex === 0) drawLevel4Briefing(ctx, g, now);
+    else if (sceneIndex === 1) drawLevel4BaseYard(ctx, g, now);
+    else if (sceneIndex === 2) drawLevel6CityHallExterior(ctx, g, now);
+    else if (sceneIndex === 3) drawLevel6Corridor(ctx, g, now, false, "配电室方向");
+    else if (sceneIndex === 4) drawLevel6PowerRoom(ctx, g, now);
+    else if (sceneIndex === 5) drawLevel6Corridor(ctx, g, now, true, "档案室方向");
+    else if (sceneIndex === 6) drawLevel6Archives(ctx, g, now);
+    else if (sceneIndex === 7) drawLevel4Stairwell(ctx, g, 3);
+    else drawLevel6CentralHall(ctx, g, now);
+    return;
+  }
+  if (g.level?.levelId === LEVEL5_ID) {
+    if (sceneIndex === 0) drawLevel5MonitoringRoom(ctx, g, now);
+    else if (sceneIndex === 1) drawLevel5Helipad(ctx, g, now);
+    else if (sceneIndex === 2) drawLevel5TunnelEntrance(ctx, g);
+    else if (sceneIndex === 3) drawLevel5Tunnel(ctx, g, now, false, "power");
+    else if (sceneIndex === 4) drawLevel5Tunnel(ctx, g, now, true, "rescue");
+    else drawLevel5Tunnel(ctx, g, now, true, "road");
+    return;
+  }
+  if (g.level?.levelId === LEVEL4_ID) {
+    if (sceneIndex === 0) drawLevel4Briefing(ctx, g, now);
+    else if (sceneIndex === 1) drawLevel4BaseYard(ctx, g, now);
+    else if (sceneIndex === 2) drawLevel4StationGate(ctx, g, now);
+    else if (sceneIndex === 3) drawLevel4Floor(ctx, g, now, 1);
+    else if (sceneIndex === 4) drawLevel4Stairwell(ctx, g, 2);
+    else if (sceneIndex === 5) drawLevel4Floor(ctx, g, now, 2);
+    else if (sceneIndex === 6) drawLevel4Stairwell(ctx, g, 3);
+    else if (sceneIndex === 7) drawLevel4Roof(ctx, g, now);
+    else drawLevel4RoofDefense(ctx, g, now);
+    return;
+  }
+  if (g.level?.levelId === LEVEL3_ID) {
+    if (sceneIndex === 0) drawLevelDorm(ctx, g, now);
+    else if (sceneIndex === 1) drawLevelNightBase(ctx, g, now);
+    else drawLevelDirtRoad(ctx, g);
+    return;
+  }
+  if (g.level?.levelId === LEVEL2_ID) {
+    if (sceneIndex === 0) drawLevelHighway(ctx, g);
+    else drawLevelBase(ctx, g, now);
+    return;
+  }
   if (sceneIndex === 0) drawLevelHome(ctx, g);
   else if (sceneIndex === 1) drawLevelCorridor(ctx, g, now);
   else drawLevelStreet(ctx, g, now);
+}
+
+// ===== 第三关「防守基地」场景绘制与黑夜光照系统 =====
+
+// 场景 0：军营宿舍——夜色营房（床铺/储物柜/窗/大门），开场演出时在床上绘制睡卧/起身的人物
+function drawLevelDorm(ctx: CanvasRenderingContext2D, g: GameState, now: number) {
+  const W = g.worldW;
+  // 墙与地板（熄灯后的军营宿舍：青灰冷色调）
+  const wall = ctx.createLinearGradient(0, 0, 0, 460);
+  wall.addColorStop(0, "#131a18"); wall.addColorStop(1, "#1e2823");
+  ctx.fillStyle = wall; ctx.fillRect(0, 0, W, 460);
+  const floor = ctx.createLinearGradient(0, 460, 0, H);
+  floor.addColorStop(0, "#262b26"); floor.addColorStop(1, "#191d19");
+  ctx.fillStyle = floor; ctx.fillRect(0, 460, W, H - 460);
+  ctx.fillStyle = "#0e1311"; ctx.fillRect(0, 452, W, 10);
+  // 夜窗：两块泛着夜色的窗玻璃 + 月光斜影
+  for (const wx of [W * 0.34, W * 0.58]) {
+    ctx.fillStyle = "#0d1522"; ctx.fillRect(wx, 120, 130, 150);
+    ctx.strokeStyle = "#2a352f"; ctx.lineWidth = 6; ctx.strokeRect(wx, 120, 130, 150);
+    ctx.beginPath(); ctx.moveTo(wx + 65, 120); ctx.lineTo(wx + 65, 270); ctx.moveTo(wx, 195); ctx.lineTo(wx + 130, 195); ctx.stroke();
+    ctx.fillStyle = "rgba(190,205,225,.06)";
+    ctx.beginPath(); ctx.moveTo(wx + 16, 270); ctx.lineTo(wx + 96, 270); ctx.lineTo(wx + 150, 452); ctx.lineTo(wx + 40, 452); ctx.closePath(); ctx.fill();
+  }
+  // 空床铺排（第二、三张床，暗示同寝室友已出勤）
+  for (const bx of [W * 0.42, W * 0.62]) {
+    ctx.fillStyle = "#232d27"; ctx.fillRect(bx, 470, 250, 20);
+    ctx.fillStyle = "#1a211d"; ctx.fillRect(bx, 490, 16, 70); ctx.fillRect(bx + 234, 490, 16, 70);
+    ctx.fillStyle = "#2c352d"; ctx.fillRect(bx + 8, 442, 234, 30);
+    ctx.fillStyle = "#39423a"; ctx.fillRect(bx + 14, 446, 64, 22);
+  }
+  // 储物柜
+  for (const lx of [W * 0.80, W * 0.845]) {
+    ctx.fillStyle = "#26302a"; ctx.fillRect(lx, 330, 56, 130);
+    ctx.strokeStyle = "#161d19"; ctx.lineWidth = 3; ctx.strokeRect(lx, 330, 56, 130);
+    ctx.beginPath(); ctx.moveTo(lx + 40, 344); ctx.lineTo(lx + 40, 402); ctx.stroke();
+  }
+  // 主角床铺（床头朝左，被褥军绿）
+  ctx.fillStyle = "#2b352e"; ctx.fillRect(130, 470, 300, 22);
+  ctx.fillStyle = "#1a211d"; ctx.fillRect(134, 492, 18, 82); ctx.fillRect(408, 492, 18, 82);
+  ctx.fillStyle = "#333e35"; ctx.fillRect(138, 436, 284, 36);
+  ctx.fillStyle = "#d8d4c4"; ctx.fillRect(146, 440, 62, 26);
+  // 墙上「熄灯纪律」告示与门牌
+  ctx.fillStyle = "#c8b890"; ctx.fillRect(W * 0.24, 150, 90, 60);
+  drawText(ctx, "熄灯", W * 0.24 + 45, 176, 17, "#33383d", "center");
+  drawText(ctx, "静音", W * 0.24 + 45, 198, 17, "#33383d", "center");
+  // 大门（右侧出口，门缝透光）
+  ctx.fillStyle = "#10150f"; ctx.fillRect(W - 120, 210, 86, 250);
+  ctx.strokeStyle = "#3a4436"; ctx.lineWidth = 5; ctx.strokeRect(W - 120, 210, 86, 250);
+  ctx.fillStyle = "rgba(214,190,120,.28)"; ctx.fillRect(W - 44, 214, 5, 242);
+  ctx.fillStyle = "#c8b890"; ctx.fillRect(W - 128, 168, 100, 30);
+  drawText(ctx, "宿舍门", W - 78, 190, 16, "#33383d", "center");
+  // 开场演出：睡卧 → 起身（可控后由正常玩家模型接管）
+  const level = g.level;
+  if (level && (level.eventStage === "sleep" || level.eventStage === "rise")) {
+    const riseT = level.eventStage === "rise" ? Math.min(1, (now - level.eventAt) / LEVEL3_RISE_MS) : 0;
+    drawDormSleeper(ctx, riseT, now);
+  }
+}
+
+// 开场演出人物：睡卧呼吸（riseT=0）→ 坐起 → 双腿挪下床沿站立（riseT→1 后切换为玩家模型）
+function drawDormSleeper(ctx: CanvasRenderingContext2D, riseT: number, now: number) {
+  const breath = riseT === 0 ? Math.sin(now / 680) * 2.2 : 0;
+  const sit = Math.min(1, riseT / 0.6);            // 坐起进度
+  const stand = Math.max(0, (riseT - 0.55) / 0.45); // 下床进度
+  ctx.save();
+  ctx.translate(300, 446);
+  // 双腿：平躺 → 垂下床沿
+  ctx.fillStyle = "#3b4531";
+  ctx.beginPath();
+  ctx.roundRect(10, 8 - sit * 4, 108 - stand * 62, 22 - sit * 6, 6);
+  ctx.fill();
+  if (stand > 0) ctx.fillRect(96, 22, 18, 64 * stand);
+  // 躯干：自平躺逐渐立起（绕髋部旋转）
+  ctx.save();
+  ctx.rotate(-sit * (Math.PI / 2.15));
+  ctx.fillStyle = "#4f5c3f";
+  ctx.beginPath(); ctx.roundRect(-14, -26 - breath * 0.4, 88, 30 + breath, 9); ctx.fill();
+  // 手臂交叠胸前
+  ctx.fillStyle = "#434f36";
+  ctx.beginPath(); ctx.roundRect(16, -22 - breath * 0.5, 46, 12, 6); ctx.fill();
+  // 头（枕上 → 抬起）
+  ctx.fillStyle = "#d0a079";
+  ctx.beginPath(); ctx.arc(86, -12 - breath, 13, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#1a1f1d";
+  ctx.beginPath(); ctx.arc(83, -17 - breath, 11, Math.PI * 0.9, Math.PI * 2.05); ctx.fill();
+  ctx.restore();
+  // 军绿被子：随坐起滑落到腿上
+  ctx.fillStyle = "#46523b";
+  ctx.beginPath();
+  ctx.roundRect(6, -6 + sit * 14 - breath * 0.6, 116 - sit * 30, 20 + breath * 0.8, 7);
+  ctx.fill();
+  ctx.restore();
+}
+
+// 场景 1：基地外墙夜防——星空/岗哨塔/混凝土围墙（射击孔 + 沙袋）/ 红色警灯座
+function drawLevelNightBase(ctx: CanvasRenderingContext2D, g: GameState, now: number) {
+  const W = g.worldW;
+  const wallX = LEVEL3_WALL_FX * W;
+  // 夜空与星
+  const sky = ctx.createLinearGradient(0, 0, 0, ROAD_TOP + 24);
+  sky.addColorStop(0, "#05080f"); sky.addColorStop(1, "#0c1220");
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, W, ROAD_TOP + 24);
+  ctx.fillStyle = "rgba(220,228,240,.5)";
+  for (let i = 0; i < 40; i++) {
+    const sx = (i * 173) % W;
+    const sy = (i * 97) % 130 + 8;
+    ctx.globalAlpha = 0.25 + ((i * 37) % 10) / 18;
+    ctx.fillRect(sx, sy, 2, 2);
+  }
+  ctx.globalAlpha = 1;
+  // 地面（夯土训练场，夜里近乎全黑）
+  const ground = ctx.createLinearGradient(0, ROAD_TOP + 24, 0, H);
+  ground.addColorStop(0, "#232a22"); ground.addColorStop(1, "#14180f");
+  ctx.fillStyle = ground; ctx.fillRect(0, ROAD_TOP + 24, W, H - ROAD_TOP - 24);
+  // 基地侧（围墙左）：营房剪影 + 旗杆
+  ctx.fillStyle = "#12170f";
+  ctx.fillRect(60, 120, 320, 64); ctx.fillRect(120, 96, 180, 26);
+  ctx.strokeStyle = "#1c2318"; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.moveTo(W * 0.1, 184); ctx.lineTo(W * 0.1, 90); ctx.stroke();
+  // 岗哨塔（探照灯座，灯光由光照系统绘制）
+  for (const tx of [0.2 * W, 0.42 * W]) {
+    ctx.fillStyle = "#1a201a"; ctx.fillRect(tx - 8, 96, 16, 92);
+    ctx.fillStyle = "#242c24"; ctx.fillRect(tx - 30, 66, 60, 36);
+    ctx.fillStyle = "#141a14"; ctx.fillRect(tx - 34, 58, 68, 10);
+    ctx.fillStyle = "#3a4438"; ctx.beginPath(); ctx.arc(tx, 84, 7, 0, Math.PI * 2); ctx.fill();
+  }
+  // 基地路灯：写实灯杆 + 挑臂 + 发光灯头（光洞由光照系统挖出）；沿道路与围墙内侧分布
+  for (const [i, fx] of LEVEL3_LAMP_FX.entries()) {
+    const lx = fx * W;
+    const flicker = 0.82 + Math.sin(now / 210 + i * 2.1) * 0.1;
+    ctx.strokeStyle = "#20251f"; ctx.lineWidth = 7;
+    ctx.beginPath(); ctx.moveTo(lx, 486); ctx.lineTo(lx, 218); ctx.lineTo(lx + 34, 226); ctx.stroke();
+    ctx.fillStyle = "#2c322c"; ctx.fillRect(lx + 24, 218, 36, 14);
+    ctx.fillStyle = `rgba(238,214,140,${0.85 * flicker})`;
+    ctx.beginPath(); ctx.roundRect(lx + 28, 226, 28, 7, 3); ctx.fill();
+    // 灯座与地面光斑底色（亮边在光照层叠加）
+    ctx.fillStyle = "#181d18"; ctx.fillRect(lx - 8, 480, 16, 10);
+    ctx.fillStyle = `rgba(232,208,130,${0.05 * flicker})`;
+    ctx.beginPath(); ctx.ellipse(lx + 42, 492, 150, 34, 0, 0, Math.PI * 2); ctx.fill();
+  }
+  // 外围墙右侧：铁丝网立柱没入黑暗
+  ctx.strokeStyle = "#161b16"; ctx.lineWidth = 3;
+  for (let x = wallX + 90; x < W; x += 150) {
+    ctx.beginPath(); ctx.moveTo(x, 196); ctx.lineTo(x, 164); ctx.stroke();
+  }
+  // 混凝土防御围墙：通高墙体 + 三个射击孔 + 顶部铁丝 + 红色警灯座
+  ctx.fillStyle = "#3f4440"; ctx.fillRect(wallX - 20, 176, 40, 474);
+  ctx.fillStyle = "#343936"; ctx.fillRect(wallX - 26, 168, 52, 12);
+  ctx.strokeStyle = "#222624"; ctx.lineWidth = 2;
+  for (let y = 216; y < 640; y += 42) { ctx.beginPath(); ctx.moveTo(wallX - 20, y); ctx.lineTo(wallX + 20, y); ctx.stroke(); }
+  for (const holeY of LEVEL3_WALL_HOLES) {
+    ctx.fillStyle = "#0a0d0b"; ctx.fillRect(wallX - 22, holeY - 38, 44, 76);
+    ctx.strokeStyle = "#565c55"; ctx.lineWidth = 3; ctx.strokeRect(wallX - 22, holeY - 38, 44, 76);
+  }
+  // 围墙电机大门（混凝土门洞 + 金属闸板）：夜防结束后闸板升起放行
+  const level = g.level;
+  const gateOpen = !!level && level.taskIndex >= 2;
+  ctx.fillStyle = "#10140f";
+  ctx.fillRect(wallX - 21, LEVEL3_GATE_TOP, 42, LEVEL3_GATE_BOTTOM - LEVEL3_GATE_TOP);
+  if (!gateOpen) {
+    // 关闭态：钢闸板 + 警示斜纹
+    ctx.fillStyle = "#39413c"; ctx.fillRect(wallX - 19, LEVEL3_GATE_TOP + 2, 38, LEVEL3_GATE_BOTTOM - LEVEL3_GATE_TOP - 4);
+    ctx.strokeStyle = "#22271f"; ctx.lineWidth = 2; ctx.strokeRect(wallX - 19, LEVEL3_GATE_TOP + 2, 38, LEVEL3_GATE_BOTTOM - LEVEL3_GATE_TOP - 4);
+    ctx.fillStyle = "#8a7a2e";
+    for (let y = LEVEL3_GATE_TOP + 10; y < LEVEL3_GATE_BOTTOM - 12; y += 26) {
+      ctx.beginPath(); ctx.moveTo(wallX - 17, y + 12); ctx.lineTo(wallX + 1, y); ctx.lineTo(wallX + 17, y); ctx.lineTo(wallX - 1, y + 12); ctx.closePath(); ctx.fill();
+    }
+    drawText(ctx, "大门", wallX, LEVEL3_GATE_TOP + 34, 13, "#c9c2a8", "center");
+  } else {
+    // 开启态：闸板收进门楣，只留顶部一截
+    ctx.fillStyle = "#39413c"; ctx.fillRect(wallX - 19, LEVEL3_GATE_TOP, 38, 14);
+    ctx.strokeStyle = "#565c55"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(wallX - 19, LEVEL3_GATE_TOP + 14); ctx.lineTo(wallX + 19, LEVEL3_GATE_TOP + 14); ctx.stroke();
+  }
+  // 红色警报灯座（旋转光效由光照系统叠加）
+  ctx.fillStyle = "#2a2422"; ctx.fillRect(wallX - 10, 146, 20, 24);
+  ctx.fillStyle = "#7a221c"; ctx.beginPath(); ctx.arc(wallX, 148, 8, 0, Math.PI * 2); ctx.fill();
+  // 墙后沙袋掩体（玩家防守位）
+  for (const sy of [330, 450, 570]) {
+    for (let r = 0; r < 2; r++) for (let s = 0; s < 4; s++) {
+      ctx.fillStyle = r ? "#4a4636" : "#544f3c";
+      ctx.beginPath(); ctx.roundRect(wallX - 96 + s * 22 + (r ? 10 : 0), sy + r * 14, 22, 14, 5); ctx.fill();
+    }
+  }
+  // 防守进行中：围墙 HP 条
+  if (level && level.eventStage === "defend") {
+    const ratio = Math.max(0, level.wallHp / LEVEL3_WALL_HP);
+    ctx.fillStyle = "#101311"; ctx.fillRect(wallX - 90, 128, 180, 10);
+    ctx.fillStyle = ratio > .45 ? "#d5ad39" : "#c33c36"; ctx.fillRect(wallX - 90, 128, 180 * ratio, 10);
+    drawText(ctx, `围墙 ${Math.ceil(level.wallHp)} HP`, wallX, 122, 13, "#f0ead8", "center");
+  }
+}
+
+// 场景 2：城外土路侦查——荒野土路、枯树与电线杆剪影，尽头没入黑暗（仅枪灯照明）
+function drawLevelDirtRoad(ctx: CanvasRenderingContext2D, g: GameState) {
+  const W = g.worldW;
+  const sky = ctx.createLinearGradient(0, 0, 0, ROAD_TOP + 24);
+  sky.addColorStop(0, "#04070d"); sky.addColorStop(1, "#0a101a");
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, W, ROAD_TOP + 24);
+  ctx.fillStyle = "rgba(215,222,236,.4)";
+  for (let i = 0; i < 46; i++) {
+    ctx.globalAlpha = 0.2 + ((i * 41) % 10) / 20;
+    ctx.fillRect((i * 211) % W, (i * 83) % 120 + 6, 2, 2);
+  }
+  ctx.globalAlpha = 1;
+  // 土路
+  const road = ctx.createLinearGradient(0, ROAD_TOP + 24, 0, H);
+  road.addColorStop(0, "#2a2419"); road.addColorStop(1, "#17130c");
+  ctx.fillStyle = road; ctx.fillRect(0, ROAD_TOP + 24, W, H - ROAD_TOP - 24);
+  ctx.strokeStyle = "rgba(0,0,0,.4)"; ctx.lineWidth = 3;
+  for (let x = 200; x < W; x += 380) {
+    ctx.beginPath(); ctx.moveTo(x, 320 + (x % 5) * 46); ctx.lineTo(x + 30, 352 + (x % 5) * 46); ctx.stroke();
+  }
+  // 基地大门（起点后方：铁门 + 门柱，回望可见）
+  ctx.fillStyle = "#171c17"; ctx.fillRect(20, 180, 18, 180); ctx.fillRect(150, 180, 18, 180);
+  ctx.strokeStyle = "#222a22"; ctx.lineWidth = 5;
+  ctx.beginPath(); ctx.moveTo(38, 200); ctx.lineTo(150, 200); ctx.moveTo(38, 250); ctx.lineTo(150, 250); ctx.stroke();
+  // 枯树与电线杆剪影
+  ctx.strokeStyle = "#0d110d"; ctx.lineWidth = 7;
+  for (let i = 0; i < 8; i++) {
+    const tx = 420 + i * ((W - 700) / 8);
+    ctx.beginPath(); ctx.moveTo(tx, 210); ctx.lineTo(tx + 6, 130); ctx.moveTo(tx + 6, 150); ctx.lineTo(tx - 18, 108); ctx.moveTo(tx + 6, 140); ctx.lineTo(tx + 30, 104); ctx.stroke();
+  }
+  ctx.lineWidth = 6;
+  for (let i = 0; i < 5; i++) {
+    const px = 700 + i * 760;
+    if (px > W - 100) break;
+    ctx.beginPath(); ctx.moveTo(px, 220); ctx.lineTo(px, 96); ctx.moveTo(px - 24, 112); ctx.lineTo(px + 24, 112); ctx.stroke();
+  }
+  // 道路尽头：黑暗林地剪影
+  ctx.fillStyle = "#080b08";
+  ctx.fillRect(W - 260, 60, 260, 130);
+  for (let i = 0; i < 6; i++) {
+    const tx = W - 250 + i * 44;
+    ctx.beginPath(); ctx.moveTo(tx, 190); ctx.lineTo(tx + 20, 84); ctx.lineTo(tx + 40, 190); ctx.closePath(); ctx.fill();
+  }
+}
+
+// ===== 黑夜光照系统（第三关）：离屏暗色覆盖层 + destination-out 挖出光洞，再叠回主画布 =====
+// 暗层画布复用（跟随主画布尺寸），避免逐帧分配
+let nightLayer: HTMLCanvasElement | null = null;
+function nightLayerCtx(w: number, h: number): CanvasRenderingContext2D | null {
+  if (typeof document === "undefined") return null;
+  if (!nightLayer) nightLayer = document.createElement("canvas");
+  if (nightLayer.width !== w) nightLayer.width = w;
+  if (nightLayer.height !== h) nightLayer.height = h;
+  return nightLayer.getContext("2d");
+}
+
+// 在暗层上挖出锥形光洞（sector 路径 + 轴向线性渐隐，destination-out 模式下白色即擦除）
+function punchCone(lctx: CanvasRenderingContext2D, x: number, y: number, angle: number, reach: number, halfAngle: number, alpha: number) {
+  const grad = lctx.createLinearGradient(x, y, x + Math.cos(angle) * reach, y + Math.sin(angle) * reach);
+  grad.addColorStop(0, `rgba(255,255,255,${alpha})`);
+  grad.addColorStop(0.5, `rgba(255,255,255,${alpha * 0.5})`);
+  grad.addColorStop(1, "rgba(255,255,255,0)");
+  lctx.fillStyle = grad;
+  lctx.beginPath();
+  lctx.moveTo(x, y);
+  lctx.arc(x, y, reach, angle - halfAngle, angle + halfAngle);
+  lctx.closePath();
+  lctx.fill();
+}
+
+// 在暗层上挖出圆形光洞（径向渐隐）
+function punchCircle(lctx: CanvasRenderingContext2D, x: number, y: number, r: number, alpha: number) {
+  const grad = lctx.createRadialGradient(x, y, 2, x, y, r);
+  grad.addColorStop(0, `rgba(255,255,255,${alpha})`);
+  grad.addColorStop(0.55, `rgba(255,255,255,${alpha * 0.5})`);
+  grad.addColorStop(1, "rgba(255,255,255,0)");
+  lctx.fillStyle = grad;
+  lctx.beginPath(); lctx.arc(x, y, r, 0, Math.PI * 2); lctx.fill();
+}
+
+function level4StairFootY(worldW: number, x: number): number {
+  const lowerStart = worldW * LEVEL4_STAIR_LOWER_START_FX;
+  const landingStart = worldW * LEVEL4_STAIR_LANDING_FX;
+  const landingEnd = landingStart + worldW * LEVEL4_STAIR_LANDING_W_FX * .82;
+  const upperEnd = worldW * LEVEL4_STAIR_UPPER_END_FX;
+  const steps = 10;
+  if (x <= lowerStart) return LEVEL4_STAIR_BOTTOM_Y;
+  if (x < landingStart) {
+    const step = Math.min(steps - 1, Math.floor(((x - lowerStart) / Math.max(1, landingStart - lowerStart)) * steps));
+    return LEVEL4_STAIR_BOTTOM_Y + (LEVEL4_STAIR_LANDING_Y - LEVEL4_STAIR_BOTTOM_Y) * (step / steps);
+  }
+  if (x <= landingEnd) return LEVEL4_STAIR_LANDING_Y;
+  if (x < upperEnd) {
+    const step = Math.min(steps - 1, Math.floor(((x - landingEnd) / Math.max(1, upperEnd - landingEnd)) * steps));
+    return LEVEL4_STAIR_LANDING_Y + (LEVEL4_STAIR_EXIT_Y - LEVEL4_STAIR_LANDING_Y) * (step / steps);
+  }
+  return LEVEL4_STAIR_EXIT_Y;
+}
+
+function isLevel4StairScene(g: GameState): boolean {
+  if (g.mode !== "level" || !g.level) return false;
+  return (g.level.levelId === LEVEL4_ID && (g.level.sceneIndex === 4 || g.level.sceneIndex === 6))
+    || (g.level.levelId === LEVEL6_ID && g.level.sceneIndex === 7);
+}
+
+function isLevel8Driving(g: GameState): boolean {
+  return g.mode === "level" && g.level?.levelId === LEVEL8_ID && g.level.sceneIndex === 2 && g.level.eventStage === "armored-drive";
+}
+
+// 开场/乘车演出输入冻结判定：第三关睡眠起身；第四关车辆行驶、停稳及全员下车。
+function levelInputFrozen(g: GameState): boolean {
+  const level = g.level;
+  if (g.mode !== "level" || !level) return false;
+  if (level.levelId === LEVEL3_ID && level.sceneIndex === 0) return level.eventStage === "sleep" || level.eventStage === "rise";
+  if (level.levelId === LEVEL4_ID && level.sceneIndex === 2) return level.eventStage === "ride" || level.eventStage === "disembark";
+  if (level.levelId === LEVEL6_ID && level.sceneIndex === 2) return level.eventStage === "ride" || level.eventStage === "disembark";
+  if (level.levelId === LEVEL7_ID && level.sceneIndex === 2) return level.eventStage === "ride" || level.eventStage === "disembark";
+  if (level.levelId === LEVEL8_ID && level.sceneIndex === 2) return level.eventStage === "disembark";
+  return level.levelId === LEVEL5_ID && level.sceneIndex === 2
+    && (level.eventStage === "flight" || level.eventStage === "landed");
+}
+
+function levelPlayerHidden(g: GameState, now: number): boolean {
+  const level = g.level;
+  if (g.mode !== "level" || !level) return false;
+  if (level.levelId === LEVEL3_ID && level.sceneIndex === 0) return level.eventStage === "sleep" || level.eventStage === "rise";
+  if (level.levelId === LEVEL4_ID && level.sceneIndex === 2) {
+    return level.eventStage === "ride" || (level.eventStage === "disembark" && now < level.eventAt + LEVEL4_PLAYER_EXIT_DELAY_MS);
+  }
+  if (level.levelId === LEVEL6_ID && level.sceneIndex === 2) {
+    return level.eventStage === "ride" || (level.eventStage === "disembark" && now < level.eventAt + LEVEL6_PLAYER_EXIT_DELAY_MS);
+  }
+  if (level.levelId === LEVEL7_ID && level.sceneIndex === 2) {
+    return level.eventStage === "ride" || (level.eventStage === "disembark" && now < level.eventAt + LEVEL7_PLAYER_EXIT_DELAY_MS);
+  }
+  if (level.levelId === LEVEL8_ID && level.sceneIndex === 2) {
+    return level.eventStage === "armored-drive" || (level.eventStage === "disembark" && now < level.eventAt + 700);
+  }
+  return level.levelId === LEVEL5_ID && level.sceneIndex === 2
+    && (level.eventStage === "flight" || (level.eventStage === "landed" && now < level.eventAt + LEVEL5_PLAYER_EXIT_DELAY_MS));
+}
+
+// 夜防围墙：子弹仅经射击孔越过墙体；被墙挡下时返回交点（用于截断曳光与命中），否则 null
+function level3WallBlock(g: GameState, x1: number, y1: number, x2: number, y2: number): { x: number; y: number } | null {
+  if (g.mode !== "level" || g.level?.levelId !== LEVEL3_ID || g.level.sceneIndex !== 1) return null;
+  const wallX = LEVEL3_WALL_FX * g.worldW;
+  if (!(x1 < wallX - 20 && x2 > wallX + 20)) return null;
+  const t = (wallX - x1) / (x2 - x1 || 1e-6);
+  const crossY = y1 + (y2 - y1) * t;
+  for (const holeY of LEVEL3_WALL_HOLES) if (Math.abs(crossY - holeY) <= 38) return null;
+  // 大门开启后（任务推进到「走到基地大门」），门洞可通行/射击
+  if (g.level.taskIndex >= 2 && crossY >= LEVEL3_GATE_TOP && crossY <= LEVEL3_GATE_BOTTOM) return null;
+  return { x: wallX, y: crossY };
+}
+
+// 黑暗光照主入口：第三关夜景、第五关未通电隧道与第六关断电楼层共用枪灯、枪口火光、队友枪灯和爆炸照明。
+function drawNightLighting(ctx: CanvasRenderingContext2D, g: GameState, now: number) {
+  const level = g.level;
+  if (g.mode !== "level" || !level) return;
+  const level3Night = level.levelId === LEVEL3_ID;
+  const level5DarkTunnel = level.levelId === LEVEL5_ID && level.sceneIndex === 3;
+  const level6DarkBuilding = level.levelId === LEVEL6_ID && !level.powerOn && (level.sceneIndex === 3 || level.sceneIndex === 4);
+  if (!level3Night && !level5DarkTunnel && !level6DarkBuilding) return;
+  const W = ctx.canvas.width;
+  if (level3Night && level.sceneIndex === 0) {
+    // 屏幕亮度由暗变亮：睡眠段 0.96 → 0.18，起身段归零
+    let alpha = 0;
+    if (level.eventStage === "sleep") alpha = 0.96 - Math.min(1, (now - level.eventAt) / LEVEL3_WAKE_MS) * 0.78;
+    else if (level.eventStage === "rise") alpha = 0.18 * (1 - Math.min(1, (now - level.eventAt) / LEVEL3_RISE_MS));
+    if (alpha > 0.004) {
+      ctx.fillStyle = `rgba(2,4,9,${alpha.toFixed(3)})`;
+      ctx.fillRect(0, 0, W, H);
+    }
+    return;
+  }
+  const lctx = nightLayerCtx(W, H);
+  if (!lctx) return;
+  const camX = g.cameraX;
+  const p = g.player;
+  lctx.clearRect(0, 0, W, H);
+  lctx.globalCompositeOperation = "source-over";
+  lctx.fillStyle = "rgba(3,7,15,0.94)";
+  lctx.fillRect(0, 0, W, H);
+  lctx.globalCompositeOperation = "destination-out";
+  // 第三关保留人物周身微光；未通电的隧道和市政大楼严格只靠枪灯与开火/爆炸照明。
+  if (level3Night) punchCircle(lctx, p.x - camX, p.y - 92, 150, 0.5);
+  // 枪灯：武器下挂战术灯，锥形光束随枪口方向（M16 远距离锥形照明；手枪为近程微光）
+  const reach = p.weapon === "m16" ? 650 : MELEE_WEAPONS.has(p.weapon) ? 0 : 290;
+  if (reach > 0) {
+    const gun = playerGunOrigin(p);
+    const gx = gun.x - camX;
+    punchCone(lctx, gx, gun.y, p.angle, reach, 0.19, 0.9);
+    punchCone(lctx, gx, gun.y, p.angle, reach * 0.6, 0.1, 0.7);
+  }
+  // 枪口火光短暂照亮近场
+  if (now - p.lastMuzzleFlash < 80) {
+    const gun = playerGunOrigin(p);
+    punchCircle(lctx, gun.x - camX + Math.cos(p.angle) * 40, gun.y + Math.sin(p.angle) * 40, 190, 0.9);
+  }
+  // 队友枪灯：每名士兵的 M16 同带锥形光束（方向随各自瞄准），叠加开火火光
+  for (const npc of g.npcs) {
+    const f = npc.field;
+    const shoulderY = f.y - 88 * CHARACTER_SCALE;
+    punchCone(lctx, f.x - camX, shoulderY, f.angle, 560, 0.17, 0.65);
+    if (now - f.muzzleAt < 80) punchCircle(lctx, f.x - camX, shoulderY, 150, 0.75);
+  }
+  // 爆炸与火光（手雷/爆炸物照明）
+  for (const blast of g.blastEffects) {
+    const fade = Math.max(0, Math.min(1, (blast.until - now) / 700));
+    if (fade > 0) punchCircle(lctx, blast.x - camX, blast.y, 150 + 130 * fade, 0.95 * fade);
+  }
+  if (level.sceneIndex === 1) {
+    // 基地路灯光洞：灯头暖光 + 地面光池（随灯杆闪烁同步明暗）
+    for (const [i, fx] of LEVEL3_LAMP_FX.entries()) {
+      const flicker = 0.82 + Math.sin(now / 210 + i * 2.1) * 0.1;
+      const lx = fx * g.worldW - camX;
+      punchCircle(lctx, lx + 42, 240, 190, 0.62 * flicker);
+      punchCircle(lctx, lx + 42, 486, 170, 0.5 * flicker);
+    }
+    // 探照灯：两座岗哨塔旋转光束扫过墙外（加亮加宽的光柱 + 更大的落点光斑）
+    for (const [i, fx] of [0.2, 0.42].entries()) {
+      const ang = 0.62 + Math.sin(now / 3000 + i * 2.4) * 0.5;
+      const sx = fx * g.worldW - camX;
+      punchCone(lctx, sx, 92, ang, 1150, 0.085, 0.85);
+      punchCircle(lctx, sx + Math.cos(ang) * 830, 92 + Math.sin(ang) * 830, 190, 0.75);
+    }
+    // 红色警报灯：围墙顶警灯闪烁（微光照亮墙体）
+    const blink = 0.5 + Math.sin(now / 130) * 0.5;
+    punchCircle(lctx, LEVEL3_WALL_FX * g.worldW - camX, 178, 160, 0.16 + blink * 0.2);
+  }
+  lctx.globalCompositeOperation = "source-over";
+  ctx.drawImage(nightLayer as HTMLCanvasElement, 0, 0);
+  // 加色层：路灯光晕、探照灯光柱与警报红光本体（在黑暗中可见的光效）
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  if (level.sceneIndex === 1) {
+    for (const [i, fx] of LEVEL3_LAMP_FX.entries()) {
+      const flicker = 0.82 + Math.sin(now / 210 + i * 2.1) * 0.1;
+      const lx = fx * g.worldW - camX;
+      const lampHalo = ctx.createRadialGradient(lx + 42, 232, 3, lx + 42, 232, 110);
+      lampHalo.addColorStop(0, `rgba(240,216,140,${(0.4 * flicker).toFixed(3)})`);
+      lampHalo.addColorStop(1, "rgba(240,216,140,0)");
+      ctx.fillStyle = lampHalo;
+      ctx.beginPath(); ctx.arc(lx + 42, 232, 110, 0, Math.PI * 2); ctx.fill();
+    }
+    for (const [i, fx] of [0.2, 0.42].entries()) {
+      const ang = 0.62 + Math.sin(now / 3000 + i * 2.4) * 0.5;
+      const sx = fx * g.worldW - camX;
+      const ex = sx + Math.cos(ang) * 1150;
+      const ey = 92 + Math.sin(ang) * 1150;
+      const beam = ctx.createLinearGradient(sx, 92, ex, ey);
+      beam.addColorStop(0, "rgba(216,228,246,.24)");
+      beam.addColorStop(1, "rgba(216,228,246,0)");
+      ctx.strokeStyle = beam;
+      ctx.lineWidth = 58;
+      ctx.lineCap = "round";
+      ctx.beginPath(); ctx.moveTo(sx, 92); ctx.lineTo(ex, ey); ctx.stroke();
+    }
+    const wallX = LEVEL3_WALL_FX * g.worldW - camX;
+    const blink = 0.5 + Math.sin(now / 130) * 0.5;
+    const halo = ctx.createRadialGradient(wallX, 178, 3, wallX, 178, 130);
+    halo.addColorStop(0, `rgba(255,58,44,${(0.55 * blink).toFixed(3)})`);
+    halo.addColorStop(1, "rgba(255,58,44,0)");
+    ctx.fillStyle = halo;
+    ctx.beginPath(); ctx.arc(wallX, 178, 130, 0, Math.PI * 2); ctx.fill();
+    // 旋转警灯光斑（左右交替扫动）
+    const sweep = Math.sin(now / 260) * 70;
+    const rg = ctx.createRadialGradient(wallX + sweep, 300, 6, wallX + sweep, 300, 120);
+    rg.addColorStop(0, `rgba(255,44,36,${(0.22 * blink).toFixed(3)})`);
+    rg.addColorStop(1, "rgba(255,44,36,0)");
+    ctx.fillStyle = rg;
+    ctx.beginPath(); ctx.arc(wallX + sweep, 300, 120, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
 }
 
 // 场景 0：家中客厅——暖墙、夜景窗、沙发、右侧通向走廊的房门
@@ -1049,15 +2500,15 @@ function drawLevelStreet(ctx: CanvasRenderingContext2D, g: GameState, now: numbe
     ctx.beginPath(); ctx.moveTo(x + 10, 106); ctx.lineTo(x + 64, 106); ctx.lineTo(x + 120, 430); ctx.lineTo(x - 46, 430); ctx.closePath(); ctx.fill();
     ctx.fillStyle = `rgba(238,208,128,${0.5 * flicker})`; ctx.beginPath(); ctx.arc(x + 37, 104, 6, 0, Math.PI * 2); ctx.fill();
   }
-  // 尽头保安亭（亮灯小房 + 道闸）
+  // 尽头保安亭（亮灯小房 + 道闸；人物高≈245，亭体 210 高、门 170 高）
   const boothX = W - 170;
-  ctx.fillStyle = "#3d444a"; ctx.fillRect(boothX, 240, 150, 150);
-  ctx.fillStyle = "#4d565e"; ctx.fillRect(boothX - 8, 224, 166, 20);
-  ctx.fillStyle = "rgba(238,220,150,.85)"; ctx.fillRect(boothX + 22, 268, 48, 44);
-  ctx.strokeStyle = "#2c3238"; ctx.lineWidth = 4; ctx.strokeRect(boothX + 22, 268, 48, 44);
-  ctx.fillStyle = "#22272c"; ctx.fillRect(boothX + 96, 268, 36, 122);
-  ctx.fillStyle = "#c9cdd2"; ctx.fillRect(boothX + 18, 218, 110, 22);
-  drawText(ctx, "保安亭", boothX + 73, 234, 15, "#33383d", "center");
+  ctx.fillStyle = "#3d444a"; ctx.fillRect(boothX - 20, 130, 190, 210);
+  ctx.fillStyle = "#4d565e"; ctx.fillRect(boothX - 30, 110, 210, 22);
+  ctx.fillStyle = "rgba(238,220,150,.85)"; ctx.fillRect(boothX + 4, 172, 62, 58);
+  ctx.strokeStyle = "#2c3238"; ctx.lineWidth = 4; ctx.strokeRect(boothX + 4, 172, 62, 58);
+  ctx.fillStyle = "#22272c"; ctx.fillRect(boothX + 92, 170, 50, 170);
+  ctx.fillStyle = "#c9cdd2"; ctx.fillRect(boothX - 12, 136, 150, 24);
+  drawText(ctx, "保安亭", boothX + 63, 154, 15, "#33383d", "center");
   // 道闸杆
   ctx.fillStyle = "#8a2f2a"; ctx.fillRect(boothX - 190, 318, 182, 10);
   ctx.fillStyle = "#d8d8d8";
@@ -1072,6 +2523,341 @@ function shadeHex(hex: string, factor: number): string {
   const g = Math.max(0, Math.min(255, Math.round(((n >> 8) & 255) * factor)));
   const b = Math.max(0, Math.min(255, Math.round((n & 255) * factor)));
   return `rgb(${r},${g},${b})`;
+}
+
+// ===== 第二关场景绘制 =====
+
+// 场景 0：城郊公路——黄昏天际线 + 城市楼群视差 + 长直公路 + 尽头加油站
+function drawLevelHighway(ctx: CanvasRenderingContext2D, g: GameState) {
+  const W = g.worldW;
+  ctx.save();
+  ctx.translate(g.cameraX * 0.55, 0);
+  const sky = ctx.createLinearGradient(0, 0, 0, ROAD_TOP + 24);
+  sky.addColorStop(0, "#2b2733"); sky.addColorStop(.6, "#4a3540"); sky.addColorStop(1, "#6b4a3a");
+  ctx.fillStyle = sky; ctx.fillRect(-W, 0, W * 3, ROAD_TOP + 24);
+  ctx.fillStyle = "rgba(232,150,80,.8)"; ctx.beginPath(); ctx.arc(500, 118, 26, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "rgba(232,150,80,.14)"; ctx.beginPath(); ctx.arc(500, 118, 52, 0, Math.PI * 2); ctx.fill();
+  for (let i = 0; i < 16; i++) {
+    const bx = -260 + i * 210;
+    const bw = 120 + (i % 4) * 30;
+    const bh = 110 + ((i * 37) % 80);
+    ctx.fillStyle = i % 2 ? "#221d26" : "#1c1820";
+    ctx.fillRect(bx, ROAD_TOP + 24 - bh, bw, bh);
+    for (let wy = 0; wy < 4; wy++) for (let wx = 0; wx < 3; wx++) {
+      if ((i * 5 + wy + wx) % 6 === 0) {
+        ctx.fillStyle = "rgba(220,170,90,.35)";
+        ctx.fillRect(bx + 14 + wx * 34, ROAD_TOP + 24 - bh + 14 + wy * 26, 10, 12);
+      }
+    }
+  }
+  ctx.restore();
+  const road = ctx.createLinearGradient(0, ROAD_TOP + 24, 0, H);
+  road.addColorStop(0, "#3a3c40"); road.addColorStop(1, "#24262a");
+  ctx.fillStyle = road; ctx.fillRect(0, ROAD_TOP + 24, W, H - ROAD_TOP - 24);
+  ctx.fillStyle = "rgba(214,178,80,.5)";
+  for (let x = 60; x < W; x += 260) ctx.fillRect(x, 388, 110, 6);
+  ctx.fillStyle = "rgba(210,210,200,.35)";
+  for (let x = 160; x < W; x += 300) ctx.fillRect(x, 500, 80, 5);
+  // 护栏（上沿远景）
+  ctx.strokeStyle = "#4c5157"; ctx.lineWidth = 5;
+  ctx.beginPath(); ctx.moveTo(0, ROAD_TOP + 34); ctx.lineTo(W, ROAD_TOP + 34); ctx.stroke();
+  ctx.strokeStyle = "#33373c"; ctx.lineWidth = 3;
+  for (let x = 40; x < W; x += 120) { ctx.beginPath(); ctx.moveTo(x, ROAD_TOP + 34); ctx.lineTo(x, ROAD_TOP + 52); ctx.stroke(); }
+  ctx.strokeStyle = "rgba(0,0,0,.35)"; ctx.lineWidth = 2.5;
+  for (let x = 220; x < W; x += 420) { ctx.beginPath(); ctx.moveTo(x, 300 + (x % 4) * 60); ctx.lineTo(x + 28, 330 + (x % 4) * 60); ctx.stroke(); }
+  drawGasStation(ctx, g);
+}
+
+// 加油站：雨棚 + 油泵 + 便利店（门口为伏击涌出点）；人物高≈245，门/店立面按此放大
+function drawGasStation(ctx: CanvasRenderingContext2D, g: GameState) {
+  const gasX = LEVEL2_GAS_FX * g.worldW;
+  // 便利店主体与顶部檐口
+  ctx.fillStyle = "#3d3830"; ctx.fillRect(gasX - 20, 60, 380, 300);
+  ctx.fillStyle = "#2c2822"; ctx.fillRect(gasX - 30, 44, 400, 18);
+  // 店门（黑洞，僵尸涌出口，居中 ≈ gasX+158）
+  ctx.fillStyle = "#0c0d0e"; ctx.fillRect(gasX + 126, 120, 64, 240);
+  ctx.strokeStyle = "#4a4438"; ctx.lineWidth = 3; ctx.strokeRect(gasX + 126, 120, 64, 240);
+  // 碎玻璃窗
+  ctx.fillStyle = "#1b232a"; ctx.fillRect(gasX + 6, 140, 96, 110); ctx.fillRect(gasX + 216, 140, 120, 110);
+  ctx.strokeStyle = "rgba(200,215,225,.3)"; ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(gasX + 14, 148); ctx.lineTo(gasX + 82, 236);
+  ctx.moveTo(gasX + 228, 148); ctx.lineTo(gasX + 316, 238);
+  ctx.stroke();
+  // 招牌（屋顶）
+  ctx.fillStyle = "#c8b890"; ctx.fillRect(gasX + 70, 8, 220, 42);
+  drawText(ctx, "加油站", gasX + 180, 40, 26, "#33383d", "center");
+  // 雨棚（底沿高于人物头顶）+ 立柱
+  ctx.fillStyle = "#4a4440"; ctx.fillRect(gasX - 190, 84, 220, 20);
+  ctx.fillStyle = "#a8322c"; ctx.fillRect(gasX - 190, 84, 220, 6);
+  ctx.fillStyle = "#38342e"; ctx.fillRect(gasX - 178, 104, 12, 256); ctx.fillRect(gasX - 40, 104, 12, 256);
+  // 两台油泵（≈150 高）
+  for (const px of [gasX - 160, gasX - 90]) {
+    ctx.fillStyle = "#8a2f2a"; ctx.fillRect(px, 210, 34, 150);
+    ctx.fillStyle = "#d8d3c8"; ctx.fillRect(px + 5, 222, 24, 34);
+    ctx.fillStyle = "#222"; ctx.fillRect(px + 9, 262, 16, 12);
+  }
+}
+
+// 场景 1：军事基地——围墙铁丝网、岗哨塔、帐篷排、停放军车、训练场、尽头军营
+function drawLevelBase(ctx: CanvasRenderingContext2D, g: GameState, now: number) {
+  const W = g.worldW;
+  const sky = ctx.createLinearGradient(0, 0, 0, ROAD_TOP + 24);
+  sky.addColorStop(0, "#3a4149"); sky.addColorStop(1, "#6a6a58");
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, W, ROAD_TOP + 24);
+  // 围墙 + 顶部铁丝网
+  ctx.fillStyle = "#4c4f45"; ctx.fillRect(0, 96, W, ROAD_TOP + 24 - 96);
+  ctx.strokeStyle = "#2c2e28"; ctx.lineWidth = 2;
+  for (let x = 0; x < W; x += 46) { ctx.beginPath(); ctx.moveTo(x, 96); ctx.lineTo(x + 14, 84); ctx.stroke(); }
+  ctx.fillStyle = "#383b33"; ctx.fillRect(0, ROAD_TOP + 24 - 8, W, 8);
+  // 岗哨塔
+  for (const tx of [W * 0.2, W * 0.62]) {
+    ctx.fillStyle = "#3a3d34"; ctx.fillRect(tx - 6, 60, 12, 100);
+    ctx.fillStyle = "#4a4d42"; ctx.fillRect(tx - 26, 30, 52, 36);
+    ctx.fillStyle = "#2c2e26"; ctx.fillRect(tx - 30, 22, 60, 10);
+    ctx.fillStyle = "rgba(240,220,140,.75)"; ctx.fillRect(tx - 12, 40, 24, 14);
+  }
+  // 沙土训练场
+  const ground = ctx.createLinearGradient(0, ROAD_TOP + 24, 0, H);
+  ground.addColorStop(0, "#6b6250"); ground.addColorStop(1, "#4a4438");
+  ctx.fillStyle = ground; ctx.fillRect(0, ROAD_TOP + 24, W, H - ROAD_TOP - 24);
+  ctx.strokeStyle = "rgba(0,0,0,.15)"; ctx.lineWidth = 2;
+  for (let x = 80; x < W; x += 180) { ctx.beginPath(); ctx.moveTo(x, 500); ctx.lineTo(x + 90, 500); ctx.stroke(); }
+  // 帐篷排
+  for (let i = 0; i < 4; i++) {
+    const tx = 120 + i * 170;
+    ctx.fillStyle = "#4f5c3f";
+    ctx.beginPath(); ctx.moveTo(tx, 380); ctx.lineTo(tx + 60, 316); ctx.lineTo(tx + 120, 380); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#434f36";
+    ctx.beginPath(); ctx.moveTo(tx + 60, 316); ctx.lineTo(tx + 120, 380); ctx.lineTo(tx + 96, 380); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = "#2f3826"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(tx, 380); ctx.lineTo(tx + 60, 316); ctx.lineTo(tx + 120, 380); ctx.stroke();
+  }
+  // 停放军车与旗杆
+  drawMilitaryTruck(ctx, W * 0.55, 620, false, now);
+  ctx.strokeStyle = "#2c2e28"; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.moveTo(W * 0.42, 300); ctx.lineTo(W * 0.42, 150); ctx.stroke();
+  ctx.fillStyle = "#8a2f2a"; ctx.fillRect(W * 0.42, 150, 40, 24);
+  // 军营建筑（目标点；人物高≈245，主楼 330 高、大门 200 高）
+  const bx = LEVEL2_BARRACKS_FX * W;
+  ctx.fillStyle = "#4a4d42"; ctx.fillRect(bx - 190, 60, 420, 330);
+  ctx.fillStyle = "#3a3d34"; ctx.fillRect(bx - 200, 44, 440, 18);
+  for (const wx of [bx - 160, bx - 100, bx + 60, bx + 120]) { ctx.fillStyle = "#232a20"; ctx.fillRect(wx, 110, 52, 64); }
+  ctx.fillStyle = "#0f1410"; ctx.fillRect(bx - 36, 190, 72, 200);
+  ctx.fillStyle = "#c8b890"; ctx.fillRect(bx - 80, 136, 160, 40);
+  drawText(ctx, "军营", bx, 164, 24, "#33383d", "center");
+}
+
+// 军用卡车（伪 3D：侧面 + 受光顶面，与废弃车辆同一风格；driving 时车身微颠、尾部排烟）
+function drawMilitaryTruck(ctx: CanvasRenderingContext2D, x: number, baseY: number, driving: boolean, now: number) {
+  const bounce = driving ? Math.sin(now / 90) * 1.6 : 0;
+  ctx.save();
+  ctx.translate(x, baseY + bounce);
+  ctx.scale(1.8, 1.8); // 与人物（高≈245）同场景比例：整车 ≈540 宽 × 262 高
+  const w = 300;
+  // 地面投影
+  ctx.fillStyle = "rgba(0,0,0,.32)";
+  ctx.beginPath(); ctx.ellipse(0, 4, w * 0.54, 16, 0, 0, Math.PI * 2); ctx.fill();
+  // 底盘
+  ctx.fillStyle = "#22261e"; ctx.fillRect(-w / 2 + 4, -46, w - 8, 16);
+  // 货厢侧面（军绿渐变）
+  const bedGrad = ctx.createLinearGradient(0, -132, 0, -44);
+  bedGrad.addColorStop(0, "#4f5c3f"); bedGrad.addColorStop(1, "#323b2a");
+  ctx.fillStyle = bedGrad; ctx.fillRect(-w / 2 + 6, -118, 196, 74);
+  // 帆布篷（圆拱 + 篷骨棱线）与受光顶面
+  ctx.fillStyle = "#55633f";
+  ctx.beginPath(); ctx.roundRect(-w / 2 + 8, -134, 192, 32, 14); ctx.fill();
+  ctx.strokeStyle = "rgba(0,0,0,.28)"; ctx.lineWidth = 2;
+  for (let rx = -w / 2 + 34; rx < -w / 2 + 196; rx += 32) {
+    ctx.beginPath(); ctx.moveTo(rx, -104); ctx.quadraticCurveTo(rx + 2, -134, rx + 4, -134); ctx.stroke();
+  }
+  ctx.fillStyle = "#5a684a";
+  ctx.beginPath();
+  ctx.moveTo(-w / 2 + 8, -132); ctx.lineTo(-w / 2 + 198, -132);
+  ctx.lineTo(-w / 2 + 186, -146); ctx.lineTo(-w / 2 - 2, -146);
+  ctx.closePath(); ctx.fill();
+  // 白星标志
+  ctx.fillStyle = "rgba(230,230,220,.85)";
+  ctx.beginPath();
+  const starX = -44, starY = -82;
+  for (let i = 0; i < 5; i++) {
+    const a = -Math.PI / 2 + (i * Math.PI * 4) / 5;
+    const px = starX + Math.cos(a) * 13, py = starY + Math.sin(a) * 13;
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.closePath(); ctx.fill();
+  // 驾驶室：侧箱 + 风挡 + 车顶受光面 + 保险杠/大灯/格栅
+  const cabGrad = ctx.createLinearGradient(0, -124, 0, -44);
+  cabGrad.addColorStop(0, "#4f5c3f"); cabGrad.addColorStop(1, "#323b2a");
+  ctx.fillStyle = cabGrad; ctx.fillRect(52, -118, 92, 74);
+  const glassGrad = ctx.createLinearGradient(0, -114, 0, -84);
+  glassGrad.addColorStop(0, "#26323c"); glassGrad.addColorStop(1, "#0f151b");
+  ctx.fillStyle = glassGrad; ctx.fillRect(96, -112, 40, 30);
+  ctx.fillStyle = "#5a684a"; ctx.fillRect(48, -126, 100, 9);
+  ctx.fillStyle = "#22261e"; ctx.fillRect(140, -44, 12, 20);
+  ctx.strokeStyle = "rgba(12,14,12,.8)"; ctx.lineWidth = 2.2;
+  ctx.beginPath(); ctx.moveTo(140, -66); ctx.lineTo(148, -66); ctx.moveTo(140, -58); ctx.lineTo(148, -58); ctx.stroke();
+  ctx.fillStyle = "rgba(216,207,154,.9)"; ctx.beginPath(); ctx.ellipse(143, -74, 5, 4, 0, 0, Math.PI * 2); ctx.fill();
+  // 三对车轮（轮胎/轮辋/轮毂层次）
+  for (const wx of [-105, -45, 95]) {
+    ctx.fillStyle = "#101112"; ctx.beginPath(); ctx.arc(wx, -22, 22, 0, Math.PI * 2); ctx.fill();
+    const rimGrad = ctx.createRadialGradient(wx - 3, -25, 1, wx, -22, 13);
+    rimGrad.addColorStop(0, "#8a8d8f"); rimGrad.addColorStop(1, "#56595b");
+    ctx.fillStyle = rimGrad; ctx.beginPath(); ctx.arc(wx, -22, 13, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#2f3233"; ctx.beginPath(); ctx.arc(wx, -22, 5.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "rgba(8,10,9,.5)"; ctx.beginPath(); ctx.arc(wx, -22, 25, Math.PI, 0); ctx.fill();
+  }
+  // 行驶排烟
+  if (driving) {
+    for (let i = 0; i < 3; i++) {
+      const puff = ((now / 140 + i * 12) % 36) / 36;
+      ctx.fillStyle = `rgba(90,90,88,${0.22 * (1 - puff)})`;
+      ctx.beginPath(); ctx.arc(-w / 2 - 8 - puff * 40, -30 - i * 7 - puff * 16, 6 + puff * 12, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+// 士兵 NPC：复用人物骨架/步态/两骨 IK 持枪（军队迷彩 + 战斗头盔 + M16，结构与 drawOfficer 一致）
+function drawLevelSoldier(ctx: CanvasRenderingContext2D, f: PartnerField, now: number, weapon: WeaponKey = "m16") {
+  const uniform = ARMORS.army;
+  const facing = Math.cos(f.angle) >= 0 ? 1 : -1;
+  ctx.save();
+  ctx.translate(f.x, f.y);
+  ctx.scale(CHARACTER_SCALE, CHARACTER_SCALE);
+  ctx.fillStyle = "rgba(0,0,0,.42)";
+  ctx.beginPath(); ctx.ellipse(0, 4, 23, 7, 0, 0, Math.PI * 2); ctx.fill();
+  const cycle = f.moving ? (now / 230) % 1 : 0;
+  if (f.moving) ctx.translate(0, Math.sin(cycle * Math.PI * 4) * 1.8);
+  const rearLeg = f.moving ? gaitLegPose((cycle + .5) % 1, facing, -5) : standingLegPose(facing, -5);
+  const frontLeg = f.moving ? gaitLegPose(cycle, facing, 5) : standingLegPose(facing, 5);
+  drawLimb(ctx, rearLeg, 7.5, uniform.pants, "#101513");
+  drawLimb(ctx, frontLeg, 7.5, uniform.pants, "#111715");
+  drawFoot(ctx, rearLeg[2], facing, 14, "#101513", f.moving ? gaitFootPitch((cycle + .5) % 1) : 0);
+  drawFoot(ctx, frontLeg[2], facing, 14, "#101513", f.moving ? gaitFootPitch(cycle) : 0);
+  // 行进时上身随步幅前倾、左右摆动；避免跟随编队看起来像站姿模型在地面平移。
+  if (f.moving) {
+    ctx.translate(facing * Math.sin(cycle * Math.PI * 2) * 1.5, -Math.abs(Math.sin(cycle * Math.PI * 2)) * 1.4);
+    ctx.rotate(facing * (.025 + Math.sin(cycle * Math.PI * 2) * .018));
+  }
+  // 迷彩躯干：底衬 + 主层 + 迷彩斑块 + 插板背心
+  ctx.fillStyle = "#18211f";
+  ctx.beginPath();
+  ctx.moveTo(-12.5, -103); ctx.lineTo(12.5, -103); ctx.lineTo(12, -88); ctx.lineTo(9.5, -78); ctx.lineTo(10.5, -63);
+  ctx.lineTo(-10.5, -63); ctx.lineTo(-9.5, -78); ctx.lineTo(-12, -88);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = uniform.torso;
+  ctx.beginPath();
+  ctx.moveTo(-15, -102); ctx.lineTo(15, -102); ctx.lineTo(14, -88); ctx.lineTo(11.5, -78); ctx.lineTo(12.5, -66);
+  ctx.lineTo(-12.5, -66); ctx.lineTo(-11.5, -78); ctx.lineTo(-14, -88);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "rgba(59,69,49,.9)";
+  ctx.beginPath(); ctx.ellipse(-6, -94, 5, 3.4, 0.4, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(7, -82, 4.4, 3, -0.3, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "rgba(143,131,96,.5)";
+  ctx.beginPath(); ctx.ellipse(4, -97, 3.6, 2.6, 0.2, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "rgba(0,0,0,.16)";
+  ctx.beginPath();
+  ctx.moveTo(-facing * 15, -102); ctx.lineTo(-facing * 8, -102); ctx.lineTo(-facing * 7, -66); ctx.lineTo(-facing * 12.5, -66); ctx.lineTo(-facing * 11.5, -78); ctx.lineTo(-facing * 14, -88);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "#242c1e"; roundedRect(ctx, -9, -92, 18, 22, 3); ctx.fill();
+  // 双手持枪（grip + fore 步枪位，两骨 IK；M16 / PKM / 燧石66 同套编舞）
+  const hold = WEAPON_HOLD[weapon];
+  const gunScale = playerWeaponScale(weapon);
+  const recoilSpec = WEAPON_RECOIL[weapon];
+  const recoilAge = now - f.recoilAt;
+  const recoilHeat = f.recoilHeat * Math.max(0, 1 - Math.max(0, recoilAge) / RECOIL_HEAT_COOL_MS);
+  const recoilKick = recoilImpulse(recoilAge);
+  const recoilRise = recoilSpec.rise * recoilKick * (1 + recoilHeat * 1.5);
+  const recoilBack = recoilSpec.back * recoilKick * (1 + recoilHeat * .6);
+  const gunAngle = f.angle - facing * recoilRise;
+  const cosA = Math.cos(gunAngle);
+  const sinA = Math.sin(gunAngle);
+  const gunRelX = cosA * (12 - recoilBack);
+  const gunRelY = -88 + sinA * 6 - recoilBack * .35;
+  const toLocal = (m: [number, number]): [number, number] => [
+    gunRelX + (cosA * m[0] - sinA * m[1]) * gunScale,
+    gunRelY + (sinA * m[0] + cosA * m[1]) * gunScale,
+  ];
+  const rearShoulder: [number, number] = [-cosA * 11, -99 - sinA * 5];
+  const leadShoulder: [number, number] = [cosA * 11, -99 + sinA * 5];
+  const rightHand = toLocal(hold.grip);
+  let leadHand = toLocal(hold.fore);
+  const reloadProgress = f.reloadingUntil > now && f.reloadStartedAt > 0
+    ? Math.min(1, (now - f.reloadStartedAt) / Math.max(1, f.reloadingUntil - f.reloadStartedAt))
+    : 0;
+  const reloadVisual = reloadProgress > 0 ? computeReloadVisual(weapon, reloadProgress, toLocal, facing) : null;
+  if (reloadVisual?.lead) leadHand = reloadVisual.lead;
+  const elbowDown = (s: [number, number], h: [number, number]): [number, number] => [(s[0] + h[0]) / 2, (s[1] + h[1]) / 2 + 16];
+  const rightArm = solveTwoBoneArm(rearShoulder, rightHand, elbowDown(rearShoulder, rightHand));
+  const leadArm = solveTwoBoneArm(leadShoulder, leadHand, elbowDown(leadShoulder, leadHand));
+  drawLimb(ctx, rightArm, 6.5, uniform.sleeves, "#c38e67");
+  drawLimb(ctx, leadArm, 6.5, uniform.sleeves, "#c38e67");
+  drawHand(ctx, rightArm[2], rightArm[1], 7, "#c58e67");
+  drawHand(ctx, leadArm[2], leadArm[1], 7, "#c58e67");
+  // 颈部/头部 + 战斗头盔
+  ctx.fillStyle = "#c58e67";
+  ctx.beginPath();
+  ctx.moveTo(-5.5, -102); ctx.lineTo(5.5, -102); ctx.lineTo(4, -112); ctx.lineTo(-4, -112);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "#d0a079";
+  ctx.beginPath();
+  ctx.moveTo(facing * -9, -118);
+  ctx.lineTo(facing * -7.5, -125); ctx.lineTo(facing * -1, -128.5); ctx.lineTo(facing * 5.5, -126.5);
+  ctx.lineTo(facing * 8.5, -121); ctx.lineTo(facing * 9.5, -117.5); ctx.lineTo(facing * 8, -115);
+  ctx.lineTo(facing * 8.5, -113.5); ctx.lineTo(facing * 6.5, -110.5); ctx.lineTo(facing * 1, -108.5);
+  ctx.lineTo(facing * -5, -110);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "#3f4a34";
+  ctx.beginPath(); ctx.ellipse(facing * 0.5, -124, 10.5, 7.5, facing * 0.1, Math.PI, 0); ctx.fill();
+  ctx.fillStyle = "#333d2b"; ctx.fillRect(facing > 0 ? -10 : -1.5, -121.5, 11.5, 3);
+  ctx.fillStyle = "#23282c";
+  ctx.beginPath(); ctx.ellipse(facing * 5, -116.6, 1.7, 1.15, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = "#6b4f3c"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(facing * 2.8, -118.6); ctx.lineTo(facing * 7.6, -119); ctx.stroke();
+  // 枪模与枪口火光（按手持武器绘制：M16 / PKM 弹链机枪 / 燧石66 重型狙击）
+  ctx.save();
+  ctx.translate(gunRelX, gunRelY);
+  ctx.rotate(gunAngle);
+  drawWeaponModel(ctx, weapon, gunScale, reloadVisual?.hideMag ?? false, reloadVisual?.bolt ?? 0, reloadVisual?.cylinderSpin ?? 0);
+  if (reloadVisual) {
+    ctx.save();
+    ctx.scale(gunScale, gunScale);
+    drawReloadProps(ctx, weapon, reloadVisual);
+    ctx.restore();
+  }
+  ctx.restore();
+  if (now - f.muzzleAt < 65) {
+    const muzzle = weaponMuzzleOffset(weapon) / CHARACTER_SCALE;
+    ctx.save();
+    ctx.translate(gunRelX, gunRelY);
+    ctx.rotate(gunAngle);
+    ctx.fillStyle = "#fff2a8";
+    ctx.beginPath();
+    ctx.moveTo(muzzle - 7, 0);
+    ctx.lineTo(muzzle + 17, -9);
+    ctx.lineTo(muzzle + 9, 0);
+    ctx.lineTo(muzzle + 17, 9);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+// 关卡对话框（屏幕坐标）：底部暗色描金面板 + 说话人 + 台词 + 继续提示
+function drawLevelDialog(ctx: CanvasRenderingContext2D, g: GameState, W: number, now: number) {
+  const dialog = g.level?.dialog;
+  if (!dialog) return;
+  const line = dialog.lines[Math.min(dialog.index, dialog.lines.length - 1)];
+  const boxW = Math.min(620, W - 80);
+  const boxX = (W - boxW) / 2;
+  const boxY = H - 178;
+  ctx.fillStyle = "rgba(8,11,9,.94)";
+  roundedRect(ctx, boxX, boxY, boxW, 118, 12); ctx.fill();
+  ctx.strokeStyle = "rgba(241,198,67,.55)"; ctx.lineWidth = 2; roundedRect(ctx, boxX, boxY, boxW, 118, 12); ctx.stroke();
+  drawText(ctx, line.speaker, boxX + 28, boxY + 36, 17, "#f1c643");
+  drawText(ctx, line.text, boxX + 28, boxY + 76, 20, "#e8e4d7");
+  if (Math.sin(now / 300) > -0.2) drawText(ctx, "按任意键 / 点击 继续 ▸", boxX + boxW - 28, boxY + 100, 13, "#8f978d", "right");
 }
 
 // 废弃车辆（伪 3D：近侧面车身 + 可见车顶/引擎盖/后备箱受光顶面 + 玻璃厚度挤出，3/4 俯视感；碰撞箱不变）。
@@ -1268,6 +3054,1125 @@ function drawWreckedCar(ctx: CanvasRenderingContext2D, ob: LevelObstacle) {
   ctx.restore();
 }
 
+// ===== 第四关「占领电台」场景绘制（白天；电台内部为冷色金属白配色，明显区别于其他场景） =====
+
+// 场景 0：军事基地商讨室——独立封闭室内；只有走到右端房门后才切换到室外集合区。
+function drawLevel4Briefing(ctx: CanvasRenderingContext2D, g: GameState, now: number) {
+  const W = g.worldW;
+  const roomW = W;
+  const tableX = LEVEL4_TABLE_FX * W;
+  const cityHallBriefing = g.level?.levelId === LEVEL6_ID;
+  const warehouseBriefing = g.level?.levelId === LEVEL7_ID;
+  const highwayBriefing = g.level?.levelId === LEVEL8_ID;
+  const operationTarget = highwayBriefing ? "高速收费站" : warehouseBriefing ? "物资仓库" : cityHallBriefing ? "市政大楼" : "电台";
+  const operationTitle = highwayBriefing ? "行动：清理高速" : warehouseBriefing ? "行动：夺取仓库" : cityHallBriefing ? "行动：攻占市政大楼" : "行动：占领电台";
+  // 室内：暖灰墙面 + 地板 + 踢脚线
+  const wall = ctx.createLinearGradient(0, 0, 0, 460);
+  wall.addColorStop(0, "#474d51"); wall.addColorStop(1, "#5b6165");
+  ctx.fillStyle = wall; ctx.fillRect(0, 0, roomW, 460);
+  const inFloor = ctx.createLinearGradient(0, 460, 0, H);
+  inFloor.addColorStop(0, "#3a3e40"); inFloor.addColorStop(1, "#2b2e30");
+  ctx.fillStyle = inFloor; ctx.fillRect(0, 460, roomW, H - 460);
+  ctx.fillStyle = "#33373a"; ctx.fillRect(0, 450, roomW, 10);
+  // 地面中央深色毯面走道（简报室向地图板聚拢的构图）
+  ctx.fillStyle = "rgba(20,24,26,.5)";
+  ctx.beginPath(); ctx.moveTo(0, 560); ctx.lineTo(roomW, 560); ctx.lineTo(roomW, 640); ctx.lineTo(0, 640); ctx.closePath(); ctx.fill();
+  // 吊顶与两盏军用吊灯（金属灯罩 + 防护网 + 垂杆 + 地面光锥）
+  ctx.fillStyle = "#33383b"; ctx.fillRect(0, 0, roomW, 46);
+  ctx.fillStyle = "#2a2f32"; ctx.fillRect(0, 42, roomW, 6);
+  for (let lx = 180; lx < roomW - 70; lx += 300) {
+    ctx.strokeStyle = "#22262a"; ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.moveTo(lx, 46); ctx.lineTo(lx, 86); ctx.stroke();
+    ctx.fillStyle = "#3f464b";
+    ctx.beginPath(); ctx.moveTo(lx - 34, 118); ctx.lineTo(lx + 34, 118); ctx.lineTo(lx + 18, 86); ctx.lineTo(lx - 18, 86); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = "rgba(20,24,26,.6)"; ctx.lineWidth = 2;
+    for (let cx = -24; cx <= 24; cx += 12) { ctx.beginPath(); ctx.moveTo(lx + cx, 116); ctx.lineTo(lx + cx * 0.5, 88); ctx.stroke(); }
+    ctx.fillStyle = "#f2e2ae";
+    ctx.beginPath(); ctx.ellipse(lx, 118, 30, 6, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "rgba(240,225,170,.08)";
+    ctx.beginPath(); ctx.moveTo(lx - 30, 122); ctx.lineTo(lx + 30, 122); ctx.lineTo(lx + 90, 460); ctx.lineTo(lx - 90, 460); ctx.closePath(); ctx.fill();
+  }
+  // 顶部通风管
+  ctx.fillStyle = "#3d4347"; ctx.fillRect(60, 56, roomW - 120, 22);
+  ctx.strokeStyle = "#2c3134"; ctx.lineWidth = 2;
+  for (let x = 90; x < roomW - 90; x += 60) { ctx.beginPath(); ctx.moveTo(x, 56); ctx.lineTo(x, 78); ctx.stroke(); }
+  // 作战态势地图板（整墙主视觉）：封锁区地图 + 道路网 + 电台目标点（闪烁标记）
+  ctx.fillStyle = "#2c3540"; ctx.fillRect(80, 92, 340, 200);
+  ctx.strokeStyle = "#1b222b"; ctx.lineWidth = 6; ctx.strokeRect(80, 92, 340, 200);
+  ctx.fillStyle = "#222a33"; ctx.fillRect(80, 92, 340, 26);
+  drawText(ctx, "封锁区态势图", 250, 112, 15, "#b8c4cf", "center");
+  ctx.strokeStyle = "rgba(140,170,195,.4)"; ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(110, 250); ctx.quadraticCurveTo(180, 170, 250, 210); ctx.quadraticCurveTo(310, 240, 390, 150);
+  ctx.moveTo(130, 130); ctx.lineTo(220, 272);
+  ctx.moveTo(180, 130); ctx.quadraticCurveTo(260, 190, 380, 240);
+  ctx.stroke();
+  ctx.fillStyle = "rgba(150,180,205,.5)";
+  for (const [px, py] of [[140, 190], [210, 240], [300, 170], [250, 150]] as Array<[number, number]>) { ctx.beginPath(); ctx.arc(px, py, 3, 0, Math.PI * 2); ctx.fill(); }
+  const ping = 0.5 + Math.sin(now / 300) * 0.5;
+  ctx.fillStyle = "#e05244";
+  ctx.beginPath(); ctx.arc(356, 158, 7, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = `rgba(224,82,68,${0.7 * ping})`; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(356, 158, 12 + ping * 8, 0, Math.PI * 2); ctx.stroke();
+  drawText(ctx, operationTarget, 356, 136, 14, "#f0d8d4", "center");
+  // 白板（行动简报）：标题 + 要点 + 突击箭头
+  ctx.fillStyle = "#dfe3e6"; ctx.fillRect(452, 100, 216, 176);
+  ctx.strokeStyle = "#3a4046"; ctx.lineWidth = 5; ctx.strokeRect(452, 100, 216, 176);
+  drawText(ctx, operationTitle, 560, 130, 17, "#2c3338", "center");
+  ctx.strokeStyle = "rgba(60,70,80,.75)"; ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(474, 152); ctx.lineTo(622, 152);
+  ctx.moveTo(474, 176); ctx.lineTo(600, 176);
+  ctx.moveTo(474, 200); ctx.lineTo(612, 200);
+  ctx.stroke();
+  ctx.strokeStyle = "#b0402f"; ctx.lineWidth = 3.5;
+  ctx.beginPath(); ctx.moveTo(486, 236); ctx.lineTo(596, 236); ctx.lineTo(584, 226); ctx.moveTo(596, 236); ctx.lineTo(584, 246); ctx.stroke();
+  drawText(ctx, "10 分钟后集合", 560, 262, 13, "#8a4038", "center");
+  // 投影仪（吊顶悬挂，镜头朝向白板）
+  ctx.strokeStyle = "#22262a"; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.moveTo(560, 46); ctx.lineTo(560, 66); ctx.stroke();
+  ctx.fillStyle = "#2e3438"; ctx.fillRect(540, 66, 40, 20);
+  ctx.fillStyle = "rgba(220,235,245,.5)"; ctx.fillRect(556, 86, 8, 6);
+  // 军旗（右侧墙）
+  ctx.strokeStyle = "#2c2e28"; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.moveTo(roomW - 128, 120); ctx.lineTo(roomW - 128, 250); ctx.stroke();
+  ctx.fillStyle = "#7a2f2a"; ctx.fillRect(roomW - 124, 126, 62, 42);
+  ctx.fillStyle = "rgba(230,220,170,.85)"; ctx.fillRect(roomW - 114, 138, 20, 18);
+  // 长桌座椅（桌面由障碍物绘制）：桌旁两排椅子 + 桌上沙盘/文件
+  for (const cx of [tableX - 84, tableX - 10, tableX + 64]) {
+    for (const cy of [322, 478]) {
+      ctx.fillStyle = "#46413a";
+      ctx.beginPath(); ctx.roundRect(cx, cy, 44, 26, 5); ctx.fill();
+      ctx.fillStyle = "#373330"; ctx.fillRect(cx + 4, cy + 26, 8, 30); ctx.fillRect(cx + 32, cy + 26, 8, 30);
+      ctx.fillStyle = "#524c44"; ctx.fillRect(cx + 2, cy - 4, 40, 8);
+    }
+  }
+  ctx.fillStyle = "#d8d2c0"; ctx.fillRect(tableX - 30, 372, 52, 10);
+  ctx.fillStyle = "#b8b2a0"; ctx.fillRect(tableX - 24, 364, 40, 8);
+  // 会议室后半区：装备柜、无线电席与文件架，补足从长桌到门厅的空间层次。
+  const supportX = Math.max(700, roomW - 430);
+  ctx.fillStyle = "#363c40";
+  ctx.fillRect(supportX, 112, 300, 178);
+  ctx.strokeStyle = "#24292c"; ctx.lineWidth = 4; ctx.strokeRect(supportX, 112, 300, 178);
+  for (let x = supportX + 18; x < supportX + 286; x += 68) {
+    ctx.fillStyle = "#4d555a"; ctx.fillRect(x, 132, 52, 132);
+    ctx.strokeStyle = "#2e3438"; ctx.lineWidth = 2; ctx.strokeRect(x, 132, 52, 132);
+    ctx.fillStyle = "#252b2f"; ctx.fillRect(x + 9, 150, 34, 5); ctx.fillRect(x + 9, 188, 34, 5);
+    ctx.fillStyle = "#c9a64c"; ctx.fillRect(x + 40, 202, 4, 9);
+  }
+  ctx.fillStyle = "#2c3236"; ctx.fillRect(supportX + 16, 322, 270, 86);
+  ctx.fillStyle = "#171c20"; ctx.fillRect(supportX + 30, 336, 78, 42); ctx.fillRect(supportX + 118, 336, 78, 42);
+  ctx.fillStyle = "#6ed08a"; ctx.fillRect(supportX + 42, 348, 7, 7);
+  ctx.fillStyle = "#d6a14b"; ctx.fillRect(supportX + 132, 348, 7, 7);
+  ctx.strokeStyle = "#777f82"; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(supportX + 226, 348); ctx.lineTo(supportX + 240, 318); ctx.lineTo(supportX + 254, 348); ctx.stroke();
+  drawText(ctx, "基地通讯席", supportX + 151, 430, 14, "#bfc6c8", "center");
+  // 承重柱、墙面导向线与门厅缓冲区，避免房门像直接开在一张平面贴图上。
+  ctx.fillStyle = "#30363a"; ctx.fillRect(roomW - 126, 46, 18, 414);
+  ctx.fillStyle = "#697176"; ctx.fillRect(roomW - 122, 52, 4, 402);
+  ctx.fillStyle = "#242a2e"; ctx.fillRect(roomW - 210, 448, 210, 12);
+  ctx.strokeStyle = "rgba(215,220,216,.16)"; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(roomW - 250, 520); ctx.lineTo(roomW, 520); ctx.moveTo(roomW - 250, 620); ctx.lineTo(roomW, 620); ctx.stroke();
+  // 房门（右侧通向室外基地道路）+ 出口灯牌
+  ctx.fillStyle = "#171b1d"; ctx.fillRect(roomW - 108, 210, 108, 250);
+  ctx.strokeStyle = "#41484c"; ctx.lineWidth = 5; ctx.strokeRect(roomW - 108, 210, 108, 250);
+  ctx.strokeStyle = "#2b3135"; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(roomW - 54, 214); ctx.lineTo(roomW - 54, 458); ctx.stroke();
+  ctx.fillStyle = "rgba(140,175,190,.3)"; ctx.fillRect(roomW - 94, 238, 30, 54); ctx.fillRect(roomW - 44, 238, 30, 54);
+  ctx.fillStyle = "#3f8f5f"; ctx.fillRect(roomW - 94, 184, 80, 24);
+  drawText(ctx, "出口", roomW - 54, 202, 15, "#eef6ee", "center");
+
+  // 房门之外不提前绘制任何室外内容；任务推进后通过独立场景进入集合区。
+}
+
+// 场景 1：基地室外集合区——营房、道路、岗亭与停靠军车；从商讨室出门后才载入。
+function drawLevel4BaseYard(ctx: CanvasRenderingContext2D, g: GameState, now: number) {
+  const W = g.worldW;
+  const sky = ctx.createLinearGradient(0, 0, 0, ROAD_TOP + 24);
+  sky.addColorStop(0, "#7ea9cb"); sky.addColorStop(1, "#ccd6da");
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, W, ROAD_TOP + 24);
+  ctx.fillStyle = "#5c6055"; ctx.fillRect(0, 96, W, ROAD_TOP + 24 - 96);
+  ctx.strokeStyle = "#3a3d34"; ctx.lineWidth = 2;
+  for (let x = 20; x < W; x += 46) { ctx.beginPath(); ctx.moveTo(x, 96); ctx.lineTo(x + 14, 84); ctx.stroke(); }
+  const outGround = ctx.createLinearGradient(0, ROAD_TOP + 24, 0, H);
+  outGround.addColorStop(0, "#6f6854"); outGround.addColorStop(1, "#4e493c");
+  ctx.fillStyle = outGround; ctx.fillRect(0, ROAD_TOP + 24, W, H - ROAD_TOP - 24);
+  ctx.strokeStyle = "rgba(0,0,0,.14)"; ctx.lineWidth = 2;
+  for (let x = 60; x < W; x += 200) { ctx.beginPath(); ctx.moveTo(x, 520); ctx.lineTo(x + 100, 520); ctx.stroke(); }
+  // 基地院区：营房、器材棚、路灯、沙袋与道路标线，连接商讨室和远端上车点。
+  for (let x = 120; x < W - 620; x += 520) {
+    ctx.fillStyle = "#555b50"; ctx.fillRect(x, 128, 310, 170);
+    ctx.fillStyle = "#666c5e"; ctx.beginPath(); ctx.moveTo(x - 14, 128); ctx.lineTo(x + 155, 80); ctx.lineTo(x + 324, 128); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#2f342f"; ctx.fillRect(x + 34, 188, 64, 110); ctx.fillRect(x + 212, 188, 64, 110);
+    ctx.fillStyle = "rgba(206,220,190,.45)"; ctx.fillRect(x + 126, 164, 58, 48);
+    ctx.strokeStyle = "rgba(38,42,36,.55)"; ctx.lineWidth = 3; ctx.strokeRect(x, 128, 310, 170);
+  }
+  for (let x = 90; x < W - 240; x += 420) {
+    ctx.strokeStyle = "#343a34"; ctx.lineWidth = 6;
+    ctx.beginPath(); ctx.moveTo(x, 410); ctx.lineTo(x, 180); ctx.lineTo(x + 36, 180); ctx.stroke();
+    ctx.fillStyle = "#e4d28f"; ctx.fillRect(x + 28, 176, 24, 10);
+    const lamp = ctx.createRadialGradient(x + 40, 184, 2, x + 40, 184, 80);
+    lamp.addColorStop(0, "rgba(244,224,150,.24)"); lamp.addColorStop(1, "rgba(244,224,150,0)");
+    ctx.fillStyle = lamp; ctx.beginPath(); ctx.arc(x + 40, 184, 80, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.fillStyle = "rgba(225,214,167,.42)";
+  for (let x = 140; x < W - 380; x += 300) ctx.fillRect(x, 594, 150, 8);
+  ctx.fillStyle = "#665b42";
+  for (let x = W - 760; x < W - 340; x += 54) {
+    ctx.beginPath(); ctx.ellipse(x, 455, 30, 13, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = "#413a2d"; ctx.lineWidth = 2; ctx.stroke();
+  }
+  // 基地大门（上车点）：门柱 + 横杆 + 岗亭 + 停靠军车
+  const gx = LEVEL4_GATE_FX * W;
+  ctx.fillStyle = "#43473e"; ctx.fillRect(gx - 16, 180, 26, 280); ctx.fillRect(gx + 130, 180, 26, 280);
+  ctx.fillStyle = "#535849"; ctx.fillRect(gx - 26, 164, 192, 22);
+  drawText(ctx, "基地大门", gx + 70, 152, 17, "#d8d2b8", "center");
+  ctx.fillStyle = "#3d4138"; ctx.fillRect(gx + 190, 300, 90, 160);
+  ctx.fillStyle = "rgba(230,225,180,.6)"; ctx.fillRect(gx + 206, 322, 58, 40);
+  if (g.level?.levelId === LEVEL8_ID) drawLevel8ArmoredVehicle(ctx, g.level, now, gx - 180, 470);
+  else drawMilitaryTruck(ctx, gx - 180, 470, false, now);
+}
+
+// 场景 2：电台门口——白天，放大的电台通讯基地主楼（三层立面 + 门厅雨棚 + 大字招牌）+ 独立天线铁塔 + 围栏大门
+function drawLevel4StationGate(ctx: CanvasRenderingContext2D, g: GameState, now: number) {
+  const W = g.worldW;
+  const sky = ctx.createLinearGradient(0, 0, 0, ROAD_TOP + 24);
+  sky.addColorStop(0, "#7fb0d6"); sky.addColorStop(1, "#d2dce0");
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, W, ROAD_TOP + 24);
+  // 地面必须先于建筑绘制；旧顺序会用整块水泥路覆盖主楼 y=184 以下的门厅和一层立面。
+  const ground = ctx.createLinearGradient(0, ROAD_TOP + 24, 0, H);
+  ground.addColorStop(0, "#8b9095"); ground.addColorStop(1, "#676c71");
+  ctx.fillStyle = ground; ctx.fillRect(0, ROAD_TOP + 24, W, H - ROAD_TOP - 24);
+  ctx.fillStyle = "rgba(0,0,0,.18)"; ctx.fillRect(0, ROAD_TOP + 24, W, 12);
+  // 远景：城市建筑剪影（高低错落）
+  ctx.fillStyle = "rgba(120,135,145,.4)";
+  for (let x = 60; x < W * 0.5; x += 260) ctx.fillRect(x, ROAD_TOP - 60 - (x % 3) * 20, 120, 60 + (x % 3) * 20);
+  const doorX = LEVEL4_STATION_DOOR_FX * W;
+  const bx = doorX - 520;
+  const bw = 900;
+  // 主楼体量：完整三层金属白立面。屋顶、三排窗带和一层门厅全部保持在画布内，
+  // 既保留通讯基地的体量，也避免顶层与屋顶设备因负坐标被裁掉。
+  const buildingTop = 32;
+  const buildingBottom = 420;
+  ctx.fillStyle = "#c6cfd7"; ctx.fillRect(bx, buildingTop, bw, buildingBottom - buildingTop);
+  ctx.fillStyle = "#b4bec7"; ctx.fillRect(bx - 12, buildingBottom - 20, bw + 24, 20);
+  ctx.fillStyle = "#aeb8c1"; ctx.fillRect(bx - 16, buildingTop, bw + 32, 14);
+  ctx.fillStyle = "#a4aeb7"; ctx.fillRect(bx, 146, bw, 10); ctx.fillRect(bx, 252, bw, 10);
+  // 立面竖向分格 + 三层深色窗带
+  ctx.strokeStyle = "rgba(88,98,108,.35)"; ctx.lineWidth = 2;
+  for (let x = bx + 60; x < bx + bw; x += 92) { ctx.beginPath(); ctx.moveTo(x, buildingTop + 14); ctx.lineTo(x, buildingBottom - 40); ctx.stroke(); }
+  ctx.fillStyle = "#2b343c";
+  for (const [wy, wh] of [[52, 80], [166, 72], [272, 112]] as Array<[number, number]>) {
+    for (let wx = bx + 26; wx < bx + bw - 40; wx += 74) ctx.fillRect(wx, wy, 46, wh);
+  }
+  // 玻璃反光（几片窗亮面）
+  ctx.fillStyle = "rgba(190,215,230,.35)";
+  ctx.fillRect(bx + 100, 58, 46, 68); ctx.fillRect(bx + 322, 172, 46, 60); ctx.fillRect(bx + 26, 278, 46, 100);
+  // 门厅：外凸入口 + 雨棚 + 立柱 + 大门（单人进入点）
+  ctx.fillStyle = "#b9c3cc"; ctx.fillRect(doorX - 130, 154, 260, 266);
+  ctx.fillStyle = "#9aa5af"; ctx.fillRect(doorX - 154, 136, 308, 20);
+  ctx.fillStyle = "#8b96a0"; ctx.fillRect(doorX - 142, 158, 16, 262); ctx.fillRect(doorX + 126, 158, 16, 262);
+  ctx.fillStyle = "#0f1214"; ctx.fillRect(doorX - 58, 184, 116, 236);
+  ctx.strokeStyle = "#434d55"; ctx.lineWidth = 5; ctx.strokeRect(doorX - 58, 184, 116, 236);
+  ctx.beginPath(); ctx.moveTo(doorX, 184); ctx.lineTo(doorX, 420); ctx.stroke();
+  drawText(ctx, "通讯基地", doorX, 174, 14, "#c8cdd2", "center");
+  // 大字招牌（门厅上方）+ 英文小字
+  ctx.fillStyle = "#e8e4d4"; ctx.fillRect(doorX - 170, 70, 340, 62);
+  ctx.strokeStyle = "#a8a494"; ctx.lineWidth = 3; ctx.strokeRect(doorX - 170, 70, 340, 62);
+  drawText(ctx, "市广播电台", doorX, 111, 34, "#33383d", "center");
+  drawText(ctx, "RADIO STATION", doorX, 146, 12, "#6a7068", "center");
+  // 独立天线铁塔（主楼右后侧，格构式，直出画面顶部）：双斜撑塔身 + 横担 + 红色障碍灯
+  const tx = bx + bw + 60;
+  const towerTop = 8;
+  ctx.strokeStyle = "#5a646d"; ctx.lineWidth = 6;
+  ctx.beginPath(); ctx.moveTo(tx - 34, 400); ctx.lineTo(tx - 8, towerTop); ctx.moveTo(tx + 34, 400); ctx.lineTo(tx + 8, towerTop); ctx.stroke();
+  ctx.lineWidth = 2.5;
+  for (let ty = 380; ty > towerTop; ty -= 46) {
+    const towerProgress = (ty - towerTop) / (380 - towerTop);
+    const spread = 8 + towerProgress * 26;
+    ctx.beginPath();
+    ctx.moveTo(tx - spread, ty); ctx.lineTo(tx + spread, ty);
+    ctx.moveTo(tx - spread, ty); ctx.lineTo(tx + spread - 4, ty - 46);
+    ctx.moveTo(tx + spread, ty); ctx.lineTo(tx - spread + 4, ty - 46);
+    ctx.stroke();
+  }
+  ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.moveTo(tx - 34, 28); ctx.lineTo(tx + 34, 28); ctx.moveTo(tx - 26, 112); ctx.lineTo(tx + 26, 112); ctx.stroke();
+  const blink = Math.floor(now / 520) % 2 === 0;
+  ctx.fillStyle = blink ? "#ff5a4a" : "#7a2620";
+  ctx.beginPath(); ctx.arc(tx, towerTop + 4, 6, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(tx, 26, 4, 0, Math.PI * 2); ctx.fill();
+  // 屋顶设备群：抛物面天线、馈线桥架、空调机组与备用微波天线。
+  const roofEquipmentY = buildingTop - 8;
+  ctx.fillStyle = "#8b959e";
+  ctx.beginPath(); ctx.arc(bx + 90, roofEquipmentY, 20, -0.7, Math.PI * 0.85); ctx.lineTo(bx + 90, roofEquipmentY); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = "#6a737c"; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(bx + 90, roofEquipmentY); ctx.lineTo(bx + 90, buildingTop + 18); ctx.stroke();
+  for (const ax of [bx + 250, bx + 430, bx + 650]) {
+    ctx.fillStyle = "#89939c"; ctx.fillRect(ax, roofEquipmentY, 112, 42);
+    ctx.strokeStyle = "#626c75"; ctx.lineWidth = 2; ctx.strokeRect(ax, roofEquipmentY, 112, 42);
+    for (let gx = ax + 12; gx < ax + 102; gx += 18) { ctx.beginPath(); ctx.moveTo(gx, roofEquipmentY + 4); ctx.lineTo(gx, roofEquipmentY + 36); ctx.stroke(); }
+  }
+  ctx.strokeStyle = "#5b656e"; ctx.lineWidth = 5;
+  ctx.beginPath(); ctx.moveTo(bx + 30, buildingTop + 58); ctx.lineTo(bx + bw - 24, buildingTop + 58); ctx.stroke();
+  // 左侧附属机房与发电设施，让大门前的长距离不再是一片空地。
+  const annexX = bx - 500;
+  ctx.fillStyle = "#adb7c0"; ctx.fillRect(annexX, 132, 430, 268);
+  ctx.fillStyle = "#929da7"; ctx.fillRect(annexX - 12, 118, 454, 18);
+  ctx.strokeStyle = "rgba(70,80,90,.45)"; ctx.lineWidth = 3; ctx.strokeRect(annexX, 132, 430, 268);
+  ctx.fillStyle = "#313941";
+  for (let x = annexX + 26; x < annexX + 250; x += 74) ctx.fillRect(x, 174, 52, 76);
+  ctx.fillStyle = "#56616b"; ctx.fillRect(annexX + 298, 196, 92, 204);
+  ctx.fillStyle = "#d2d9df"; ctx.fillRect(annexX + 34, 278, 224, 42);
+  drawText(ctx, "供电与发射机房", annexX + 146, 306, 19, "#3b444c", "center");
+  ctx.fillStyle = "#56616a"; ctx.fillRect(annexX - 240, 290, 190, 110);
+  ctx.strokeStyle = "#353d44"; ctx.lineWidth = 4; ctx.strokeRect(annexX - 240, 290, 190, 110);
+  for (let x = annexX - 220; x < annexX - 70; x += 28) { ctx.beginPath(); ctx.moveTo(x, 308); ctx.lineTo(x, 380); ctx.stroke(); }
+  ctx.fillStyle = "#d9aa3f"; ctx.fillRect(annexX - 220, 316, 18, 12);
+  // 铁围栏（主楼左侧，大门敞开）：栏杆柱 + 横杆 + 门柱
+  const fx = bx - 60;
+  ctx.strokeStyle = "#454b51"; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.moveTo(0, 330); ctx.lineTo(fx, 330); ctx.moveTo(0, 380); ctx.lineTo(fx, 380); ctx.stroke();
+  for (let x = 20; x < fx; x += 44) { ctx.beginPath(); ctx.moveTo(x, 316); ctx.lineTo(x, 396); ctx.stroke(); }
+  ctx.fillStyle = "#4c5258"; ctx.fillRect(fx - 8, 300, 18, 100); ctx.fillRect(fx + 60, 300, 18, 100);
+  // 入口检查区：岗亭、升降杆、减速带、停车位与通向门厅的双车道导向。
+  const checkpointX = Math.max(360, annexX - 560);
+  ctx.fillStyle = "#88929a"; ctx.fillRect(checkpointX, 286, 132, 114);
+  ctx.fillStyle = "#4c5861"; ctx.fillRect(checkpointX + 16, 304, 100, 50);
+  ctx.fillStyle = "rgba(184,215,229,.55)"; ctx.fillRect(checkpointX + 24, 312, 84, 34);
+  ctx.fillStyle = "#6d7680"; ctx.fillRect(checkpointX - 12, 276, 156, 14);
+  ctx.strokeStyle = "#4b5258"; ctx.lineWidth = 8;
+  ctx.beginPath(); ctx.moveTo(checkpointX + 132, 350); ctx.lineTo(checkpointX + 360, 350); ctx.stroke();
+  ctx.strokeStyle = "#d7d8cf"; ctx.lineWidth = 4;
+  for (let x = checkpointX + 150; x < checkpointX + 350; x += 44) { ctx.beginPath(); ctx.moveTo(x, 343); ctx.lineTo(x + 24, 357); ctx.stroke(); }
+  ctx.fillStyle = "#31363a";
+  for (let x = checkpointX - 40; x < checkpointX + 470; x += 52) ctx.fillRect(x, 612, 32, 10);
+  ctx.strokeStyle = "rgba(235,232,210,.5)"; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.moveTo(checkpointX + 190, 540); ctx.lineTo(doorX - 160, 540); ctx.moveTo(checkpointX + 190, 650); ctx.lineTo(doorX - 160, 650); ctx.stroke();
+  ctx.fillStyle = "rgba(235,232,210,.55)";
+  for (let x = checkpointX + 240; x < doorX - 200; x += 210) ctx.fillRect(x, 590, 110, 7);
+  // 门前水泥路裂纹与排水沟最后叠加在地表，不再覆盖建筑。
+  ctx.strokeStyle = "rgba(40,44,48,.4)"; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.moveTo(doorX - 440, 500); ctx.lineTo(doorX - 340, 560); ctx.moveTo(doorX - 230, 480); ctx.lineTo(doorX - 150, 548); ctx.stroke();
+  ctx.fillStyle = "rgba(35,39,43,.42)"; ctx.fillRect(bx - 30, 684, bw + 90, 8);
+}
+
+// 场景 3/5：电台内部走廊——金属白配色（高吊顶 + 冷色金属墙面 + 顶灯 + 通讯机柜 + 楼层标识），层高与人物比例合理
+function drawLevel4Floor(ctx: CanvasRenderingContext2D, g: GameState, now: number, floorNo: number) {
+  const W = g.worldW;
+  // 金属白墙面 + 墙板缝线 + 护腰线 + 踢脚线
+  const wall = ctx.createLinearGradient(0, 0, 0, 460);
+  wall.addColorStop(0, "#aab4be"); wall.addColorStop(1, "#ccd4dc");
+  ctx.fillStyle = wall; ctx.fillRect(0, 0, W, 460);
+  ctx.strokeStyle = "rgba(88,98,108,.35)"; ctx.lineWidth = 2;
+  for (let x = 60; x < W; x += 150) { ctx.beginPath(); ctx.moveTo(x, 40); ctx.lineTo(x, 460); ctx.stroke(); }
+  ctx.fillStyle = "#a4aeb8"; ctx.fillRect(0, 300, W, 10);
+  ctx.fillStyle = "#96a0aa"; ctx.fillRect(0, 448, W, 12);
+  // 高吊顶：井字梁 + 吊杆悬挂长条冷白灯（个别闪烁）+ 地面光锥
+  ctx.fillStyle = "#8b96a0"; ctx.fillRect(0, 0, W, 40);
+  ctx.fillStyle = "#7e8892";
+  for (let x = 0; x < W; x += 320) ctx.fillRect(x, 36, 16, 14);
+  for (let x = 120; x < W; x += 320) {
+    ctx.strokeStyle = "#6c767f"; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(x + 20, 40); ctx.lineTo(x + 20, 14); ctx.moveTo(x + 100, 40); ctx.lineTo(x + 100, 14); ctx.stroke();
+    const flicker = Math.floor(x / 320) % 4 === 2 ? 0.6 + Math.sin(now / 90 + x) * 0.18 : 1;
+    ctx.fillStyle = `rgba(240,248,255,${0.92 * flicker})`;
+    ctx.fillRect(x, 14, 120, 12);
+    ctx.fillStyle = `rgba(215,232,248,${0.10 * flicker})`;
+    ctx.beginPath(); ctx.moveTo(x, 26); ctx.lineTo(x + 120, 26); ctx.lineTo(x + 170, 448); ctx.lineTo(x - 50, 448); ctx.closePath(); ctx.fill();
+  }
+  // 墙面侧门（通讯机房入口，门牌）与绿色疏散指示
+  for (let x = 420; x < W - 160; x += 840) {
+    ctx.fillStyle = "#6b7680"; ctx.fillRect(x, 210, 76, 240);
+    ctx.strokeStyle = "#4a545e"; ctx.lineWidth = 4; ctx.strokeRect(x, 210, 76, 240);
+    ctx.fillStyle = "#39414a"; ctx.fillRect(x + 8, 350, 14, 4);
+    ctx.fillStyle = "#3f8f5f"; ctx.fillRect(x + 10, 186, 56, 20);
+    drawText(ctx, "机房", x + 38, 202, 13, "#eef6ee", "center");
+  }
+  // 通讯机柜：深色柜体 + 闪烁 LED + 顶部线缆槽
+  for (let x = 200; x < W - 160; x += 420) {
+    ctx.fillStyle = "#2e3338"; ctx.fillRect(x, 220, 92, 228);
+    ctx.strokeStyle = "#1b2025"; ctx.lineWidth = 3; ctx.strokeRect(x, 220, 92, 228);
+    for (let ry = 236; ry < 430; ry += 26) {
+      ctx.fillStyle = "#3d444c"; ctx.fillRect(x + 8, ry, 76, 16);
+      const on = Math.floor(now / 300 + ry + x) % 3 !== 0;
+      ctx.fillStyle = on ? "#69e08a" : "#d88a3a";
+      ctx.fillRect(x + 70, ry + 5, 6, 6);
+    }
+    ctx.fillStyle = "#24292e"; ctx.fillRect(x - 6, 206, 104, 14);
+  }
+  // 地板：浅灰金属 + 拼缝 + 中央导向条纹（纵深空间感）
+  const floorG = ctx.createLinearGradient(0, 460, 0, H);
+  floorG.addColorStop(0, "#b7bec6"); floorG.addColorStop(1, "#8d959d");
+  ctx.fillStyle = floorG; ctx.fillRect(0, 460, W, H - 460);
+  ctx.strokeStyle = "rgba(70,80,90,.18)"; ctx.lineWidth = 1.5;
+  for (let x = 0; x < W; x += 120) { ctx.beginPath(); ctx.moveTo(x, 460); ctx.lineTo(x + 40, H); ctx.stroke(); }
+  ctx.fillStyle = "rgba(70,80,90,.22)"; ctx.fillRect(0, 600, W, 8);
+  // 楼层标识与尽头安全门（带闭门器与逃生灯牌）
+  drawText(ctx, `${floorNo}F`, 90, 130, 46, "rgba(60,70,80,.75)", "center");
+  ctx.fillStyle = "#39414a"; ctx.fillRect(W - 120, 230, 90, 220);
+  ctx.strokeStyle = "#22282e"; ctx.lineWidth = 4; ctx.strokeRect(W - 120, 230, 90, 220);
+  ctx.strokeStyle = "#2c343c"; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(W - 116, 244); ctx.lineTo(W - 90, 236); ctx.stroke();
+  ctx.fillStyle = "#3f8f5f"; ctx.fillRect(W - 116, 204, 66, 20);
+  drawText(ctx, "安全门", W - 83, 220, 12, "#eef6ee", "center");
+}
+
+// 场景 4/6：楼梯间——角色沿与模型完全一致的两跑台阶自动升到出口平台。
+function drawLevel4Stairwell(ctx: CanvasRenderingContext2D, g: GameState, nextFloor: number) {
+  const W = g.worldW;
+  const wall = ctx.createLinearGradient(0, 0, 0, 460);
+  wall.addColorStop(0, "#9fa9b3"); wall.addColorStop(1, "#c2cad2");
+  ctx.fillStyle = wall; ctx.fillRect(0, 0, W, 460);
+  const floorG = ctx.createLinearGradient(0, 460, 0, H);
+  floorG.addColorStop(0, "#a8b0b8"); floorG.addColorStop(1, "#7e868e");
+  ctx.fillStyle = floorG; ctx.fillRect(0, 460, W, H - 460);
+  ctx.fillStyle = "#96a0aa"; ctx.fillRect(0, 448, W, 12);
+  // 防火楼梯间结构：楼板梁、墙面分缝、消防立管和高窗。
+  ctx.fillStyle = "#7f8993"; ctx.fillRect(0, 36, W, 24); ctx.fillRect(0, 278, W, 18);
+  ctx.strokeStyle = "rgba(80,90,100,.34)"; ctx.lineWidth = 2;
+  for (let x = 80; x < W; x += 190) { ctx.beginPath(); ctx.moveTo(x, 60); ctx.lineTo(x, 448); ctx.stroke(); }
+  for (let x = 210; x < W - 180; x += 460) {
+    ctx.fillStyle = "#65727c"; ctx.fillRect(x, 92, 164, 104);
+    ctx.fillStyle = "rgba(183,214,229,.58)"; ctx.fillRect(x + 10, 102, 144, 84);
+    ctx.strokeStyle = "#525e68"; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(x + 82, 102); ctx.lineTo(x + 82, 186); ctx.moveTo(x + 10, 144); ctx.lineTo(x + 154, 144); ctx.stroke();
+  }
+  ctx.strokeStyle = "#ad3f35"; ctx.lineWidth = 12;
+  ctx.beginPath(); ctx.moveTo(72, 82); ctx.lineTo(72, 448); ctx.lineTo(124, 448); ctx.stroke();
+  ctx.fillStyle = "#c84a3f"; ctx.fillRect(48, 286, 48, 78);
+  ctx.fillStyle = "#ece4cf"; ctx.fillRect(58, 300, 28, 24);
+  drawText(ctx, "消防", 72, 352, 11, "#f1e8d6", "center");
+
+  // 两跑平台楼梯：完整踏步、踢面、平台、下部承重斜梁和前后两层扶手。
+  // 所有水平几何按世界宽度计算，保证极窄屏的动态画布也不会把楼梯或出口挤出世界。
+  const lowerStart = W * LEVEL4_STAIR_LOWER_START_FX;
+  const landingX = W * LEVEL4_STAIR_LANDING_FX;
+  const landingW = W * LEVEL4_STAIR_LANDING_W_FX;
+  const steps = 10;
+  const stepW = (landingX - lowerStart) / steps;
+  const stepH = (LEVEL4_STAIR_BOTTOM_Y - LEVEL4_STAIR_LANDING_Y) / steps;
+  ctx.fillStyle = "#68727c";
+  ctx.beginPath();
+  ctx.moveTo(lowerStart - 24, LEVEL4_STAIR_BOTTOM_Y + 10);
+  ctx.lineTo(landingX + 28, LEVEL4_STAIR_LANDING_Y + 10);
+  ctx.lineTo(landingX + 28, LEVEL4_STAIR_LANDING_Y + 54);
+  ctx.lineTo(lowerStart - 24, LEVEL4_STAIR_BOTTOM_Y + 60);
+  ctx.closePath(); ctx.fill();
+  for (let i = 0; i < steps; i++) {
+    const sx = lowerStart + i * stepW;
+    const sy = LEVEL4_STAIR_BOTTOM_Y - i * stepH;
+    ctx.fillStyle = i % 2 ? "#a5afb8" : "#b5bdc5";
+    ctx.fillRect(sx, sy, stepW + 2, stepH);
+    ctx.fillStyle = "#7d8790"; ctx.fillRect(sx, sy + stepH - 6, stepW + 2, 6);
+  }
+  ctx.fillStyle = "#aeb7bf"; ctx.fillRect(landingX, LEVEL4_STAIR_LANDING_Y, landingW, 42);
+  ctx.fillStyle = "#747e87"; ctx.fillRect(landingX, LEVEL4_STAIR_LANDING_Y + 38, landingW, 10);
+  // 上层梯在背景中继续抬升至出口平台。
+  const upperStart = landingX + landingW * .82;
+  const upperEnd = W * LEVEL4_STAIR_UPPER_END_FX;
+  const upperStepH = (LEVEL4_STAIR_LANDING_Y - LEVEL4_STAIR_EXIT_Y) / steps;
+  ctx.fillStyle = "#737e87";
+  ctx.beginPath(); ctx.moveTo(upperStart, LEVEL4_STAIR_LANDING_Y); ctx.lineTo(upperEnd, LEVEL4_STAIR_EXIT_Y); ctx.lineTo(upperEnd, LEVEL4_STAIR_EXIT_Y + 52); ctx.lineTo(upperStart, LEVEL4_STAIR_LANDING_Y + 48); ctx.closePath(); ctx.fill();
+  const upperSpan = upperEnd - upperStart;
+  const upperStepW = upperSpan / steps;
+  for (let i = 0; i < steps; i++) {
+    const sx = upperStart + i * upperStepW;
+    const sy = LEVEL4_STAIR_LANDING_Y - i * upperStepH;
+    ctx.fillStyle = i % 2 ? "#9ca7b0" : "#b0b9c1";
+    ctx.fillRect(sx, sy, upperStepW + 2, upperStepH);
+    ctx.fillStyle = "#737d86"; ctx.fillRect(sx, sy + upperStepH - 5, upperStepW + 2, 5);
+  }
+  // 扶手立柱与连续扶手。
+  ctx.strokeStyle = "#59656f"; ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.moveTo(lowerStart, LEVEL4_STAIR_BOTTOM_Y - 54); ctx.lineTo(landingX + 10, LEVEL4_STAIR_LANDING_Y - 54); ctx.lineTo(upperStart, LEVEL4_STAIR_LANDING_Y - 54);
+  ctx.lineTo(upperEnd, LEVEL4_STAIR_EXIT_Y - 54);
+  ctx.stroke();
+  ctx.lineWidth = 3;
+  for (let i = 0; i <= steps; i += 2) {
+    const x = lowerStart + i * stepW;
+    const stepY = LEVEL4_STAIR_BOTTOM_Y - i * stepH;
+    ctx.beginPath(); ctx.moveTo(x, stepY - 54); ctx.lineTo(x, stepY); ctx.stroke();
+  }
+  for (let i = 0; i <= steps; i += 2) {
+    const x = upperStart + i * upperStepW;
+    const stepY = LEVEL4_STAIR_LANDING_Y - i * upperStepH;
+    ctx.beginPath(); ctx.moveTo(x, stepY - 54); ctx.lineTo(x, stepY); ctx.stroke();
+  }
+  // 楼层平台安全门、应急灯、层号与上行指示。
+  const exitDoorW = Math.max(84, Math.min(118, W * .09));
+  const exitDoorX = W - exitDoorW - Math.max(24, W * .025);
+  const exitDoorY = LEVEL4_STAIR_EXIT_Y - 240;
+  ctx.fillStyle = "#4d5862"; ctx.fillRect(exitDoorX, exitDoorY, exitDoorW, 240);
+  ctx.strokeStyle = "#343d45"; ctx.lineWidth = 5; ctx.strokeRect(exitDoorX, exitDoorY, exitDoorW, 240);
+  ctx.fillStyle = "#242b31"; ctx.fillRect(exitDoorX + 20, LEVEL4_STAIR_EXIT_Y - 122, 18, 5);
+  const exitSignW = Math.max(118, Math.min(164, W * .13));
+  ctx.fillStyle = "#3f8f5f"; ctx.fillRect(W - exitSignW - 18, exitDoorY - 38, exitSignW, 32);
+  const stairExitLabel = g.level?.levelId === LEVEL6_ID ? "中央大厅 →" : nextFloor >= 3 ? "天台出口 →" : `↑ 前往 ${nextFloor}F`;
+  drawText(ctx, stairExitLabel, W - exitSignW / 2 - 18, exitDoorY - 15, 17, "#eef6ee", "center");
+  ctx.fillStyle = "rgba(60,70,80,.72)"; ctx.fillRect(120, 104, 92, 70);
+  drawText(ctx, `${nextFloor - 1}F`, 166, 154, 38, "#d6dde1", "center");
+  drawText(ctx, "楼梯间", 166, 194, 18, "rgba(60,70,80,.78)", "center");
+  ctx.fillStyle = "rgba(235,245,236,.22)";
+  ctx.beginPath(); ctx.moveTo(exitDoorX, LEVEL4_STAIR_EXIT_Y); ctx.lineTo(exitDoorX + exitDoorW, LEVEL4_STAIR_EXIT_Y); ctx.lineTo(W, 640); ctx.lineTo(Math.max(0, exitDoorX - W * .14), 640); ctx.closePath(); ctx.fill();
+}
+
+// 场景 7：天台——白天天空 + 女儿墙 + 通风箱与天线杆（重甲僵尸出现处）
+function drawLevel4Roof(ctx: CanvasRenderingContext2D, g: GameState, now: number) {
+  const W = g.worldW;
+  const sky = ctx.createLinearGradient(0, 0, 0, ROAD_TOP + 24);
+  sky.addColorStop(0, "#83b4da"); sky.addColorStop(1, "#d6dee2");
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, W, ROAD_TOP + 24);
+  // 远景城市剪影
+  ctx.fillStyle = "rgba(115,130,140,.45)";
+  for (let x = 40; x < W; x += 230) ctx.fillRect(x, ROAD_TOP - 70 - (x % 4) * 18, 110, 70 + (x % 4) * 18);
+  // 女儿墙（护栏矮墙）
+  ctx.fillStyle = "#99a1aa"; ctx.fillRect(0, ROAD_TOP - 26, W, 50);
+  ctx.fillStyle = "#878f98"; ctx.fillRect(0, ROAD_TOP - 32, W, 10);
+  // 屋面：碎石沥青 + 女儿墙阴影
+  const ground = ctx.createLinearGradient(0, ROAD_TOP + 24, 0, H);
+  ground.addColorStop(0, "#7c8187"); ground.addColorStop(1, "#5f646a");
+  ctx.fillStyle = ground; ctx.fillRect(0, ROAD_TOP + 24, W, H - ROAD_TOP - 24);
+  ctx.fillStyle = "rgba(0,0,0,.12)"; ctx.fillRect(0, ROAD_TOP + 24, W, 26);
+  // 通风箱与天线杆
+  for (const vx of [W * 0.24, W * 0.52]) {
+    ctx.fillStyle = "#8d959d"; ctx.fillRect(vx, 360, 120, 90);
+    ctx.strokeStyle = "#6c747c"; ctx.lineWidth = 3; ctx.strokeRect(vx, 360, 120, 90);
+    ctx.strokeStyle = "#767e86";
+    for (let ly = 374; ly < 440; ly += 14) { ctx.beginPath(); ctx.moveTo(vx + 10, ly); ctx.lineTo(vx + 110, ly); ctx.stroke(); }
+  }
+  ctx.strokeStyle = "#5a646d"; ctx.lineWidth = 6;
+  ctx.beginPath(); ctx.moveTo(W * 0.4, 340); ctx.lineTo(W * 0.4, 180); ctx.stroke();
+  const blink = Math.floor(now / 520) % 2 === 0;
+  ctx.fillStyle = blink ? "#ff5a4a" : "#7a2620";
+  ctx.beginPath(); ctx.arc(W * 0.4, 176, 5, 0, Math.PI * 2); ctx.fill();
+}
+
+// 场景 7：天台通讯设备区——机柜列 + 天线桅杆 + 设备 HP / 维修进度 / 维修火花（参照第三关围墙承伤体系）
+function drawLevel4RoofDefense(ctx: CanvasRenderingContext2D, g: GameState, now: number) {
+  drawLevel4Roof(ctx, g, now);
+  const level = g.level;
+  const equipX = LEVEL4_EQUIP_FX * g.worldW;
+  // 通讯机柜列（覆盖路面高度，与判定段对应）：柜体 + 指示灯 + 顶部馈线
+  for (const cy of [280, 400, 520, 620]) {
+    ctx.fillStyle = "#3a4046"; ctx.fillRect(equipX - 30, cy - 70, 60, 120);
+    ctx.strokeStyle = "#23282d"; ctx.lineWidth = 3; ctx.strokeRect(equipX - 30, cy - 70, 60, 120);
+    ctx.fillStyle = "#2c3136"; ctx.fillRect(equipX - 22, cy - 58, 44, 30);
+    const on = Math.floor(now / 260 + cy) % 2 === 0;
+    ctx.fillStyle = on ? "#69e08a" : "#c84a3a";
+    ctx.fillRect(equipX - 22, cy - 64, 8, 8);
+  }
+  // 天线桅杆 + 横担 + 红色障碍灯
+  ctx.strokeStyle = "#565e66"; ctx.lineWidth = 8;
+  ctx.beginPath(); ctx.moveTo(equipX, 240); ctx.lineTo(equipX, 40); ctx.stroke();
+  ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.moveTo(equipX - 40, 90); ctx.lineTo(equipX + 40, 90); ctx.moveTo(equipX - 30, 130); ctx.lineTo(equipX + 30, 130); ctx.stroke();
+  ctx.strokeStyle = "rgba(40,45,50,.6)"; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(equipX, 240); ctx.lineTo(equipX - 12, 300); ctx.moveTo(equipX, 240); ctx.lineTo(equipX + 12, 340); ctx.stroke();
+  const blink = Math.floor(now / 500) % 2 === 0;
+  ctx.fillStyle = blink ? "#ff5a4a" : "#7a2620";
+  ctx.beginPath(); ctx.arc(equipX, 34, 7, 0, Math.PI * 2); ctx.fill();
+  if (!level) return;
+  // 设备 HP 条（共享池，同第三关围墙换算）
+  const hpRatio = Math.max(0, level.wallHp / LEVEL4_EQUIP_HP);
+  ctx.fillStyle = "rgba(12,14,16,.72)"; ctx.fillRect(equipX - 90, 96, 180, 16);
+  ctx.fillStyle = hpRatio > 0.35 ? "#72ef9a" : "#e0a03a";
+  ctx.fillRect(equipX - 88, 98, 176 * hpRatio, 12);
+  drawText(ctx, `通讯设备 ${Math.ceil(level.wallHp)} HP`, equipX, 88, 15, "#e8e2d2", "center");
+  if (level.eventStage !== "repair") return;
+  // 维修进度条（20 秒）+ 维修点火花
+  const prog = Math.min(1, (now - level.eventAt) / LEVEL4_REPAIR_MS);
+  ctx.fillStyle = "rgba(12,14,16,.72)"; ctx.fillRect(equipX - 90, 132, 180, 14);
+  ctx.fillStyle = "#6ec8f2"; ctx.fillRect(equipX - 88, 134, 176 * prog, 10);
+  drawText(ctx, `维修进度 ${Math.floor(prog * 100)}%`, equipX, 126, 14, "#cfe8f8", "center");
+  if (Math.floor(now / 120) % 2 === 0) {
+    ctx.fillStyle = "#ffe08a";
+    for (let i = 0; i < 5; i++) {
+      const a = (now / 130 + i) * 2.1;
+      ctx.fillRect(equipX - 52 + Math.cos(a) * 14, 410 + Math.sin(a) * 18, 3, 3);
+    }
+  }
+}
+
+// ===== 第五关「解救行动」场景绘制 =====
+
+function drawMilitaryHelicopter(ctx: CanvasRenderingContext2D, x: number, groundY: number, flying: boolean, now: number) {
+  const scale = LEVEL5_HELICOPTER_SCALE;
+  const bob = flying ? Math.sin(now / 90) * 3 : 0;
+  const rotor = now / (flying ? 22 : 34);
+  const altitude = flying ? Math.max(0, 500 - groundY) : 0;
+  const shadowScale = flying ? Math.max(.56, 1 - altitude / 720) : 1;
+  const shadowGroundY = flying ? 510 : groundY + 10;
+  ctx.save();
+  // 阴影固定在落地区地面，只随飞行高度缩小/变淡；机体再按真实人物比例整体放大。
+  ctx.fillStyle = `rgba(0,0,0,${flying ? .1 + shadowScale * .1 : .24})`;
+  ctx.beginPath(); ctx.ellipse(x, shadowGroundY, 210 * scale * shadowScale, (flying ? 14 : 22) * scale * shadowScale, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.translate(x, groundY - 88 * scale + bob);
+  ctx.scale(scale, scale);
+  // 尾梁、垂尾与尾桨
+  const tailGradient = ctx.createLinearGradient(-250, -80, -60, 42);
+  tailGradient.addColorStop(0, "#343f34"); tailGradient.addColorStop(.5, "#526049"); tailGradient.addColorStop(1, "#3c493a");
+  ctx.fillStyle = tailGradient;
+  ctx.beginPath(); ctx.moveTo(-82, -8); ctx.lineTo(-244, -52); ctx.lineTo(-250, -30); ctx.lineTo(-78, 34); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = "#273129"; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(-231, -45); ctx.lineTo(-84, 7); ctx.stroke();
+  ctx.fillStyle = "#394635";
+  ctx.beginPath(); ctx.moveTo(-228, -42); ctx.lineTo(-248, -112); ctx.lineTo(-214, -82); ctx.lineTo(-192, -26); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "#55624a";
+  ctx.beginPath(); ctx.moveTo(-224, -35); ctx.lineTo(-260, -4); ctx.lineTo(-208, -18); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = "#252d28"; ctx.lineWidth = 6;
+  ctx.beginPath(); ctx.arc(-245, -48, 34, 0, Math.PI * 2); ctx.stroke();
+  ctx.save(); ctx.translate(-245, -48); ctx.rotate(rotor * .72); ctx.lineWidth = 4;
+  for (let i = 0; i < 4; i++) { ctx.rotate(Math.PI / 2); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(30, 0); ctx.stroke(); }
+  ctx.restore();
+  // 机身与驾驶舱
+  const bodyGradient = ctx.createLinearGradient(0, -72, 0, 72);
+  bodyGradient.addColorStop(0, "#69765b"); bodyGradient.addColorStop(.45, "#4f5d43"); bodyGradient.addColorStop(1, "#303c31");
+  ctx.fillStyle = bodyGradient;
+  ctx.beginPath(); ctx.ellipse(0, 0, 116, 70, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = "#283128"; ctx.lineWidth = 3; ctx.stroke();
+  // 涡轴发动机舱、进气口与排气管
+  ctx.fillStyle = "#3d493b"; ctx.beginPath(); ctx.roundRect(-68, -86, 128, 38, 15); ctx.fill();
+  ctx.strokeStyle = "#242c25"; ctx.lineWidth = 2; ctx.stroke();
+  ctx.fillStyle = "#151b18"; ctx.beginPath(); ctx.ellipse(42, -68, 17, 12, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#242b26"; ctx.fillRect(-82, -78, 30, 13);
+  ctx.strokeStyle = "#171d19"; ctx.lineWidth = 7; ctx.lineCap = "round";
+  ctx.beginPath(); ctx.moveTo(-68, -67); ctx.lineTo(-95, -66); ctx.stroke(); ctx.lineCap = "butt";
+  // 分片式驾驶舱风挡与窗框
+  ctx.fillStyle = "#253130";
+  ctx.beginPath(); ctx.moveTo(64, -52); ctx.quadraticCurveTo(124, -26, 112, 18); ctx.lineTo(60, 22); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "rgba(139,176,182,.68)";
+  ctx.beginPath(); ctx.moveTo(70, -42); ctx.quadraticCurveTo(108, -20, 102, 8); ctx.lineTo(68, 10); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = "#1e2827"; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(82, -44); ctx.lineTo(82, 11); ctx.moveTo(67, -14); ctx.lineTo(108, -13); ctx.stroke();
+  ctx.fillStyle = "rgba(190,218,220,.18)";
+  ctx.beginPath(); ctx.moveTo(74, -38); ctx.lineTo(87, -31); ctx.lineTo(70, 4); ctx.closePath(); ctx.fill();
+  // 开启的侧滑舱门与可见座舱（飞行中关闭，落地后打开供小队下机）
+  ctx.fillStyle = "#151b18"; ctx.fillRect(-54, -45, 78, 82);
+  if (flying) {
+    ctx.fillStyle = "#394638"; ctx.fillRect(-54, -45, 78, 82);
+    ctx.strokeStyle = "#202821"; ctx.lineWidth = 3; ctx.strokeRect(-54, -45, 78, 82);
+    ctx.fillStyle = "#75847b"; ctx.fillRect(-38, -30, 43, 26);
+  } else {
+    ctx.fillStyle = "#343d34";
+    ctx.beginPath(); ctx.roundRect(-40, -19, 20, 29, 4); ctx.roundRect(-13, -19, 20, 29, 4); ctx.fill();
+    ctx.strokeStyle = "#8a917f"; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(-36, -16); ctx.lineTo(-24, 7); ctx.moveTo(-9, -16); ctx.lineTo(3, 7); ctx.stroke();
+    ctx.fillStyle = "#596150"; ctx.fillRect(-45, 15, 58, 7);
+    ctx.strokeStyle = "#879080"; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(-42, -29); ctx.lineTo(13, -29); ctx.moveTo(-42, 12); ctx.lineTo(-42, 30); ctx.stroke();
+    ctx.fillStyle = "#273027"; ctx.fillRect(-72, -45, 14, 82);
+  }
+  // 舱门导轨、检修面板、编号与军徽
+  ctx.strokeStyle = "#242c25"; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(-62, -50); ctx.lineTo(31, -50); ctx.moveTo(-62, 43); ctx.lineTo(31, 43); ctx.stroke();
+  ctx.strokeRect(30, 27, 35, 23);
+  ctx.fillStyle = "#b7b397";
+  for (const px of [-70, -28, 16, 55]) { ctx.beginPath(); ctx.arc(px, 52, 1.6, 0, Math.PI * 2); ctx.fill(); }
+  ctx.fillStyle = "#d8d3a9";
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const a = -Math.PI / 2 + i * Math.PI * 4 / 5;
+    const r = i % 2 ? 7 : 15;
+    const px = 44 + Math.cos(a) * r; const py = 1 + Math.sin(a) * r;
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.closePath(); ctx.fill();
+  drawText(ctx, "DR-05", -10, 64, 12, "#d7d1a6", "center");
+  // 起落架
+  ctx.strokeStyle = "#202723"; ctx.lineWidth = 7;
+  ctx.beginPath(); ctx.moveTo(-68, 48); ctx.lineTo(-84, 82); ctx.moveTo(42, 50); ctx.lineTo(58, 82); ctx.stroke();
+  ctx.lineWidth = 8; ctx.lineCap = "round";
+  ctx.beginPath(); ctx.moveTo(-112, 86); ctx.lineTo(25, 86); ctx.moveTo(36, 86); ctx.lineTo(137, 86); ctx.stroke(); ctx.lineCap = "butt";
+  // 主旋翼桅杆、旋翼毂与飞行时的旋转残影
+  ctx.strokeStyle = "#1f2723"; ctx.lineWidth = 7;
+  ctx.beginPath(); ctx.moveTo(0, -68); ctx.lineTo(0, -92); ctx.stroke();
+  ctx.fillStyle = "#171d19"; ctx.beginPath(); ctx.ellipse(0, -94, 13, 7, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.save(); ctx.translate(0, -96); ctx.rotate(rotor);
+  if (flying) {
+    for (let i = 0; i < 4; i++) {
+      ctx.rotate(Math.PI / 4); ctx.strokeStyle = `rgba(27,34,30,${.26 + i * .1})`; ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.moveTo(-260, 0); ctx.lineTo(260, 0); ctx.stroke();
+    }
+  } else {
+    ctx.strokeStyle = "#1f2723"; ctx.lineWidth = 6;
+    ctx.beginPath(); ctx.moveTo(-260, 0); ctx.lineTo(260, 0); ctx.moveTo(0, -18); ctx.lineTo(0, 18); ctx.stroke();
+  }
+  ctx.restore();
+  // 航行灯
+  ctx.fillStyle = Math.floor(now / 360) % 2 ? "#ef4f42" : "#7c2925";
+  ctx.beginPath(); ctx.arc(-205, -31, 4, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#77d7a0"; ctx.beginPath(); ctx.arc(111, 7, 3, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+function drawLevel5MonitoringRoom(ctx: CanvasRenderingContext2D, g: GameState, now: number) {
+  const W = g.worldW;
+  const wall = ctx.createLinearGradient(0, 0, 0, 460);
+  wall.addColorStop(0, "#66717a"); wall.addColorStop(1, "#8a949c");
+  ctx.fillStyle = wall; ctx.fillRect(0, 0, W, 460);
+  ctx.fillStyle = "#444b51"; ctx.fillRect(0, 460, W, H - 460);
+  ctx.fillStyle = "#353c42"; ctx.fillRect(0, 0, W, 54); ctx.fillRect(0, 448, W, 14);
+  // 吸音墙板与吊灯
+  for (let x = 30; x < W; x += 96) {
+    ctx.fillStyle = x % 192 ? "#59646d" : "#505b64"; ctx.fillRect(x, 72, 78, 122);
+    ctx.strokeStyle = "rgba(30,38,44,.35)"; ctx.lineWidth = 2; ctx.strokeRect(x, 72, 78, 122);
+  }
+  for (let x = 180; x < W; x += 360) {
+    ctx.fillStyle = "rgba(225,239,241,.86)"; ctx.fillRect(x, 66, 180, 12);
+    ctx.fillStyle = "rgba(210,230,235,.09)"; ctx.beginPath(); ctx.moveTo(x, 78); ctx.lineTo(x + 180, 78); ctx.lineTo(x + 230, 450); ctx.lineTo(x - 50, 450); ctx.closePath(); ctx.fill();
+  }
+  // 无线电监听席：频谱屏、接收机、录音机与天线馈线
+  const deskX = W * .38;
+  ctx.fillStyle = "#31383e"; ctx.fillRect(deskX - 260, 286, 520, 144);
+  ctx.fillStyle = "#20272d"; ctx.fillRect(deskX - 232, 214, 464, 92);
+  for (let i = 0; i < 4; i++) {
+    const sx = deskX - 216 + i * 112;
+    ctx.fillStyle = "#0d171c"; ctx.fillRect(sx, 228, 96, 62);
+    ctx.strokeStyle = "#51606a"; ctx.lineWidth = 3; ctx.strokeRect(sx, 228, 96, 62);
+    ctx.strokeStyle = i === 2 ? "#df8d45" : "#71d48c"; ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let p = 0; p <= 80; p += 8) {
+      const py = 260 + Math.sin(now / 190 + p * .34 + i) * (5 + i * 2);
+      if (p === 0) ctx.moveTo(sx + 8 + p, py); else ctx.lineTo(sx + 8 + p, py);
+    }
+    ctx.stroke();
+  }
+  for (let x = deskX - 220; x < deskX + 220; x += 72) {
+    ctx.fillStyle = "#4e5961"; ctx.fillRect(x, 326, 58, 62);
+    ctx.fillStyle = Math.floor(now / 300 + x) % 2 ? "#72e193" : "#d55a45"; ctx.fillRect(x + 8, 336, 7, 7);
+    ctx.fillStyle = "#222a2f"; ctx.beginPath(); ctx.arc(x + 38, 358, 10, 0, Math.PI * 2); ctx.fill();
+  }
+  drawText(ctx, "无线电监听室 · 04", deskX, 206, 20, "#d8e0e3", "center");
+  // 求救信号主屏
+  const signalX = Math.min(W - 260, deskX + 390);
+  ctx.fillStyle = "#182126"; ctx.fillRect(signalX - 150, 196, 300, 176);
+  ctx.strokeStyle = "#3f4b52"; ctx.lineWidth = 6; ctx.strokeRect(signalX - 150, 196, 300, 176);
+  drawText(ctx, "隧道紧急频段", signalX, 228, 18, "#d9d7bd", "center");
+  ctx.strokeStyle = "#e45d49"; ctx.lineWidth = 3;
+  ctx.beginPath();
+  for (let x = -122; x <= 122; x += 6) {
+    const y = 292 + Math.sin(x * .12 + now / 170) * 10 + (Math.abs(x) < 28 ? Math.sin(x * .55) * 24 : 0);
+    if (x === -122) ctx.moveTo(signalX + x, y); else ctx.lineTo(signalX + x, y);
+  }
+  ctx.stroke();
+  drawText(ctx, "SOS · 信号重复中", signalX, 348, 16, "#ef8a72", "center");
+}
+
+function drawLevel5Helipad(ctx: CanvasRenderingContext2D, g: GameState, now: number) {
+  drawLevel4Roof(ctx, g, now);
+  const hx = LEVEL5_HELIPAD_FX * g.worldW;
+  ctx.strokeStyle = "#e6dfc2"; ctx.lineWidth = 14;
+  ctx.beginPath(); ctx.arc(hx, 500, 300, 0, Math.PI * 2); ctx.stroke();
+  ctx.lineWidth = 10; ctx.beginPath(); ctx.moveTo(hx - 74, 398); ctx.lineTo(hx - 74, 602); ctx.moveTo(hx + 74, 398); ctx.lineTo(hx + 74, 602); ctx.moveTo(hx - 74, 500); ctx.lineTo(hx + 74, 500); ctx.stroke();
+  drawText(ctx, "H-05 · 救援起降区", hx, 682, 18, "#e5dfc8", "center");
+  drawMilitaryHelicopter(ctx, hx, 500, false, now);
+}
+
+function drawLevel5TunnelEntrance(ctx: CanvasRenderingContext2D, g: GameState) {
+  const W = g.worldW;
+  const sky = ctx.createLinearGradient(0, 0, 0, 240);
+  sky.addColorStop(0, "#7f9eb2"); sky.addColorStop(1, "#bec8ca");
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, W, 260);
+  ctx.fillStyle = "#545a56";
+  ctx.beginPath(); ctx.moveTo(W * .42, 260); ctx.lineTo(W * .58, 64); ctx.lineTo(W * .76, 260); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "#6b706a"; ctx.fillRect(0, 260, W, H - 260);
+  // 隧道口混凝土门楼
+  const portalX = W * .76;
+  ctx.fillStyle = "#9ca1a0"; ctx.fillRect(portalX - 250, 138, 500, 332);
+  ctx.fillStyle = "#171b1c"; ctx.beginPath(); ctx.roundRect(portalX - 168, 212, 336, 258, 132); ctx.fill();
+  ctx.strokeStyle = "#777d7d"; ctx.lineWidth = 18; ctx.stroke();
+  ctx.fillStyle = "#d6c650"; ctx.fillRect(portalX - 236, 166, 472, 30);
+  drawText(ctx, "17 号公路隧道 · 救援入口", portalX, 190, 20, "#282e30", "center");
+  // 降落区与通向洞口的道路
+  ctx.strokeStyle = "rgba(236,230,201,.75)"; ctx.lineWidth = 7;
+  ctx.beginPath(); ctx.arc(LEVEL5_HELI_STOP_FX * W, 520, 150, 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = "rgba(238,228,190,.55)";
+  for (let x = W * .45; x < portalX - 190; x += 180) ctx.fillRect(x, 586, 90, 7);
+}
+
+function drawLevel5Tunnel(ctx: CanvasRenderingContext2D, g: GameState, now: number, powered: boolean, mode: "power" | "rescue" | "road") {
+  const W = g.worldW;
+  ctx.fillStyle = powered ? "#596168" : "#15191c"; ctx.fillRect(0, 0, W, H);
+  // 拱形隧道壳体与连续肋拱
+  ctx.fillStyle = powered ? "#747c82" : "#242a2e";
+  ctx.fillRect(0, 150, W, 330);
+  ctx.fillStyle = powered ? "#454b50" : "#101416";
+  ctx.fillRect(0, 480, W, H - 480);
+  ctx.strokeStyle = powered ? "#8d9498" : "#30363a"; ctx.lineWidth = 14;
+  for (let x = 80; x < W; x += 360) {
+    ctx.beginPath(); ctx.moveTo(x, 480); ctx.lineTo(x, 230); ctx.quadraticCurveTo(x + 140, 94, x + 280, 230); ctx.lineTo(x + 280, 480); ctx.stroke();
+  }
+  // 双车道路面、排水沟与里程牌
+  ctx.strokeStyle = powered ? "rgba(232,222,178,.58)" : "rgba(110,106,86,.28)"; ctx.lineWidth = 6;
+  ctx.beginPath(); ctx.moveTo(0, 584); ctx.lineTo(W, 584); ctx.stroke();
+  ctx.fillStyle = powered ? "rgba(235,227,190,.7)" : "rgba(130,124,92,.2)";
+  for (let x = 120; x < W; x += 260) ctx.fillRect(x, 578, 120, 9);
+  ctx.fillStyle = "#282d31"; ctx.fillRect(0, 688, W, 10);
+  for (let x = 380; x < W; x += 900) {
+    ctx.fillStyle = powered ? "#d5d8cf" : "#555b59"; ctx.fillRect(x, 286, 94, 50);
+    drawText(ctx, `K${Math.floor(x / 1000) + 17}+${String(x % 1000).padStart(3, "0")}`, x + 47, 317, 13, powered ? "#343a3e" : "#171c1f", "center");
+  }
+  // 顶灯：维修前全部熄灭；通电后沿长隧道连续亮起。
+  for (let x = 170; x < W; x += 320) {
+    ctx.fillStyle = powered ? "#f0e5b2" : "#30363a"; ctx.fillRect(x, 198, 150, 13);
+    if (powered) {
+      const glow = ctx.createRadialGradient(x + 75, 212, 2, x + 75, 212, 160);
+      glow.addColorStop(0, "rgba(242,229,173,.23)"); glow.addColorStop(1, "rgba(242,229,173,0)");
+      ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(x + 75, 250, 160, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  if (mode === "power") {
+    const powerX = LEVEL5_POWER_FX * W;
+    ctx.fillStyle = "#30383d"; ctx.fillRect(powerX - 180, 258, 300, 198);
+    ctx.strokeStyle = "#11171a"; ctx.lineWidth = 6; ctx.strokeRect(powerX - 180, 258, 300, 198);
+    for (let x = powerX - 158; x < powerX + 96; x += 82) {
+      ctx.fillStyle = "#465158"; ctx.fillRect(x, 280, 64, 142);
+      ctx.fillStyle = Math.floor(now / 240 + x) % 2 ? "#d65a45" : "#6bd18a"; ctx.fillRect(x + 10, 296, 8, 8);
+      ctx.fillStyle = "#20272b"; ctx.beginPath(); ctx.arc(x + 32, 346, 15, 0, Math.PI * 2); ctx.fill();
+    }
+    drawText(ctx, "电力配置室", powerX - 30, 246, 20, "#bdc5c8", "center");
+    const fenceX = LEVEL5_FENCE_FX * W;
+    ctx.strokeStyle = "#626d71"; ctx.lineWidth = 7;
+    for (let y = 228; y <= 650; y += 42) { ctx.beginPath(); ctx.moveTo(fenceX - 18, y); ctx.lineTo(fenceX + 18, y); ctx.stroke(); }
+    ctx.lineWidth = 4;
+    for (let y = 228; y < 650; y += 26) { ctx.beginPath(); ctx.moveTo(fenceX - 18, y); ctx.lineTo(fenceX + 18, y + 26); ctx.moveTo(fenceX + 18, y); ctx.lineTo(fenceX - 18, y + 26); ctx.stroke(); }
+    if (g.level?.eventStage === "power") {
+      const ratio = Math.max(0, g.level.wallHp / LEVEL5_FENCE_HP);
+      ctx.fillStyle = "rgba(8,11,12,.78)"; ctx.fillRect(fenceX - 92, 172, 184, 16);
+      ctx.fillStyle = ratio > .35 ? "#d9ba48" : "#d24a42"; ctx.fillRect(fenceX - 90, 174, 180 * ratio, 12);
+      drawText(ctx, `防护围栏 ${Math.ceil(g.level.wallHp)} HP`, fenceX, 164, 15, "#ddd9c4", "center");
+      const prog = Math.min(1, (now - g.level.eventAt) / LEVEL5_REPAIR_MS);
+      ctx.fillStyle = "rgba(8,11,12,.78)"; ctx.fillRect(powerX - 120, 464, 220, 14);
+      ctx.fillStyle = "#69c7ef"; ctx.fillRect(powerX - 118, 466, 216 * prog, 10);
+    }
+  }
+  if (mode === "rescue") {
+    const sx = LEVEL5_SURVIVOR_FX * W;
+    ctx.fillStyle = "#292d2c"; ctx.fillRect(sx - 120, 330, 220, 150);
+    ctx.fillStyle = "#e4d8be"; ctx.fillRect(sx - 92, 352, 164, 36);
+    drawText(ctx, "紧急避险间", sx - 10, 378, 17, "#3b4142", "center");
+    // 求救人员：靠墙挥手的静态识别模型
+    ctx.save(); ctx.translate(sx, 520);
+    ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.beginPath(); ctx.ellipse(0, 5, 24, 7, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = "#3f4f5c"; ctx.lineWidth = 15; ctx.beginPath(); ctx.moveTo(0, -70); ctx.lineTo(-8, -18); ctx.moveTo(-8, -18); ctx.lineTo(-18, 0); ctx.moveTo(-8, -18); ctx.lineTo(8, 0); ctx.stroke();
+    ctx.strokeStyle = "#c89b75"; ctx.lineWidth = 11; ctx.beginPath(); ctx.moveTo(-2, -62); ctx.lineTo(-34, -104); ctx.moveTo(2, -62); ctx.lineTo(28, -80 - Math.sin(now / 220) * 16); ctx.stroke();
+    ctx.fillStyle = "#c89b75"; ctx.beginPath(); ctx.arc(0, -92, 16, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#342f2c"; ctx.beginPath(); ctx.arc(-2, -98, 14, Math.PI, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    drawText(ctx, "求救人员", sx, 396, 18, "#8df3ad", "center");
+  }
+  if (mode === "road") {
+    const vehicleX = LEVEL5_VEHICLE_FX * W;
+    drawMilitaryTruck(ctx, vehicleX, 500, false, now);
+    drawText(ctx, "救援车队", vehicleX, 302, 18, "#e5dfbd", "center");
+  }
+}
+
+// ===== 第六关「攻占大楼」场景绘制 =====
+
+function drawLevel6CityHallExterior(ctx: CanvasRenderingContext2D, g: GameState, now: number) {
+  const W = g.worldW;
+  const doorX = LEVEL6_BUILDING_DOOR_FX * W;
+  const sky = ctx.createLinearGradient(0, 0, 0, 260);
+  sky.addColorStop(0, "#536878"); sky.addColorStop(1, "#c4cbd0");
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, W, 260);
+  const plaza = ctx.createLinearGradient(0, 240, 0, H);
+  plaza.addColorStop(0, "#858a8c"); plaza.addColorStop(1, "#64696b");
+  ctx.fillStyle = plaza; ctx.fillRect(0, 240, W, H - 240);
+  ctx.strokeStyle = "rgba(35,39,41,.2)"; ctx.lineWidth = 2;
+  for (let y = 548; y < H; y += 58) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+  for (let x = 40; x < W; x += 180) { ctx.beginPath(); ctx.moveTo(x, 500); ctx.lineTo(x + 86, H); ctx.stroke(); }
+
+  // 主体约 13 个成人肩宽、近 4 个人物身高，入口门高约为人物的两倍；不再像远景贴片。
+  const bw = Math.min(1680, W - 120);
+  const bx = Math.max(60, Math.min(W - bw - 60, doorX - bw * .7));
+  const facadeTop = 24;
+  const facadeBottom = 500;
+  ctx.fillStyle = "#aaa69b"; ctx.fillRect(bx, facadeTop, bw, facadeBottom - facadeTop);
+  ctx.fillStyle = "#918e86"; ctx.fillRect(bx - 24, facadeTop + 18, bw + 48, 24);
+  ctx.fillStyle = "#c5c0b4"; ctx.fillRect(bx - 32, facadeBottom - 24, bw + 64, 30);
+  ctx.fillStyle = "#77756f"; ctx.fillRect(bx + 18, facadeTop + 54, bw - 36, 8);
+  ctx.fillRect(bx + 18, facadeTop + 194, bw - 36, 7);
+  ctx.fillRect(bx + 18, facadeTop + 334, bw - 36, 7);
+
+  // 三层侧翼窗：石质窗套、横竖框和轻微室内反光，建立真实楼层尺度。
+  const porticoW = 660;
+  const porticoX = doorX - porticoW / 2;
+  for (const floorY of [88, 228, 368]) {
+    for (let x = bx + 52; x < bx + bw - 50; x += 108) {
+      if (x > porticoX - 42 && x < porticoX + porticoW + 12) continue;
+      ctx.fillStyle = "#817e76"; ctx.fillRect(x - 7, floorY - 8, 72, 104);
+      ctx.fillStyle = "#9eb2bc"; ctx.fillRect(x, floorY, 58, 88);
+      ctx.fillStyle = "rgba(220,232,236,.32)"; ctx.fillRect(x + 5, floorY + 5, 22, 34);
+      ctx.strokeStyle = "#626a6d"; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(x + 29, floorY); ctx.lineTo(x + 29, floorY + 88); ctx.moveTo(x, floorY + 44); ctx.lineTo(x + 58, floorY + 44); ctx.stroke();
+    }
+  }
+
+  // 中央柱廊与三角山花：六根通高石柱、两层门厅和成比例双开大门。
+  ctx.fillStyle = "#c9c3b6"; ctx.fillRect(porticoX, 102, porticoW, 398);
+  ctx.fillStyle = "#ded7c8";
+  ctx.beginPath(); ctx.moveTo(porticoX - 38, 116); ctx.lineTo(doorX, 20); ctx.lineTo(porticoX + porticoW + 38, 116); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "#8d8981"; ctx.fillRect(porticoX - 38, 112, porticoW + 76, 22);
+  const columnXs = [38, 132, 226, 434, 528, 622].map((offset) => porticoX + offset);
+  for (const px of columnXs) {
+    ctx.fillStyle = "#b9b3a7"; ctx.fillRect(px - 23, 140, 46, 342);
+    ctx.fillStyle = "rgba(255,255,245,.22)"; ctx.fillRect(px - 17, 146, 8, 330);
+    ctx.fillStyle = "#d5cec0"; ctx.fillRect(px - 32, 130, 64, 22); ctx.fillRect(px - 34, 474, 68, 20);
+    ctx.strokeStyle = "rgba(92,88,82,.35)"; ctx.lineWidth = 2;
+    for (let flute = -12; flute <= 12; flute += 8) { ctx.beginPath(); ctx.moveTo(px + flute, 154); ctx.lineTo(px + flute, 472); ctx.stroke(); }
+  }
+  drawText(ctx, "市 政 大 楼", doorX, 92, 32, "#44443f", "center");
+  drawText(ctx, "CITY HALL", doorX, 122, 14, "#5c5c55", "center");
+  ctx.fillStyle = "#171d21"; ctx.fillRect(doorX - 96, 250, 192, 250);
+  ctx.strokeStyle = "#555e62"; ctx.lineWidth = 7; ctx.strokeRect(doorX - 96, 250, 192, 250);
+  ctx.beginPath(); ctx.moveTo(doorX, 252); ctx.lineTo(doorX, 498); ctx.stroke();
+  ctx.fillStyle = "rgba(145,178,190,.28)"; ctx.fillRect(doorX - 80, 272, 66, 94); ctx.fillRect(doorX + 14, 272, 66, 94);
+  ctx.fillStyle = "#b89a52";
+  ctx.beginPath(); ctx.arc(doorX - 18, 390, 5, 0, Math.PI * 2); ctx.arc(doorX + 18, 390, 5, 0, Math.PI * 2); ctx.fill();
+
+  // 宽台阶、旗杆、花坛和防撞柱共同形成可读的市政广场入口。
+  for (let i = 0; i < 7; i++) {
+    ctx.fillStyle = i % 2 ? "#97948d" : "#aaa69d";
+    ctx.fillRect(doorX - 240 - i * 28, facadeBottom + i * 18, 480 + i * 56, 19);
+  }
+  ctx.strokeStyle = "#50575b"; ctx.lineWidth = 7;
+  for (const poleX of [doorX - 470, doorX + 470]) { ctx.beginPath(); ctx.moveTo(poleX, 118); ctx.lineTo(poleX, 510); ctx.stroke(); }
+  const flagWave = Math.sin(now / 280) * 9;
+  ctx.fillStyle = "#a93332"; ctx.beginPath(); ctx.moveTo(doorX - 466, 132); ctx.lineTo(doorX - 330 + flagWave, 154); ctx.lineTo(doorX - 466, 204); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "#405d72"; ctx.beginPath(); ctx.moveTo(doorX + 474, 132); ctx.lineTo(doorX + 610 - flagWave, 156); ctx.lineTo(doorX + 474, 204); ctx.closePath(); ctx.fill();
+  for (const planterX of [doorX - 650, doorX + 650]) {
+    ctx.fillStyle = "#565c57"; ctx.fillRect(planterX - 70, 494, 140, 48);
+    ctx.fillStyle = "#3d5944";
+    for (let leaf = -50; leaf <= 50; leaf += 20) { ctx.beginPath(); ctx.ellipse(planterX + leaf, 486 - Math.abs(leaf) * .18, 24, 12, leaf * .01, 0, Math.PI * 2); ctx.fill(); }
+  }
+  ctx.fillStyle = "rgba(190,190,178,.62)";
+  for (let x = doorX - 430; x <= doorX + 430; x += 86) { ctx.beginPath(); ctx.arc(x, 646, 9, 0, Math.PI * 2); ctx.fill(); }
+}
+
+function drawLevel6Corridor(ctx: CanvasRenderingContext2D, g: GameState, now: number, powered: boolean, label: string) {
+  const W = g.worldW;
+  const wall = ctx.createLinearGradient(0, 0, 0, 460);
+  wall.addColorStop(0, powered ? "#a9afb0" : "#444a4d");
+  wall.addColorStop(1, powered ? "#d0d0c8" : "#62676a");
+  ctx.fillStyle = wall; ctx.fillRect(0, 0, W, 460);
+  ctx.fillStyle = powered ? "#e1ddd2" : "#77776f"; ctx.fillRect(0, 460, W, H - 460);
+  ctx.fillStyle = powered ? "#8b8d89" : "#34393c"; ctx.fillRect(0, 0, W, 42); ctx.fillRect(0, 444, W, 16);
+  ctx.strokeStyle = powered ? "rgba(70,72,70,.3)" : "rgba(24,27,29,.48)"; ctx.lineWidth = 2;
+  for (let x = 0; x < W; x += 180) { ctx.beginPath(); ctx.moveTo(x, 42); ctx.lineTo(x, 444); ctx.stroke(); }
+  for (let x = 300; x < W - 180; x += 620) {
+    ctx.fillStyle = powered ? "#595f62" : "#343a3d"; ctx.fillRect(x, 190, 104, 254);
+    ctx.strokeStyle = "#292e31"; ctx.lineWidth = 4; ctx.strokeRect(x, 190, 104, 254);
+    ctx.fillStyle = "#326f51"; ctx.fillRect(x + 8, 162, 88, 22);
+    drawText(ctx, x % 1240 ? "办公室" : "会议室", x + 52, 179, 12, "#e7eee9", "center");
+    ctx.fillStyle = powered ? "#a23d35" : "#642b28"; ctx.fillRect(x + 130, 288, 42, 74);
+    drawText(ctx, "消防", x + 151, 350, 10, "#eadfd7", "center");
+  }
+  for (let x = 120; x < W; x += 360) {
+    ctx.fillStyle = powered ? "rgba(246,243,218,.96)" : "#23282b"; ctx.fillRect(x, 18, 150, 12);
+    if (powered) {
+      const flicker = Math.floor((x + now) / 900) % 7 === 0 ? .55 : 1;
+      ctx.fillStyle = `rgba(255,246,210,${(.12 * flicker).toFixed(2)})`;
+      ctx.beginPath(); ctx.moveTo(x, 30); ctx.lineTo(x + 150, 30); ctx.lineTo(x + 220, 444); ctx.lineTo(x - 70, 444); ctx.closePath(); ctx.fill();
+    }
+  }
+  ctx.fillStyle = powered ? "rgba(65,68,66,.2)" : "rgba(25,28,30,.32)"; ctx.fillRect(0, 604, W, 8);
+  for (let x = 90; x < W; x += 240) {
+    ctx.strokeStyle = powered ? "rgba(80,80,76,.18)" : "rgba(30,34,36,.3)";
+    ctx.beginPath(); ctx.moveTo(x, 460); ctx.lineTo(x + 45, H); ctx.stroke();
+  }
+  drawText(ctx, powered ? `2F · ${label}` : `1F · 断电 · ${label}`, 190, 130, 26, powered ? "#4d5554" : "#b0b5b2", "center");
+  ctx.fillStyle = "#384145"; ctx.fillRect(W - 126, 204, 94, 240);
+  ctx.fillStyle = "#3a805a"; ctx.fillRect(W - 122, 174, 86, 24);
+  drawText(ctx, "出口 →", W - 79, 191, 13, "#edf4ef", "center");
+}
+
+function drawLevel6PowerRoom(ctx: CanvasRenderingContext2D, g: GameState, now: number) {
+  const W = g.worldW;
+  const powered = Boolean(g.level?.powerOn);
+  ctx.fillStyle = powered ? "#adb2af" : "#464c4f"; ctx.fillRect(0, 0, W, 460);
+  ctx.fillStyle = powered ? "#8d918e" : "#353a3d"; ctx.fillRect(0, 460, W, H - 460);
+  ctx.fillStyle = "#2d3336"; ctx.fillRect(0, 0, W, 52);
+  for (let x = 160; x < W - 260; x += 300) {
+    ctx.fillStyle = "#343b3f"; ctx.fillRect(x, 146, 210, 300);
+    ctx.strokeStyle = "#202629"; ctx.lineWidth = 4; ctx.strokeRect(x, 146, 210, 300);
+    for (let row = 0; row < 5; row++) {
+      ctx.fillStyle = "#475055"; ctx.fillRect(x + 16, 168 + row * 51, 178, 36);
+      ctx.fillStyle = powered ? (row % 2 ? "#63d486" : "#e0b34c") : "#532d2a";
+      ctx.beginPath(); ctx.arc(x + 176, 186 + row * 51, 5, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = "#d6c36d"; ctx.beginPath(); ctx.moveTo(x + 92, 242); ctx.lineTo(x + 118, 288); ctx.lineTo(x + 70, 288); ctx.closePath(); ctx.fill();
+  }
+  const switchX = LEVEL6_POWER_SWITCH_FX * W;
+  ctx.fillStyle = "#252b2e"; ctx.fillRect(switchX - 84, 180, 168, 266);
+  ctx.strokeStyle = "#596269"; ctx.lineWidth = 5; ctx.strokeRect(switchX - 84, 180, 168, 266);
+  ctx.fillStyle = powered ? "#5acb79" : "#9b3d35"; ctx.beginPath(); ctx.arc(switchX, 242, 18, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = "#c5c8c5"; ctx.lineWidth = 12; ctx.lineCap = "round";
+  ctx.beginPath(); ctx.moveTo(switchX, 330); ctx.lineTo(switchX + (powered ? 38 : -30), powered ? 276 : 374); ctx.stroke(); ctx.lineCap = "butt";
+  drawText(ctx, powered ? "主电闸 · 已合闸" : "主电闸 · 关闭", switchX, 160, 18, powered ? "#9ae8ad" : "#e4b0a6", "center");
+  if (!powered && g.level && g.level.sceneKills >= LEVEL6_POWER_ROOM_TOTAL) {
+    const pulse = .55 + Math.sin(now / 180) * .35;
+    ctx.strokeStyle = `rgba(241,198,67,${pulse})`; ctx.lineWidth = 5; ctx.strokeRect(switchX - 98, 166, 196, 294);
+  }
+}
+
+function drawLevel6Archives(ctx: CanvasRenderingContext2D, g: GameState, now: number) {
+  const W = g.worldW;
+  ctx.fillStyle = "#b6b0a4"; ctx.fillRect(0, 0, W, 460);
+  ctx.fillStyle = "#8e887e"; ctx.fillRect(0, 460, W, H - 460);
+  ctx.fillStyle = "#615c54"; ctx.fillRect(0, 0, W, 46); ctx.fillRect(0, 444, W, 16);
+  for (let x = 170; x < W - 200; x += 320) {
+    ctx.fillStyle = "#554a3c"; ctx.fillRect(x, 118, 240, 326);
+    ctx.strokeStyle = "#342d25"; ctx.lineWidth = 4; ctx.strokeRect(x, 118, 240, 326);
+    for (let row = 0; row < 5; row++) {
+      ctx.fillStyle = row % 2 ? "#6f624f" : "#665946"; ctx.fillRect(x + 12, 138 + row * 58, 216, 46);
+      for (let f = 0; f < 7; f++) {
+        ctx.fillStyle = ["#9a815d", "#6f7b70", "#8b6258"][f % 3];
+        ctx.fillRect(x + 20 + f * 28, 144 + row * 58, 20, 34);
+      }
+    }
+  }
+  for (let x = 120; x < W; x += 420) {
+    ctx.fillStyle = "rgba(248,242,214,.92)"; ctx.fillRect(x, 18, 170, 12);
+    ctx.fillStyle = "rgba(248,238,194,.08)"; ctx.beginPath(); ctx.moveTo(x, 30); ctx.lineTo(x + 170, 30); ctx.lineTo(x + 230, 444); ctx.lineTo(x - 60, 444); ctx.closePath(); ctx.fill();
+  }
+  drawText(ctx, "档案室 · ARCHIVES", 220, 92, 26, "#514d45", "center");
+  ctx.fillStyle = "#3b4245"; ctx.fillRect(W - 122, 204, 90, 240);
+  ctx.fillStyle = "#3c805b"; ctx.fillRect(W - 118, 174, 82, 24);
+  drawText(ctx, "楼梯间 →", W - 77, 191, 12, "#edf4ef", "center");
+  void now;
+}
+
+function drawLevel6CentralHall(ctx: CanvasRenderingContext2D, g: GameState, now: number) {
+  const W = g.worldW;
+  const wall = ctx.createLinearGradient(0, 0, 0, 470);
+  wall.addColorStop(0, "#c8c2b5"); wall.addColorStop(1, "#e1ddd2");
+  ctx.fillStyle = wall; ctx.fillRect(0, 0, W, 470);
+  ctx.fillStyle = "#918c82"; ctx.fillRect(0, 470, W, H - 470);
+  ctx.fillStyle = "#9d978c"; ctx.fillRect(0, 0, W, 48); ctx.fillRect(0, 450, W, 20);
+  for (let x = 170; x < W; x += 420) {
+    ctx.fillStyle = "#bbb5a9"; ctx.fillRect(x, 82, 54, 368);
+    ctx.fillStyle = "#d5cfc2"; ctx.fillRect(x - 12, 70, 78, 24); ctx.fillRect(x - 12, 434, 78, 22);
+  }
+  const centerX = W * .54;
+  ctx.fillStyle = "#8a7962"; ctx.fillRect(centerX - 250, 278, 500, 172);
+  ctx.fillStyle = "#a89372"; ctx.fillRect(centerX - 278, 260, 556, 24);
+  drawText(ctx, "市民服务中心", centerX, 316, 24, "#e6dfd0", "center");
+  ctx.fillStyle = "#8d3030"; ctx.beginPath(); ctx.arc(centerX, 134, 58, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#d2b35a"; ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const a = -Math.PI / 2 + i * Math.PI / 5; const r = i % 2 ? 22 : 48;
+    const x = centerX + Math.cos(a) * r; const y = 134 + Math.sin(a) * r;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = "rgba(72,68,62,.22)"; ctx.lineWidth = 2;
+  for (let x = 0; x < W; x += 140) { ctx.beginPath(); ctx.moveTo(x, 470); ctx.lineTo(x + 50, H); ctx.stroke(); }
+  const boss = g.zombies.find((z) => z.bossKind === "giantMutant" && z.hp > 0);
+  if (boss) {
+    const ratio = Math.max(0, boss.hp / boss.maxHp);
+    ctx.fillStyle = "rgba(20,15,15,.82)"; ctx.fillRect(centerX - 210, 34, 420, 26);
+    ctx.fillStyle = "#a92f36"; ctx.fillRect(centerX - 207, 37, 414 * ratio, 20);
+    drawText(ctx, `巨型变异僵尸 ${Math.ceil(boss.hp)} / ${boss.maxHp} HP`, centerX, 28, 17, "#f1ddd4", "center");
+    if (boss.spitAt > now) drawText(ctx, "酸液喷吐蓄力", centerX, 82, 15, "#a9df66", "center");
+  }
+}
+
+// ===== 第七关「夺取仓库」场景绘制 =====
+
+function drawLevel7WarehouseExterior(ctx: CanvasRenderingContext2D, g: GameState, now: number) {
+  const W = g.worldW;
+  const doorX = LEVEL7_WAREHOUSE_DOOR_FX * W;
+  const sky = ctx.createLinearGradient(0, 0, 0, 260);
+  sky.addColorStop(0, "#687b86"); sky.addColorStop(1, "#c6c7be");
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, W, 260);
+  ctx.fillStyle = "#77746a"; ctx.fillRect(0, 250, W, H - 250);
+  ctx.strokeStyle = "rgba(30,32,31,.22)"; ctx.lineWidth = 2;
+  for (let x = 0; x < W; x += 220) { ctx.beginPath(); ctx.moveTo(x, 530); ctx.lineTo(x + 120, H); ctx.stroke(); }
+
+  const bw = Math.min(1700, W - 120);
+  const bx = Math.max(60, Math.min(W - bw - 60, doorX - bw * .72));
+  ctx.fillStyle = "#666c6d"; ctx.fillRect(bx, 94, bw, 430);
+  ctx.fillStyle = "#4d5558";
+  ctx.beginPath(); ctx.moveTo(bx - 36, 108); ctx.lineTo(bx + 170, 38); ctx.lineTo(bx + bw - 170, 38); ctx.lineTo(bx + bw + 36, 108); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "#818788"; ctx.fillRect(bx - 18, 92, bw + 36, 28);
+  ctx.strokeStyle = "rgba(35,40,42,.42)"; ctx.lineWidth = 3;
+  for (let x = bx + 24; x < bx + bw; x += 56) { ctx.beginPath(); ctx.moveTo(x, 120); ctx.lineTo(x, 520); ctx.stroke(); }
+  ctx.fillStyle = "#2d3538"; ctx.fillRect(doorX - 180, 218, 360, 306);
+  ctx.strokeStyle = "#94999a"; ctx.lineWidth = 8; ctx.strokeRect(doorX - 180, 218, 360, 306);
+  ctx.strokeStyle = "#596164"; ctx.lineWidth = 4;
+  for (let y = 256; y < 510; y += 46) { ctx.beginPath(); ctx.moveTo(doorX - 174, y); ctx.lineTo(doorX + 174, y); ctx.stroke(); }
+  ctx.fillStyle = "rgba(180,205,211,.42)"; ctx.fillRect(doorX - 126, 248, 252, 54);
+  drawText(ctx, "17 号物资仓库", doorX, 171, 34, "#e3dfcf", "center");
+  drawText(ctx, "MILITARY SUPPLY DEPOT", doorX, 200, 14, "#c3c9c5", "center");
+  ctx.fillStyle = "#333a39"; ctx.fillRect(bx + 80, 300, 210, 224); ctx.fillRect(bx + 360, 300, 210, 224);
+  ctx.fillStyle = "#d1b95e";
+  for (const sx of [bx + 185, bx + 465]) {
+    ctx.beginPath(); ctx.moveTo(sx, 334); ctx.lineTo(sx + 54, 430); ctx.lineTo(sx - 54, 430); ctx.closePath(); ctx.fill();
+    drawText(ctx, "物资", sx, 462, 20, "#ddd8c6", "center");
+  }
+  const lampGlow = .65 + Math.sin(now / 320) * .18;
+  ctx.fillStyle = `rgba(245,214,128,${lampGlow})`; ctx.fillRect(doorX - 40, 322, 80, 14);
+}
+
+function drawLevel7WarehouseInterior(ctx: CanvasRenderingContext2D, g: GameState, now: number) {
+  const W = g.worldW;
+  const level = g.level;
+  ctx.fillStyle = "#555d60"; ctx.fillRect(0, 0, W, 470);
+  const floor = ctx.createLinearGradient(0, 470, 0, H);
+  floor.addColorStop(0, "#777872"); floor.addColorStop(1, "#4f5352");
+  ctx.fillStyle = floor; ctx.fillRect(0, 470, W, H - 470);
+  ctx.fillStyle = "#30383b"; ctx.fillRect(0, 0, W, 54);
+  ctx.strokeStyle = "#242b2e"; ctx.lineWidth = 8;
+  for (let x = 80; x < W; x += 520) {
+    ctx.beginPath(); ctx.moveTo(x, 52); ctx.lineTo(x + 220, 126); ctx.lineTo(x + 440, 52); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x + 220, 126); ctx.lineTo(x + 220, 470); ctx.stroke();
+  }
+  for (let x = 110; x < W; x += 390) {
+    ctx.fillStyle = "#3e4648"; ctx.fillRect(x, 168, 254, 290);
+    ctx.strokeStyle = "#262d30"; ctx.lineWidth = 7; ctx.strokeRect(x, 168, 254, 290);
+    for (let shelf = 0; shelf < 3; shelf++) {
+      const sy = 224 + shelf * 80;
+      ctx.fillStyle = "#727067"; ctx.fillRect(x + 10, sy, 234, 9);
+      for (let crate = 0; crate < 3; crate++) {
+        const cx = x + 18 + crate * 74;
+        ctx.fillStyle = (crate + shelf) % 2 ? "#77603c" : "#61705a"; ctx.fillRect(cx, sy - 48, 62, 46);
+        ctx.strokeStyle = "rgba(32,34,30,.62)"; ctx.lineWidth = 3; ctx.strokeRect(cx, sy - 48, 62, 46);
+        ctx.beginPath(); ctx.moveTo(cx + 5, sy - 43); ctx.lineTo(cx + 57, sy - 7); ctx.moveTo(cx + 57, sy - 43); ctx.lineTo(cx + 5, sy - 7); ctx.stroke();
+      }
+    }
+  }
+  ctx.fillStyle = "rgba(235,225,180,.8)";
+  for (let x = 140; x < W; x += 480) ctx.fillRect(x, 620, 230, 8);
+  drawText(ctx, "物资堆放区", 210, 126, 27, "#d7dad4", "center");
+
+  // 燧石66所在的重点物资箱与装车区域。
+  const flintX = LEVEL7_FLINT_FX * W;
+  ctx.fillStyle = "#765b36"; ctx.fillRect(flintX - 135, 365, 270, 94);
+  ctx.strokeStyle = "#382a1b"; ctx.lineWidth = 6; ctx.strokeRect(flintX - 135, 365, 270, 94);
+  drawText(ctx, "穿甲武器", flintX, 438, 17, "#e5d3a5", "center");
+
+  if (level?.eventStage === "warehouse-defense") {
+    const truckX = LEVEL7_TRUCK_FX * W;
+    drawMilitaryTruck(ctx, truckX, 532, false, now);
+    drawText(ctx, "物资装载车", truckX, 348, 17, "#e2dcc0", "center");
+    const wallX = LEVEL7_WALL_FX * W;
+    ctx.fillStyle = "#656b69"; ctx.fillRect(wallX - 30, 176, 60, 446);
+    ctx.strokeStyle = "#333a3b"; ctx.lineWidth = 7; ctx.strokeRect(wallX - 30, 176, 60, 446);
+    ctx.fillStyle = "#252d2f";
+    for (const holeY of [286, 416, 546]) ctx.fillRect(wallX - 34, holeY - 24, 68, 48);
+    ctx.strokeStyle = "rgba(205,209,201,.3)"; ctx.lineWidth = 3;
+    for (let y = 206; y < 620; y += 58) { ctx.beginPath(); ctx.moveTo(wallX - 26, y); ctx.lineTo(wallX + 26, y); ctx.stroke(); }
+    const hpRatio = Math.max(0, level.wallHp / LEVEL7_WALL_HP);
+    ctx.fillStyle = "rgba(18,22,21,.85)"; ctx.fillRect(wallX - 104, 126, 208, 18);
+    ctx.fillStyle = hpRatio > .35 ? "#d7b946" : "#c43d38"; ctx.fillRect(wallX - 101, 129, 202 * hpRatio, 12);
+    drawText(ctx, `防守围墙 ${Math.ceil(level.wallHp)} HP`, wallX, 116, 15, "#eee8d5", "center");
+    drawText(ctx, `物资运输 ${Math.min(2, Math.floor(level.eventCount / 2))}/2`, LEVEL7_SUPPLY_FX * W, 154, 17, "#e8d99f", "center");
+  }
+}
+
 // 关卡道具：桌子 / 废弃车辆 / 地面武器拾取物（含近旁提示）/ 出口标记
 function drawLevelProps(ctx: CanvasRenderingContext2D, g: GameState, now: number) {
   for (const ob of g.obstacles) {
@@ -1283,7 +4188,7 @@ function drawLevelProps(ctx: CanvasRenderingContext2D, g: GameState, now: number
   drawLevelPickups(ctx, g, now);
   // 出口标记：当前任务要求抵达场景右端且条件已满足时，门上方脉冲提示
   const level = g.level;
-  if (level && level.sceneIndex < LEVEL1_SCENES.length - 1) {
+  if (level && level.levelId === LEVEL1_ID && level.sceneIndex < LEVEL1_SCENES.length - 1) {
     const scene = LEVEL1_SCENES[level.sceneIndex];
     const task = scene.tasks[level.taskIndex];
     const exitOpen = task && (task.id === "leave-home" || (task.id === "clear-corridor" && level.sceneKills >= levelZombieCount(scene)));
@@ -1295,12 +4200,118 @@ function drawLevelProps(ctx: CanvasRenderingContext2D, g: GameState, now: number
       drawText(ctx, "出口", ex, 142, 17, `rgba(240,198,67,${0.6 + pulse * 0.4})`, "center");
     }
   }
+  // 第二关场景 2：军营上方脉冲目标标记（军营屋顶 y≈44，标记悬于屋顶上方）
+  if (level && level.levelId === LEVEL2_ID && level.sceneIndex === 1) {
+    const pulse = 0.6 + Math.sin(now / 220) * 0.4;
+    const bx = LEVEL2_BARRACKS_FX * g.worldW + 10;
+    ctx.fillStyle = `rgba(240,198,67,${0.35 + pulse * 0.3})`;
+    ctx.beginPath(); ctx.moveTo(bx - 22, 26); ctx.lineTo(bx + 22, 26); ctx.lineTo(bx, 40); ctx.closePath(); ctx.fill();
+    drawText(ctx, "军营", bx, 20, 17, `rgba(240,198,67,${0.6 + pulse * 0.4})`, "center");
+  }
+  // 第三关场景 1：起身后宿舍门脉冲提示
+  if (level && level.levelId === LEVEL3_ID && level.sceneIndex === 0 && level.eventStage === "none") {
+    const pulse = 0.6 + Math.sin(now / 220) * 0.4;
+    const ex = g.worldW - 78;
+    ctx.fillStyle = `rgba(240,198,67,${0.35 + pulse * 0.3})`;
+    ctx.beginPath(); ctx.moveTo(ex - 20, 152); ctx.lineTo(ex + 20, 152); ctx.lineTo(ex, 182); ctx.closePath(); ctx.fill();
+    drawText(ctx, "出门", ex, 144, 16, `rgba(240,198,67,${0.6 + pulse * 0.4})`, "center");
+  }
+  // 第三关场景 2：夜防结束后大门脉冲指引（穿过门洞向右）
+  if (level && level.levelId === LEVEL3_ID && level.sceneIndex === 1) {
+    const scene = LEVEL3_SCENES[level.sceneIndex];
+    if (scene.tasks[level.taskIndex]?.id === "reach-gate") {
+      const pulse = 0.6 + Math.sin(now / 220) * 0.4;
+      const gx = LEVEL3_WALL_FX * g.worldW;
+      ctx.fillStyle = `rgba(240,198,67,${0.35 + pulse * 0.3})`;
+      ctx.beginPath(); ctx.moveTo(gx - 24, LEVEL3_GATE_TOP - 34); ctx.lineTo(gx + 24, LEVEL3_GATE_TOP - 34); ctx.lineTo(gx, LEVEL3_GATE_TOP - 6); ctx.closePath(); ctx.fill();
+      drawText(ctx, "基地大门", gx, LEVEL3_GATE_TOP - 42, 16, `rgba(240,198,67,${0.6 + pulse * 0.4})`, "center");
+    }
+  }
+  // 第四关：上车点 / 电台入口 / 楼层出口与上楼脉冲指引
+  if (level && level.levelId === LEVEL4_ID) {
+    const pulse = 0.6 + Math.sin(now / 220) * 0.4;
+    const mark = (mx: number, my: number, label: string) => {
+      ctx.fillStyle = `rgba(240,198,67,${0.35 + pulse * 0.3})`;
+      ctx.beginPath(); ctx.moveTo(mx - 22, my); ctx.lineTo(mx + 22, my); ctx.lineTo(mx, my + 28); ctx.closePath(); ctx.fill();
+      drawText(ctx, label, mx, my - 8, 16, `rgba(240,198,67,${0.6 + pulse * 0.4})`, "center");
+    };
+    const taskId = LEVEL4_SCENES[level.sceneIndex]?.tasks[level.taskIndex]?.id;
+    if (level.sceneIndex === 0 && taskId === "leave-briefing") mark(g.worldW - 70, 168, "出门");
+    if (level.sceneIndex === 1 && taskId === "board-truck") mark(LEVEL4_GATE_FX * g.worldW, 140, "上车");
+    if (level.sceneIndex === 2 && level.eventStage === "none") mark(LEVEL4_STATION_DOOR_FX * g.worldW, 168, "进入电台");
+    if ((taskId === "clear-floor-1" && level.sceneKills >= LEVEL4_FLOOR1_TOTAL)
+      || (taskId === "clear-floor-2" && level.sceneKills >= LEVEL4_FLOOR2_TOTAL)) mark(g.worldW - 70, 168, "出口");
+    if (taskId === "climb-1" || taskId === "climb-2") mark(g.worldW - 70, 168, "上楼");
+  }
+  // 第五关：队友、停机坪、电力室、求救人员与撤离车辆指引
+  if (level && level.levelId === LEVEL5_ID) {
+    const pulse = 0.6 + Math.sin(now / 220) * 0.4;
+    const mark = (mx: number, my: number, label: string) => {
+      ctx.fillStyle = `rgba(240,198,67,${0.35 + pulse * 0.3})`;
+      ctx.beginPath(); ctx.moveTo(mx - 22, my); ctx.lineTo(mx + 22, my); ctx.lineTo(mx, my + 28); ctx.closePath(); ctx.fill();
+      drawText(ctx, label, mx, my - 8, 16, `rgba(240,198,67,${0.6 + pulse * 0.4})`, "center");
+    };
+    const taskId = LEVEL5_SCENES[level.sceneIndex]?.tasks[level.taskIndex]?.id;
+    if (level.sceneIndex === 0) mark(0.3 * g.worldW, 160, "队友");
+    if (level.sceneIndex === 1) mark(LEVEL5_HELIPAD_FX * g.worldW, 180, "直升机");
+    if (level.sceneIndex === 3 && level.eventStage === "none") mark(LEVEL5_POWER_FX * g.worldW, 210, "电力室");
+    if (level.sceneIndex === 4 && level.sceneKills >= LEVEL5_RESCUE_TOTAL) mark(LEVEL5_SURVIVOR_FX * g.worldW, 300, "求救人员");
+    if (level.sceneIndex === 5 && taskId === "board-rescue-vehicle") mark(LEVEL5_VEHICLE_FX * g.worldW, 250, "上车");
+  }
+  // 第六关：简报队友、基地军车、市政大楼入口、电闸与各场景出口指引。
+  if (level && level.levelId === LEVEL6_ID) {
+    const pulse = 0.6 + Math.sin(now / 220) * 0.4;
+    const mark = (mx: number, my: number, label: string) => {
+      ctx.fillStyle = `rgba(240,198,67,${0.35 + pulse * 0.3})`;
+      ctx.beginPath(); ctx.moveTo(mx - 22, my); ctx.lineTo(mx + 22, my); ctx.lineTo(mx, my + 28); ctx.closePath(); ctx.fill();
+      drawText(ctx, label, mx, my - 8, 16, `rgba(240,198,67,${0.6 + pulse * 0.4})`, "center");
+    };
+    if (level.sceneIndex === 0 && level.taskIndex === 0) mark((LEVEL6_BRIEFING_TABLE_FX + .05) * g.worldW, 160, "队友");
+    if (level.sceneIndex === 0 && level.taskIndex === 1) mark(g.worldW - 70, 168, "出门");
+    if (level.sceneIndex === 1) mark(LEVEL6_BASE_GATE_FX * g.worldW, 140, "上车");
+    if (level.sceneIndex === 2 && level.eventStage === "none") mark(LEVEL6_BUILDING_DOOR_FX * g.worldW, 164, "进入大楼");
+    if (level.sceneIndex === 3 && level.sceneKills >= LEVEL6_CORRIDOR_ONE_TOTAL) mark(g.worldW - 76, 166, "配电室");
+    if (level.sceneIndex === 4 && level.sceneKills >= LEVEL6_POWER_ROOM_TOTAL) mark(LEVEL6_POWER_SWITCH_FX * g.worldW, 142, "开启电闸");
+    if ((level.sceneIndex === 5 && level.sceneKills >= LEVEL6_CORRIDOR_TWO_TOTAL)
+      || (level.sceneIndex === 6 && level.sceneKills >= LEVEL6_ARCHIVE_TOTAL)) mark(g.worldW - 76, 166, level.sceneIndex === 5 ? "档案室" : "楼梯间");
+    if (level.sceneIndex === 7) mark(g.worldW - 70, 168, "中央大厅");
+  }
+  // 第七关：简报、上车、仓库入口、燧石66与防守位置指引。
+  if (level && level.levelId === LEVEL7_ID) {
+    const pulse = 0.6 + Math.sin(now / 220) * 0.4;
+    const mark = (mx: number, my: number, label: string) => {
+      ctx.fillStyle = `rgba(240,198,67,${0.35 + pulse * 0.3})`;
+      ctx.beginPath(); ctx.moveTo(mx - 22, my); ctx.lineTo(mx + 22, my); ctx.lineTo(mx, my + 28); ctx.closePath(); ctx.fill();
+      drawText(ctx, label, mx, my - 8, 16, `rgba(240,198,67,${0.6 + pulse * 0.4})`, "center");
+    };
+    const taskId = LEVEL7_SCENES[level.sceneIndex]?.tasks[level.taskIndex]?.id;
+    if (level.sceneIndex === 0 && taskId === "find-warehouse-team") mark((LEVEL7_BRIEFING_TABLE_FX + .05) * g.worldW, 160, "队友");
+    if (level.sceneIndex === 0 && taskId === "board-warehouse-truck") mark(g.worldW - 70, 168, "出门");
+    if (level.sceneIndex === 1) mark(LEVEL7_BASE_GATE_FX * g.worldW, 140, "上车");
+    if (level.sceneIndex === 2 && level.eventStage === "none") mark(LEVEL7_WAREHOUSE_DOOR_FX * g.worldW, 164, "进入仓库");
+    if (level.sceneIndex === 3 && taskId === "take-flint66") mark(LEVEL7_FLINT_FX * g.worldW, 220, "燧石66");
+    if (level.sceneIndex === 3 && taskId === "protect-supplies") mark(LEVEL7_WALL_FX * g.worldW - 160, 176, "防守位置");
+  }
+  // 第八关：队友、装甲车与收费站目标指引。
+  if (level && level.levelId === LEVEL8_ID) {
+    const pulse = .6 + Math.sin(now / 220) * .4;
+    const mark = (mx: number, my: number, label: string) => {
+      ctx.fillStyle = `rgba(240,198,67,${.35 + pulse * .3})`;
+      ctx.beginPath(); ctx.moveTo(mx - 22, my); ctx.lineTo(mx + 22, my); ctx.lineTo(mx, my + 28); ctx.closePath(); ctx.fill();
+      drawText(ctx, label, mx, my - 8, 16, `rgba(240,198,67,${.6 + pulse * .4})`, "center");
+    };
+    const taskId = LEVEL8_SCENES[level.sceneIndex]?.tasks[level.taskIndex]?.id;
+    if (level.sceneIndex === 0 && taskId === "find-highway-team") mark((LEVEL8_BRIEFING_TABLE_FX + .05) * g.worldW, 160, "队友");
+    if (level.sceneIndex === 0 && taskId === "board-armored-vehicle") mark(g.worldW - 70, 168, "出门");
+    if (level.sceneIndex === 1) mark(LEVEL8_BASE_GATE_FX * g.worldW, 140, "装甲车");
+    if (level.sceneIndex === 2 && level.sceneKills >= LEVEL8_HIGHWAY_TOTAL) mark(LEVEL8_TOLL_FX * g.worldW, 150, "收费站");
+  }
 }
 
 // 地面/桌面武器拾取物：光晕 + 摆放的武器模型 + 走近后的右键提示
 function drawLevelPickups(ctx: CanvasRenderingContext2D, g: GameState, now: number) {
   for (const pk of g.pickups) {
-    if (pk.taken) continue;
+    if (pk.taken || pk.sceneIndex !== g.level?.sceneIndex) continue;
     const glow = 0.5 + Math.sin(now / 260 + pk.id) * 0.3;
     ctx.fillStyle = `rgba(240,198,67,${0.10 + glow * 0.10})`;
     ctx.beginPath(); ctx.ellipse(pk.x, pk.y + 8, 46, 16, 0, 0, Math.PI * 2); ctx.fill();
@@ -1320,6 +4331,8 @@ function drawLevelPickups(ctx: CanvasRenderingContext2D, g: GameState, now: numb
 
 type LevelPickup = {
   id: number;
+  /** 掉落/预置武器所属场景；跨场景保留，返回该场景时仍可拾取。 */
+  sceneIndex: number;
   weapon: WeaponKey;
   x: number;
   y: number;
@@ -1349,19 +4362,39 @@ type LevelRunState = {
   /** 任务完成提示（✓ 任务完成）显示截止时刻 */
   taskDoneFlashUntil: number;
   completed: boolean;
-  /** 事件阶段机（第二关：none → ambush 涌出 → truck 军车驶来 → soldiers 下车清场 → dialog 对话） */
-  eventStage: "none" | "ambush" | "truck" | "soldiers" | "dialog";
+  /** 事件阶段机（第二关：none → ambush 涌出 → truck 军车驶来 → soldiers 下车清场 → dialog 对话；
+      第三关：sleep 睡梦中 → rise 起身 → none 可控 → defend 围墙防守 → boss 重甲现身；
+      第四关：talk 商讨对话 → ride 乘车抵达 → disembark 队友下车 → repair 维修防守；
+      第五关：talk 求救简报 → flight 直升机进场 → landed 停稳下机 → power 电力维修防守；
+      第八关：talk 高速简报 → armored-drive 自主驾驶 → disembark 收费站下车） */
+  eventStage: "none" | "ambush" | "truck" | "soldiers" | "dialog" | "sleep" | "rise" | "defend" | "boss" | "talk" | "ride" | "disembark" | "repair" | "flight" | "landed" | "power" | "warehouse-defense" | "armored-drive";
   /** 阶段开始时刻（涌出计时/坚持倒计时/军车行驶计时共用） */
   eventAt: number;
   /** 阶段计数（已涌出僵尸数 / 已下车士兵数） */
   eventCount: number;
-  /** 军车世界 x（<0 = 未上场） */
+  /** 剧情防守刷怪的下一次生成时刻。 */
+  nextEventSpawnAt: number;
+  /** 军车世界 x（<0 = 未上场）与停靠点（驶入动画终点：玩家近旁、公路上方） */
   truckX: number;
+  truckY: number;
+  truckStopX: number;
+  /** 关卡结构共享 HP：第三关混凝土墙、第四关通讯设备、第五关隧道围栏。 */
+  wallHp: number;
+  /** 第六关配电状态：开启后后续市政大楼场景保持照明。 */
+  powerOn: boolean;
+  /** 第六关两名突击队员跨场景保留的生命值（0 表示阵亡）。 */
+  squadHp: number[];
+  /** 第八关装甲车与车载重机枪运行状态。 */
+  vehicleHp: number;
+  vehicleAmmo: number;
+  vehicleLastShot: number;
+  vehicleReloadUntil: number;
+  vehicleAimAngle: number;
   /** 对话状态：台词队列与当前句索引（null = 无对话） */
   dialog: { lines: Array<{ speaker: string; text: string }>; index: number } | null;
 };
 // 穿透豁免：penetration 缺省 1；penBypass = min(.8, (pen-1)/4)——手枪 0 → AWM(3) .5 → 燧石66(5) .8；
-// 实际减免 = damageReduction × (1 - penBypass)，即 AWM 把 50% 减免削到 25%，燧石66 削到 10%
+// 实际减免 = damageReduction × (1 - penBypass)：重甲基础 70%，AWM 削到 35%，燧石66 削到 14%。
 function armorPenBypass(sourceWeapon: WeaponKey) {
   return Math.min(.8, ((WEAPONS[sourceWeapon].penetration ?? 1) - 1) / 4);
 }
@@ -1370,6 +4403,10 @@ type Zombie = {
   id: number;
   /** 种类：normal/brute 为既有体系；runner/spitter/helmet/mutant/army/shield/juggernaut 为扩展种类（见 ZOMBIE_KIND_SPECS） */
   kind: ZombieKind;
+  /** 第六关中央大厅专属巨型变异体；基础种类仍为 mutant，以复用同一套姿势、损伤与断肢系统。 */
+  bossKind?: "giantMutant";
+  /** 第七关仓库护甲僵尸：附着重型插板，100 HP、全身基础减伤 99%。 */
+  warehouseArmor?: boolean;
   x: number;
   y: number;
   hp: number;
@@ -1410,6 +4447,15 @@ type Zombie = {
 };
 
 type HitRegion = "head" | "body" | "legs";
+type DamageSourceOverride = { penetrationBypass: number; stopping: number };
+function giantMutantDamageReduction(zombie: Zombie, region?: HitRegion): number {
+  if (zombie.bossKind !== "giantMutant") return 0;
+  return region === "body" ? .7 : .5;
+}
+/** 踹击仍按目标自身护甲结算；燃烧与爆炸由各自路径明确绕过全部减伤。 */
+function kickDamageReduction(zombie: Zombie, region?: HitRegion): number {
+  return Math.max(zombie.warehouseArmor ? zombie.damageReduction : 0, giantMutantDamageReduction(zombie, region));
+}
 type Wound = { x: number; y: number; region: HitRegion; size: number; bone?: boolean };
 type ZombieHit = { region: HitRegion; t: number; x: number; y: number; localX: number; localY: number };
 type Environment = "farmland" | "suburb" | "tunnel" | "city";
@@ -1468,6 +4514,11 @@ type Spit = {
   targetY: number;
   createdAt: number;
   landAt: number;
+  damage?: number;
+  splashRadius?: number;
+  arcHeight?: number;
+  /** 第六关巨型变异体的连续酸液束：更大液滴与更长尾迹。 */
+  burst?: boolean;
 };
 
 type BloodStain = { id: number; x: number; y: number; rx: number; removeAt: number; tint?: "blood" | "vomit" };
@@ -1707,6 +4758,10 @@ function shiftTimeline(g: GameState, delta: number) {
   if (g.level) {
     g.level.startedAt += delta;
     g.level.taskDoneFlashUntil += delta;
+    g.level.eventAt += delta;
+    g.level.nextEventSpawnAt += delta;
+    g.level.vehicleLastShot += delta;
+    g.level.vehicleReloadUntil += delta;
   }
   const p = g.player;
   p.lastShot += delta;
@@ -2208,6 +5263,13 @@ function remapWorldX(g: GameState, factor: number) {
   for (const z of g.zombies) z.x *= factor;
   for (const corpse of g.corpses) corpse.zombie.x *= factor;
   for (const barricade of g.barricades) barricade.x *= factor;
+  for (const pickup of g.pickups) pickup.x *= factor;
+  for (const obstacle of g.obstacles) obstacle.x *= factor;
+  for (const npc of g.npcs) {
+    npc.field.x *= factor;
+    npc.field.roamX *= factor;
+    npc.anchorX *= factor;
+  }
   for (const item of g.deployedItems) { item.x *= factor; item.thrownFromX *= factor; }
   for (const stain of g.bloodStains) stain.x *= factor;
   for (const particle of g.particles) particle.x *= factor;
@@ -2220,6 +5282,10 @@ function remapWorldX(g: GameState, factor: number) {
   const f = g.partnerField;
   f.x *= factor;
   f.roamX *= factor;
+  if (g.level) {
+    if (g.level.truckX >= 0) g.level.truckX *= factor;
+    if (g.level.truckStopX !== 0) g.level.truckStopX *= factor;
+  }
 }
 
 /** 两点间的锥形肢体段：直线边、近端宽远端窄（有棱角，非圆棍）。 */
@@ -2854,7 +5920,22 @@ function drawZombieTorso(ctx: CanvasRenderingContext2D, zombie: Zombie, scale: n
     ctx.beginPath(); ctx.moveTo(-12 * scale, (TORSO_TOP_Y + 4) * scale); ctx.lineTo(12 * scale, (TORSO_TOP_Y + 4) * scale); ctx.stroke();
     ctx.fillStyle = "#1a211a"; ctx.fillRect(-11 * scale, -76 * scale, 22 * scale, 2.4 * scale);
   }
-  // 重甲僵尸：全身厚重装甲板（胸甲中央龟裂露出腐肉——唯一弱点）
+  // 第七关护甲僵尸：在军队防弹衣外附着整块陶瓷复合装甲，正面与侧缘清晰可见。
+  if (zombie.warehouseArmor) {
+    ctx.fillStyle = "#596168";
+    roundedRect(ctx, -15 * scale, -104 * scale, 30 * scale, 39 * scale, 3 * scale); ctx.fill();
+    ctx.strokeStyle = "#252c31"; ctx.lineWidth = 2.2 * scale; ctx.stroke();
+    ctx.fillStyle = "#333b40";
+    roundedRect(ctx, -13 * scale, -101 * scale, 26 * scale, 17 * scale, 2 * scale); ctx.fill();
+    roundedRect(ctx, -12 * scale, -81 * scale, 24 * scale, 13 * scale, 2 * scale); ctx.fill();
+    ctx.strokeStyle = "rgba(205,215,218,.35)"; ctx.lineWidth = 1.1 * scale;
+    ctx.beginPath(); ctx.moveTo(-11 * scale, -83 * scale); ctx.lineTo(11 * scale, -83 * scale); ctx.stroke();
+    ctx.fillStyle = "#848b8e";
+    for (const [rx, ry] of [[-11, -100], [11, -100], [-10, -70], [10, -70]] as Array<[number, number]>) {
+      ctx.beginPath(); ctx.arc(rx * scale, ry * scale, 1.3 * scale, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  // 重甲僵尸：全身厚重装甲板；只有上胸的受损胸甲可伤，腹部仍完全覆甲。
   if (zombie.kind === "juggernaut") {
     ctx.fillStyle = "#3d4448";
     ctx.beginPath();
@@ -2868,13 +5949,25 @@ function drawZombieTorso(ctx: CanvasRenderingContext2D, zombie: Zombie, scale: n
     ctx.fillStyle = "#474f54";
     ctx.beginPath(); ctx.ellipse(-14 * scale, (TORSO_TOP_Y - 1) * scale, 6.5 * scale, 4.5 * scale, -.3, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.ellipse(14 * scale, (TORSO_TOP_Y - 1) * scale, 6.5 * scale, 4.5 * scale, .3, 0, Math.PI * 2); ctx.fill();
-    // 胸甲龟裂：裂纹环绕的腐肉弱点（引导玩家射击胸口）
-    ctx.fillStyle = skin;
-    ctx.beginPath(); ctx.ellipse(0, -90 * scale, 5.5 * scale, 4.2 * scale, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = "#101314"; ctx.lineWidth = 1.1 * scale;
+    // 腹部装甲板完全覆盖：独立下腹插板、加固横梁与铆钉，命中仍触发金属格挡。
+    ctx.fillStyle = "#252b2f";
+    roundedRect(ctx, -12.5 * scale, -78 * scale, 25 * scale, 11 * scale, 2.5 * scale); ctx.fill();
+    ctx.strokeStyle = "#596166"; ctx.lineWidth = 1.2 * scale; ctx.stroke();
+    ctx.fillStyle = "#747b7e";
+    for (const px of [-9, 9]) { ctx.beginPath(); ctx.arc(px * scale, -72.5 * scale, 1.2 * scale, 0, Math.PI * 2); ctx.fill(); }
+    // 上胸受损装甲板：视觉椭圆与实际可受伤判定共用边界，外观仍是附着在身体上的金属胸甲。
+    const weakCenterY = (JUGGERNAUT_CHEST_WEAK_TOP_Y + JUGGERNAUT_CHEST_WEAK_BOTTOM_Y) / 2;
+    const weakRadiusY = (JUGGERNAUT_CHEST_WEAK_BOTTOM_Y - JUGGERNAUT_CHEST_WEAK_TOP_Y) / 2;
+    ctx.fillStyle = "#596267";
+    ctx.beginPath(); ctx.ellipse(0, weakCenterY * scale, JUGGERNAUT_CHEST_WEAK_HALF_WIDTH * scale, weakRadiusY * scale, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = "#858d90"; ctx.lineWidth = 1.4 * scale; ctx.stroke();
+    ctx.fillStyle = "rgba(25,29,31,.36)";
+    ctx.beginPath(); ctx.ellipse(0, weakCenterY * scale, 10.5 * scale, 8 * scale, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = "#31191b"; ctx.lineWidth = 1.4 * scale;
     ctx.beginPath();
-    ctx.moveTo(-9 * scale, -95 * scale); ctx.lineTo(-3 * scale, -91 * scale); ctx.lineTo(-7 * scale, -86 * scale);
-    ctx.moveTo(9 * scale, -96 * scale); ctx.lineTo(3.5 * scale, -90 * scale); ctx.lineTo(8 * scale, -85 * scale);
+    ctx.moveTo(-12 * scale, -97 * scale); ctx.lineTo(-5 * scale, -91 * scale); ctx.lineTo(-9 * scale, -84 * scale); ctx.lineTo(-4 * scale, -78 * scale);
+    ctx.moveTo(12 * scale, -97 * scale); ctx.lineTo(5 * scale, -92 * scale); ctx.lineTo(9 * scale, -85 * scale); ctx.lineTo(4 * scale, -78 * scale);
+    ctx.moveTo(-5 * scale, -91 * scale); ctx.lineTo(4 * scale, -88 * scale); ctx.lineTo(-2 * scale, -82 * scale);
     ctx.stroke();
     ctx.strokeStyle = "rgba(200,210,215,.3)"; ctx.lineWidth = 1 * scale;
     ctx.beginPath(); ctx.moveTo(-12 * scale, -101 * scale); ctx.lineTo(12 * scale, -101 * scale); ctx.stroke();
@@ -2989,12 +6082,13 @@ function drawZombieHeadAndWounds(ctx: CanvasRenderingContext2D, zombie: Zombie, 
       ctx.moveTo(facing * 7 * scale, -121 * scale); ctx.lineTo(facing * 4 * scale, -117 * scale);
       ctx.stroke();
     }
-    // 松垂口腔（呕吐僵尸为肿胀的绿色毒喉）
-    ctx.fillStyle = zombie.kind === "spitter" ? "#5e9a2e" : "#5d171b";
+    // 松垂口腔（呕吐僵尸与巨型变异 Boss 为肿胀的绿色毒喉）
+    const toxicMouth = zombie.kind === "spitter" || zombie.bossKind === "giantMutant";
+    ctx.fillStyle = toxicMouth ? "#5e9a2e" : "#5d171b";
     ctx.beginPath();
     ctx.moveTo(facing * 4 * scale, -113 * scale); ctx.lineTo(facing * 8 * scale, -112.5 * scale); ctx.lineTo(facing * 5 * scale, -109.5 * scale);
     ctx.closePath(); ctx.fill();
-    if (zombie.kind === "spitter") {
+    if (toxicMouth) {
       ctx.fillStyle = "rgba(94,154,46,.75)";
       ctx.beginPath(); ctx.ellipse(facing * 3 * scale, -106.5 * scale, 4.2 * scale, 2.8 * scale, 0, 0, Math.PI * 2); ctx.fill();
     }
@@ -4610,6 +7704,18 @@ function lineCircleHitT(x1: number, y1: number, x2: number, y2: number, cx: numb
   return null;
 }
 
+// 取瞄准线穿过圆形躯干时离圆心最近的位置；用于重甲胸口，使正面瞄准点不会被“圆形外沿首交点”误判为装甲。
+function lineCircleClosestT(x1: number, y1: number, x2: number, y2: number, cx: number, cy: number, radius: number) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const lengthSq = dx * dx + dy * dy;
+  if (lengthSq === 0) return null;
+  const t = Math.max(0, Math.min(1, ((cx - x1) * dx + (cy - y1) * dy) / lengthSq));
+  const closestX = x1 + dx * t;
+  const closestY = y1 + dy * t;
+  return (closestX - cx) ** 2 + (closestY - cy) ** 2 <= radius * radius ? t : null;
+}
+
 function hitZombieRegion(x1: number, y1: number, x2: number, y2: number, zombie: Zombie, now: number): ZombieHit | null {
   const scale = (zombie.radius / 25) * CHARACTER_SCALE;
   const pose = zombieKnockPose(zombie, now);
@@ -4620,22 +7726,27 @@ function hitZombieRegion(x1: number, y1: number, x2: number, y2: number, zombie:
   const sin = Math.sin(rotation);
   const regions: Array<{ region: HitRegion; localX: number; localY: number; radius: number }> = [
     { region: "head", localX: 0, localY: -114, radius: 10.5 * scale },
-    { region: "body", localX: 0, localY: -80, radius: 18 * scale },
+    { region: "body", localX: 0, localY: -80, radius: (zombie.kind === "juggernaut" ? JUGGERNAUT_BODY_HIT_RADIUS : 18) * scale },
     { region: "legs", localX: 0, localY: -29, radius: 17 * scale },
   ];
   let nearest: ZombieHit | null = null;
   for (const region of regions) {
     const regionX = pivotX + (cos * region.localX - sin * region.localY) * scale;
     const regionY = pivotY + (sin * region.localX + cos * region.localY) * scale;
-    const t = lineCircleHitT(x1, y1, x2, y2, regionX, regionY, region.radius);
-    if (t === null || (nearest && t >= nearest.t)) continue;
-    const x = x1 + (x2 - x1) * t;
-    const y = y1 + (y2 - y1) * t;
+    const juggernautBody = zombie.kind === "juggernaut" && region.region === "body";
+    // 排序仍使用身体圆外沿的首次交点，保证前方重甲可以挡住后方目标；仅用最近点采样玩家实际瞄准的胸口位置。
+    const orderT = lineCircleHitT(x1, y1, x2, y2, regionX, regionY, region.radius);
+    const sampleT = juggernautBody
+      ? lineCircleClosestT(x1, y1, x2, y2, regionX, regionY, region.radius)
+      : orderT;
+    if (orderT === null || sampleT === null || (nearest && orderT >= nearest.t)) continue;
+    const x = x1 + (x2 - x1) * sampleT;
+    const y = y1 + (y2 - y1) * sampleT;
     const relativeX = x - pivotX;
     const relativeY = y - pivotY;
     nearest = {
       region: region.region,
-      t,
+      t: orderT,
       x,
       y,
       localX: (cos * relativeX + sin * relativeY) / scale,
@@ -4675,6 +7786,7 @@ export function DeadRoadGame() {
   const screenRef = useRef<Screen>("menu");
   const keysRef = useRef(new Set<string>());
   const mouseRef = useRef({ x: 880, y: 400, down: false });
+  const reloadRef = useRef<(now: number) => void>(() => {});
   const rafRef = useRef(0);
   const lastFrameRef = useRef(0);
   // 动态世界宽度：画布位图宽度（世界单位）跟随舞台实际宽高比；worldWRef 供各回调免闭包读取
@@ -4703,6 +7815,13 @@ export function DeadRoadGame() {
   }, []);
   const [codexPage, setCodexPage] = useState(0);
   const [codexReturn, setCodexReturn] = useState<"menu" | "pause">("menu");
+  // 已通关关卡（localStorage 持久化，独立键 dead-road-levels-cleared；queueMicrotask 延迟到水合后读取，避免 SSR 不一致）
+  const [clearedLevels, setClearedLevels] = useState<string[]>([]);
+  useEffect(() => {
+    let active = true;
+    queueMicrotask(() => { if (active) setClearedLevels(readClearedLevels()); });
+    return () => { active = false; };
+  }, []);
   const [bestDay, setBestDay] = useState(0);
   const [muted, setMuted] = useState(false);
   const [volume, setVolume] = useState(85);
@@ -4710,6 +7829,7 @@ export function DeadRoadGame() {
   const [saveInfo, setSaveInfo] = useState<{ nextDay: number } | null>(null);
   const pausedRef = useRef(false);
   const pausedAtRef = useRef(0);
+  const hiddenAtRef = useRef<number | null>(null);
   const [snapshot, setSnapshot] = useState({
     mode: "survival" as GameMode, day: 1, coins: 0, kills: 0, hp: 100, maxHp: 100, weapon: "glock17" as WeaponKey,
     owned: ["glock17", "sawedoff", "fruitknife"] as WeaponKey[],
@@ -4727,6 +7847,25 @@ export function DeadRoadGame() {
     rangeBatchTotal: 0,
     levelId: null as string | null,
   });
+
+  // 浏览器标签页隐藏时 RAF 会暂停。恢复可见时整体平移游戏时间轴，确保“坚持 20 秒”
+  // 只计算实际游玩时间，也避免隐藏期间跳过刷怪、冷却、投掷物与动画过程。
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      const now = performance.now();
+      if (document.hidden) {
+        hiddenAtRef.current = now;
+        return;
+      }
+      const hiddenAt = hiddenAtRef.current;
+      hiddenAtRef.current = null;
+      // 手动暂停期间由 resumeGame 统一平移完整暂停时长，避免隐藏时长被重复计算。
+      if (hiddenAt !== null && screenRef.current === "playing" && !pausedRef.current) shiftTimeline(stateRef.current, now - hiddenAt);
+      lastFrameRef.current = now;
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, []);
 
   const changeScreen = useCallback((next: Screen) => {
     screenRef.current = next;
@@ -4783,9 +7922,9 @@ export function DeadRoadGame() {
       const g = stateRef.current;
       if (g.mode === "level" && g.level) {
         // 关卡模式：世界宽 = 画布宽 + 场景余量；resize 时按新世界宽比例重映射实体，保持场景布局
-        const scene = LEVEL1_SCENES[g.level.sceneIndex];
-        remapWorldX(g, (nextW + scene.extra) / g.worldW);
-        g.worldW = nextW + scene.extra;
+        const nextWorldW = levelSceneWorldWidth(g.level.levelId, g.level.sceneIndex, nextW);
+        remapWorldX(g, nextWorldW / g.worldW);
+        g.worldW = nextWorldW;
         g.cameraX = 0;
       } else {
         remapWorldX(g, nextW / g.worldW);
@@ -4849,23 +7988,94 @@ export function DeadRoadGame() {
     });
   }, []);
 
-  // 关卡模式：开始指定关卡——空手出门（单槽携带，fists 兜底），全程靠拾取武装
+  // 关卡模式：开始指定关卡——按关卡配置初始武器与护甲，fists 始终作为空槽兜底
   const startLevel = useCallback((levelId: string) => {
-    if (levelId !== LEVEL1_ID) return;
+    if (levelId !== LEVEL1_ID && levelId !== LEVEL2_ID && levelId !== LEVEL3_ID && levelId !== LEVEL4_ID && levelId !== LEVEL5_ID && levelId !== LEVEL6_ID && levelId !== LEVEL7_ID && levelId !== LEVEL8_ID) return;
+    // 解锁守卫：未通关上一关不可进入（卡片锁定态已拦截，此为其后多一重保险）
+    if (!isLevelUnlocked(levelId, readClearedLevels())) return;
     sound.uiClick();
     const now = performance.now();
     const g = freshState("level", worldWRef.current);
     g.day = 1;
     g.waveTotal = 0;
-    g.owned = new Set<WeaponKey>(["fists"]);
-    g.loadout = ["fists", "fists"];
-    g.melee = "fists";
     g.armor = "civilian";
     g.ownedArmors = new Set<ArmorKey>(["civilian"]);
     g.player.armor = "civilian";
-    g.player.weapon = "fists";
-    g.level = { levelId, sceneIndex: 0, taskIndex: 0, sceneKills: 0, startedAt: now, taskDoneFlashUntil: 0, completed: false };
+    if (levelId === LEVEL1_ID) {
+      // 第一关：空手出门（单槽携带，fists 兜底），全程靠拾取武装
+      g.owned = new Set<WeaponKey>(["fists"]);
+      g.loadout = ["fists", "fists"];
+      g.melee = "fists";
+      g.player.weapon = "fists";
+    } else if (levelId === LEVEL2_ID) {
+      // 第二关：格洛克 17 + 水果刀开局
+      g.owned = new Set<WeaponKey>(["fists", "glock17", "fruitknife"]);
+      g.loadout = ["glock17", "glock17"];
+      g.melee = "fruitknife";
+      g.player.weapon = "glock17";
+      g.player.ammo.glock17 = WEAPONS.glock17.magazine;
+    } else if (levelId === LEVEL3_ID) {
+      // 第三关：M16 + 格洛克 17 + 破片手榴弹 ×3，战斗服为军队服
+      g.owned = new Set<WeaponKey>(["fists", "m16", "glock17"]);
+      g.loadout = ["m16", "glock17"];
+      g.melee = "fists";
+      g.player.weapon = "m16";
+      g.player.ammo.m16 = WEAPONS.m16.magazine;
+      g.player.ammo.glock17 = WEAPONS.glock17.magazine;
+      g.itemInventory.frag = 3;
+      g.armor = "army";
+      g.ownedArmors = new Set<ArmorKey>(["army"]);
+      g.player.armor = "army";
+      g.player.maxHp = ARMORS.army.maxHp;
+      g.player.hp = g.player.maxHp;
+    } else if (levelId === LEVEL4_ID) {
+      // 第四关：SCAR-H + 格洛克 17 开局，战斗服为军队服
+      g.owned = new Set<WeaponKey>(["fists", "scarh", "glock17"]);
+      g.loadout = ["scarh", "glock17"];
+      g.melee = "fists";
+      g.player.weapon = "scarh";
+      g.player.ammo.scarh = WEAPONS.scarh.magazine;
+      g.player.ammo.glock17 = WEAPONS.glock17.magazine;
+      g.armor = "army";
+      g.ownedArmors = new Set<ArmorKey>(["army"]);
+      g.player.armor = "army";
+      g.player.maxHp = ARMORS.army.maxHp;
+      g.player.hp = g.player.maxHp;
+    } else if (levelId === LEVEL7_ID || levelId === LEVEL8_ID) {
+      // 第七、八关：AK-47 + 格洛克 17 开局，战斗服为军队服
+      g.owned = new Set<WeaponKey>(["fists", "ak47", "glock17"]);
+      g.loadout = ["ak47", "glock17"];
+      g.melee = "fists";
+      g.player.weapon = "ak47";
+      g.player.ammo.ak47 = WEAPONS.ak47.magazine;
+      g.player.ammo.glock17 = WEAPONS.glock17.magazine;
+      g.armor = "army";
+      g.ownedArmors = new Set<ArmorKey>(["army"]);
+      g.player.armor = "army";
+      g.player.maxHp = ARMORS.army.maxHp;
+      g.player.hp = g.player.maxHp;
+    } else {
+      // 第五、六关：M16 + 格洛克 17 开局，战斗服为军队服
+      g.owned = new Set<WeaponKey>(["fists", "m16", "glock17"]);
+      g.loadout = ["m16", "glock17"];
+      g.melee = "fists";
+      g.player.weapon = "m16";
+      g.player.ammo.m16 = WEAPONS.m16.magazine;
+      g.player.ammo.glock17 = WEAPONS.glock17.magazine;
+      g.armor = "army";
+      g.ownedArmors = new Set<ArmorKey>(["army"]);
+      g.player.armor = "army";
+      g.player.maxHp = ARMORS.army.maxHp;
+      g.player.hp = g.player.maxHp;
+    }
+    g.level = { levelId, sceneIndex: 0, taskIndex: 0, sceneKills: 0, startedAt: now, taskDoneFlashUntil: 0, completed: false, eventStage: "none", eventAt: 0, eventCount: 0, nextEventSpawnAt: 0, truckX: -1, truckY: -1, truckStopX: 0, wallHp: 0, powerOn: false, squadHp: [], vehicleHp: 0, vehicleAmmo: 0, vehicleLastShot: 0, vehicleReloadUntil: 0, vehicleAimAngle: 0, dialog: null };
     loadLevelScene(g, 0, now, worldWRef.current);
+    if (levelId === LEVEL3_ID) {
+      // 开场演出：睡梦中 → 警报渐强 + 屏幕渐亮 → 起身
+      g.level.eventStage = "sleep";
+      g.level.eventAt = now;
+      sound.alarmCrescendo(LEVEL3_WAKE_MS / 1000);
+    }
     stateRef.current = g;
     lastFrameRef.current = now;
     setLevelResult(null);
@@ -4878,7 +8088,7 @@ export function DeadRoadGame() {
   const updateLevelTasks = useCallback((g: GameState, now: number) => {
     const level = g.level;
     if (!level || level.completed) return;
-    const scene = LEVEL1_SCENES[level.sceneIndex];
+    const scene = levelScenesFor(level.levelId)[level.sceneIndex];
     const task = scene.tasks[level.taskIndex];
     if (!task) return;
     const advance = () => {
@@ -4897,11 +8107,769 @@ export function DeadRoadGame() {
     };
     const completeLevel = () => {
       level.completed = true;
+      // 登记通关记录（解锁下一关），与结算界面提示联动
+      setClearedLevels(markLevelCleared(level.levelId));
       setLevelResult({ levelId: level.levelId, timeMs: now - level.startedAt, kills: g.kills });
       sound.taskComplete();
       syncSnapshot();
       changeScreen("levelComplete");
     };
+    // 任务失败（第三关：围墙被攻破）→ 失败界面可重试本关
+    const failLevel = () => {
+      level.completed = true;
+      sound.gameOver();
+      syncSnapshot();
+      changeScreen("gameover");
+    };
+    // ===== 第八关「清理高速」事件流 =====
+    if (level.levelId === LEVEL8_ID) {
+      if (level.sceneIndex === 0) {
+        const teammateX = (LEVEL8_BRIEFING_TABLE_FX + .05) * g.worldW;
+        if (task.id === "find-highway-team" && level.eventStage === "none"
+          && Math.abs(g.player.x - teammateX) < 170 && Math.abs(g.player.y - 350) < 150) {
+          level.eventStage = "talk";
+          level.dialog = { lines: [{ speaker: "队友", text: "我们需要清理高速并占领收费站，扫清障碍" }], index: 0 };
+          return;
+        }
+        if (level.eventStage === "talk" && !level.dialog) {
+          level.eventStage = "none";
+          advance();
+          return;
+        }
+        if (task.id === "board-armored-vehicle" && g.player.x >= g.worldW - 120) goScene(1);
+        return;
+      }
+      if (level.sceneIndex === 1) {
+        if (g.player.x >= LEVEL8_BASE_GATE_FX * g.worldW - 90) {
+          goScene(2);
+          level.eventStage = "armored-drive";
+          level.eventAt = now;
+          level.truckX = LEVEL8_VEHICLE_START_X;
+          level.truckY = 500;
+          level.vehicleHp = LEVEL8_VEHICLE_HP;
+          level.vehicleAmmo = LEVEL8_HMG_MAGAZINE;
+          level.vehicleLastShot = 0;
+          level.vehicleReloadUntil = 0;
+          g.player.x = level.truckX;
+          g.player.y = level.truckY;
+        }
+        return;
+      }
+      if (level.sceneIndex === 2) {
+        if (level.vehicleHp <= 0) { failLevel(); return; }
+        const tollX = LEVEL8_TOLL_FX * g.worldW;
+        if (level.eventStage === "armored-drive"
+          && level.sceneKills >= LEVEL8_HIGHWAY_TOTAL && level.truckX >= tollX - 260) {
+          level.eventStage = "disembark";
+          level.eventAt = now;
+          level.eventCount = 0;
+          level.truckX = tollX - 220;
+          return;
+        }
+        if (level.eventStage === "disembark") {
+          if (now >= level.eventAt + 700) {
+            g.player.x = level.truckX + 130;
+            g.player.y = 500;
+          }
+          if (level.eventCount < LEVEL8_TOLL_SQUAD_SIZE && now >= level.eventAt + 900 + level.eventCount * 420) {
+            g.npcs.push(makeLevelNpc(level.truckX + 55, 390 + level.eventCount * 100, true, false, "m16"));
+            level.eventCount += 1;
+          }
+          if (level.eventCount >= LEVEL8_TOLL_SQUAD_SIZE && now >= level.eventAt + 2100) {
+            goScene(3);
+            level.squadHp = Array(LEVEL8_TOLL_SQUAD_SIZE).fill(100);
+            for (let i = 0; i < LEVEL8_TOLL_SQUAD_SIZE; i++) {
+              g.npcs.push(makeLevelNpc(g.player.x - 70 - i * 55, g.player.y + (i === 0 ? -60 : 60), true, false, "m16", { followPlayer: true, targetable: true, squadIndex: i }));
+            }
+          }
+        }
+        return;
+      }
+      if (level.sceneIndex === 3 && task.id === "clear-toll-station" && level.sceneKills >= LEVEL8_TOLL_TOTAL) completeLevel();
+      return;
+    }
+    // ===== 第七关「夺取仓库」事件流 =====
+    if (level.levelId === LEVEL7_ID) {
+      // 场景 0 · 商讨室：找到队友，完成仓库行动简报后出门。
+      if (level.sceneIndex === 0) {
+        const teammateX = (LEVEL7_BRIEFING_TABLE_FX + .05) * g.worldW;
+        if (task.id === "find-warehouse-team" && level.eventStage === "none"
+          && Math.abs(g.player.x - teammateX) < 170 && Math.abs(g.player.y - 350) < 150) {
+          level.eventStage = "talk";
+          level.dialog = { lines: [{ speaker: "队友", text: "我们要夺取仓库，获得更多物资" }], index: 0 };
+          return;
+        }
+        if (level.eventStage === "talk" && !level.dialog) {
+          level.eventStage = "none";
+          advance();
+          return;
+        }
+        if (task.id === "board-warehouse-truck" && g.player.x >= g.worldW - 120) goScene(1);
+        return;
+      }
+      // 场景 1 · 基地集合区：走到基地大门登车。
+      if (level.sceneIndex === 1) {
+        if (g.player.x >= LEVEL7_BASE_GATE_FX * g.worldW - 90) {
+          goScene(2);
+          level.eventStage = "ride";
+          level.eventAt = now;
+          level.truckStopX = LEVEL7_TRUCK_STOP_FX * g.worldW;
+          level.truckY = 380;
+          level.truckX = level.truckStopX - 1500;
+          sound.truckEngine();
+        }
+        return;
+      }
+      // 场景 2 · 仓库大门：军车完全停稳后，玩家与四名 M16 队友依次下车警戒。
+      if (level.sceneIndex === 2) {
+        if (level.eventStage === "ride") {
+          const t = Math.min(1, (now - level.eventAt) / 2800);
+          const ease = 1 - (1 - t) * (1 - t);
+          level.truckX = level.truckStopX - 1500 * (1 - ease);
+          g.player.x = level.truckX + 150;
+          g.player.y = level.truckY + 140;
+          if (t >= 1) {
+            level.eventStage = "disembark";
+            level.eventAt = now;
+            level.eventCount = 0;
+            g.player.invulnerableUntil = now + 1200;
+            sound.truckBrake();
+          }
+          return;
+        }
+        if (level.eventStage === "disembark") {
+          if (now < level.eventAt + LEVEL7_PLAYER_EXIT_DELAY_MS) return;
+          g.player.x = level.truckX + 115;
+          g.player.y = Math.max(ROAD_TOP + 80, Math.min(ROAD_BOTTOM - 30, level.truckY + 132));
+          if (level.eventCount < LEVEL7_SQUAD_SIZE
+            && now >= level.eventAt + LEVEL7_PLAYER_EXIT_DELAY_MS + 300 + level.eventCount * 420) {
+            const disembarkY = Math.max(ROAD_TOP + 60, Math.min(ROAD_BOTTOM - 30, level.truckY + 54 + level.eventCount * 46));
+            g.npcs.push(makeLevelNpc(level.truckX + 70, disembarkY, true, true, "m16"));
+            level.eventCount += 1;
+          }
+          if (level.eventCount >= LEVEL7_SQUAD_SIZE) level.eventStage = "none";
+          return;
+        }
+        if (level.eventStage === "none" && g.player.x >= LEVEL7_WAREHOUSE_DOOR_FX * g.worldW - 40) goScene(3);
+        return;
+      }
+      // 场景 3 · 物资堆放区：先取得高穿透燧石66，再清除 2 重甲、5 盾兵与 10 护甲僵尸。
+      if (task.id === "take-flint66") {
+        if (g.player.weapon === "flint66" || g.loadout.includes("flint66")) advance();
+        return;
+      }
+      if (task.id === "clear-warehouse") {
+        if (level.sceneKills >= LEVEL7_INITIAL_TOTAL) {
+          advance();
+          level.eventStage = "warehouse-defense";
+          level.eventAt = now;
+          level.eventCount = 0;
+          level.nextEventSpawnAt = now + 350;
+          level.wallHp = LEVEL7_WALL_HP;
+          const wallX = LEVEL7_WALL_FX * g.worldW;
+          for (const y of [286, 416, 546]) {
+            g.barricades.push({ id: LEVEL7_WALL_ID + y, x: wallX, y, hp: LEVEL7_WALL_HP, maxHp: LEVEL7_WALL_HP });
+          }
+          for (let i = 0; i < LEVEL7_DEFENDERS; i++) {
+            g.npcs.push(makeLevelNpc(wallX - 170 - (i % 2) * 78, 278 + i * 92, true, true, "m16"));
+          }
+          const carrier = makeLevelNpc(LEVEL7_TRUCK_FX * g.worldW, 540, false, false, "fists", { scripted: true, carryingCrate: false });
+          carrier.field.angle = 0;
+          carrier.field.moving = true;
+          g.npcs.push(carrier);
+        }
+        return;
+      }
+      if (task.id === "protect-supplies" && level.eventStage === "warehouse-defense") {
+        if (level.wallHp <= 0) { failLevel(); return; }
+        // 护甲僵尸在运输完成前持续从右侧压向左侧围墙；同屏数量设上限避免无限堆积。
+        const activeAttackers = g.zombies.reduce((count, zombie) => count + Number(zombie.hp > 0), 0);
+        if (now >= level.nextEventSpawnAt && activeAttackers < LEVEL7_MAX_ACTIVE_ATTACKERS) {
+          const wallX = LEVEL7_WALL_FX * g.worldW;
+          // 仓库是长场景，但尸潮必须在本次运输期间抵达：出生点固定在围墙右侧，而不是世界最右端。
+          const spawnX = Math.min(g.worldW - 90, wallX + LEVEL7_ATTACKER_SPAWN_OFFSET);
+          const attacker = makeLevelZombie(970000 + Math.floor(now), "army", spawnX, 250 + Math.random() * 350, now);
+          g.zombies.push(applyLevel7ArmorZombie(attacker));
+          level.nextEventSpawnAt = now + LEVEL7_DEFEND_SPAWN_MS;
+        }
+        // 一次往返 = 卡车 → 仓库物资区（空手）→ 卡车（抱箱），总计执行两次。
+        const totalMs = LEVEL7_TRANSPORT_LEG_MS * LEVEL7_TRANSPORT_LEGS;
+        const elapsed = Math.min(totalMs, now - level.eventAt);
+        const completedLegs = Math.min(LEVEL7_TRANSPORT_LEGS, Math.floor(elapsed / LEVEL7_TRANSPORT_LEG_MS));
+        level.eventCount = completedLegs;
+        const legIndex = Math.min(LEVEL7_TRANSPORT_LEGS - 1, Math.floor(elapsed / LEVEL7_TRANSPORT_LEG_MS));
+        const legT = Math.min(1, (elapsed - legIndex * LEVEL7_TRANSPORT_LEG_MS) / LEVEL7_TRANSPORT_LEG_MS);
+        const smoothT = legT * legT * (3 - 2 * legT);
+        const supplyX = LEVEL7_SUPPLY_FX * g.worldW;
+        const truckX = LEVEL7_TRUCK_FX * g.worldW;
+        const headingToSupply = legIndex % 2 === 0;
+        const fromX = headingToSupply ? truckX : supplyX;
+        const toX = headingToSupply ? supplyX : truckX;
+        const carrier = g.npcs.find((npc) => npc.scripted);
+        if (carrier) {
+          carrier.field.x = fromX + (toX - fromX) * smoothT;
+          carrier.field.y = 540;
+          carrier.field.angle = toX < fromX ? Math.PI : 0;
+          carrier.field.moving = elapsed < totalMs && legT < .98;
+          carrier.carryingCrate = !headingToSupply && elapsed < totalMs;
+        }
+        if (elapsed >= totalMs && level.wallHp > 0) completeLevel();
+        return;
+      }
+      return;
+    }
+    // ===== 第六关「攻占大楼」事件流 =====
+    if (level.levelId === LEVEL6_ID) {
+      // 场景 0 · 商讨室：找到队友并完成两句行动简报，随后任务切换为上车。
+      if (level.sceneIndex === 0) {
+        const teammateX = (LEVEL6_BRIEFING_TABLE_FX + .05) * g.worldW;
+        if (task.id === "find-assault-team" && level.eventStage === "none"
+          && Math.abs(g.player.x - teammateX) < 170 && Math.abs(g.player.y - 350) < 150) {
+          level.eventStage = "talk";
+          level.dialog = {
+            lines: [
+              { speaker: "队友", text: "我们要参加攻占市政大楼的任务" },
+              { speaker: "队友", text: "这次任务很危险，大家小心点" },
+            ],
+            index: 0,
+          };
+          return;
+        }
+        if (level.eventStage === "talk" && !level.dialog) {
+          level.eventStage = "none";
+          advance();
+          return;
+        }
+        if (task.id === "board-assault-truck" && g.player.x >= g.worldW - 120) goScene(1);
+        return;
+      }
+      // 场景 1 · 基地大门：上车后转到市政大楼大门，军车驶入并完全停稳。
+      if (level.sceneIndex === 1) {
+        if (task.id === "board-assault-truck" && g.player.x >= LEVEL6_BASE_GATE_FX * g.worldW - 90) {
+          goScene(2);
+          level.eventStage = "ride";
+          level.eventAt = now;
+          level.truckStopX = LEVEL6_TRUCK_STOP_FX * g.worldW;
+          level.truckY = 380;
+          level.truckX = level.truckStopX - 1500;
+          level.squadHp = Array.from({ length: LEVEL6_SQUAD_SIZE }, () => LEVEL6_SQUAD_HP);
+          sound.truckEngine();
+        }
+        return;
+      }
+      // 场景 2 · 市政大楼大门：车辆停稳后玩家与两名持 M16 队友下车，随后共同进入大楼。
+      if (level.sceneIndex === 2) {
+        if (level.eventStage === "ride") {
+          const t = Math.min(1, (now - level.eventAt) / 2800);
+          const ease = 1 - (1 - t) * (1 - t);
+          level.truckX = level.truckStopX - 1500 * (1 - ease);
+          g.player.x = level.truckX + 150;
+          g.player.y = level.truckY + 140;
+          if (t >= 1) {
+            level.eventStage = "disembark";
+            level.eventAt = now;
+            level.eventCount = 0;
+            g.player.invulnerableUntil = now + 1200;
+            sound.truckBrake();
+          }
+          return;
+        }
+        if (level.eventStage === "disembark") {
+          if (now < level.eventAt + LEVEL6_PLAYER_EXIT_DELAY_MS) return;
+          g.player.x = level.truckX + 115;
+          g.player.y = Math.max(ROAD_TOP + 80, Math.min(ROAD_BOTTOM - 30, level.truckY + 132));
+          if (level.eventCount < LEVEL6_SQUAD_SIZE
+            && now >= level.eventAt + LEVEL6_PLAYER_EXIT_DELAY_MS + 300 + level.eventCount * 420) {
+            const squadIndex = level.eventCount;
+            const disembarkY = Math.max(ROAD_TOP + 60, Math.min(ROAD_BOTTOM - 30, level.truckY + 70 + squadIndex * 72));
+            g.npcs.push(makeLevelNpc(
+              level.truckX + 70,
+              disembarkY,
+              true,
+              false,
+              "m16",
+              { hp: LEVEL6_SQUAD_HP, followPlayer: true, targetable: true, squadIndex },
+            ));
+            level.eventCount += 1;
+          }
+          if (level.eventCount >= LEVEL6_SQUAD_SIZE) level.eventStage = "none";
+          return;
+        }
+        if (level.eventStage === "none" && g.player.x >= LEVEL6_BUILDING_DOOR_FX * g.worldW - 40) goScene(3);
+        return;
+      }
+      // 场景 3 · 断电长走廊：10 军队奔跑 + 3 重甲 + 10 军队，全清后进入配电室。
+      if (level.sceneIndex === 3) {
+        if (level.sceneKills >= LEVEL6_CORRIDOR_ONE_TOTAL && g.player.x >= g.worldW - 130) goScene(4);
+        return;
+      }
+      // 场景 4 · 配电室：清剿 10 军队 + 5 盾兵，走到主电闸后恢复整栋楼照明并进入新走廊。
+      if (level.sceneIndex === 4) {
+        if (level.sceneKills >= LEVEL6_POWER_ROOM_TOTAL && g.player.x >= LEVEL6_POWER_SWITCH_FX * g.worldW - 120) {
+          level.powerOn = true;
+          g.flashUntil = now + 360;
+          goScene(5);
+        }
+        return;
+      }
+      // 场景 5 · 二层走廊：5 盾兵 + 5 重甲，全清后进入档案室。
+      if (level.sceneIndex === 5) {
+        if (level.sceneKills >= LEVEL6_CORRIDOR_TWO_TOTAL && g.player.x >= g.worldW - 130) goScene(6);
+        return;
+      }
+      // 场景 6 · 档案室：击杀 2 只重甲并从尽头离开，完成占领档案室任务。
+      if (level.sceneIndex === 6) {
+        if (level.sceneKills >= LEVEL6_ARCHIVE_TOTAL && g.player.x >= g.worldW - 130) goScene(7);
+        return;
+      }
+      // 场景 7 · 楼梯间：沿与台阶共用的轨迹上楼，抵达中央大厅门槛。
+      if (level.sceneIndex === 7) {
+        if (g.player.x >= g.worldW - 120 && g.player.y <= LEVEL4_STAIR_EXIT_Y + 4) goScene(8);
+        return;
+      }
+      // 场景 8 · 中央大厅：巨型变异 Boss + 两只突变强壮僵尸全部击杀即通关。
+      if (level.sceneIndex === 8) {
+        if (level.sceneKills >= LEVEL6_CENTRAL_HALL_TOTAL) completeLevel();
+        return;
+      }
+      return;
+    }
+    // ===== 第五关「解救行动」事件流 =====
+    if (level.levelId === LEVEL5_ID) {
+      // 场景 0 · 无线电监听室：找到队友并确认隧道求救信号。
+      if (level.sceneIndex === 0) {
+        const teammateX = 0.3 * g.worldW;
+        if (task.id === "find-radio-teammate" && level.eventStage === "none"
+          && Math.abs(g.player.x - teammateX) < 170 && Math.abs(g.player.y - 360) < 150) {
+          level.eventStage = "talk";
+          level.dialog = {
+            lines: [{ speaker: "队友", text: "隧道里有求救信号，我们得去看看。" }],
+            index: 0,
+          };
+          return;
+        }
+        if (level.eventStage === "talk" && !level.dialog) goScene(1);
+        return;
+      }
+      // 场景 1 · 通讯基地天台：走到停机坪并登机，转到隧道入口飞行演出。
+      if (level.sceneIndex === 1) {
+        if (task.id === "board-helicopter" && g.player.x >= LEVEL5_HELIPAD_FX * g.worldW - 120) {
+          goScene(2);
+          level.eventStage = "flight";
+          level.eventAt = now;
+          level.truckStopX = LEVEL5_HELI_STOP_FX * g.worldW;
+          level.truckX = level.truckStopX - 1400;
+          level.truckY = 180;
+          sound.truckEngine();
+        }
+        return;
+      }
+      // 场景 2 · 隧道入口：直升机飞入并落稳，玩家与 4 名 M16 队友依次下机警戒。
+      if (level.sceneIndex === 2) {
+        if (level.eventStage === "flight") {
+          const t = Math.min(1, (now - level.eventAt) / 3200);
+          const ease = 1 - (1 - t) * (1 - t);
+          level.truckX = level.truckStopX - 1400 * (1 - ease);
+          level.truckY = 180 + 320 * ease;
+          g.player.x = level.truckX + 40;
+          g.player.y = level.truckY;
+          if (t >= 1) {
+            level.eventStage = "landed";
+            level.eventAt = now;
+            level.eventCount = 0;
+            g.player.invulnerableUntil = now + 1800;
+            sound.truckBrake();
+          }
+          return;
+        }
+        if (level.eventStage === "landed") {
+          if (now < level.eventAt + LEVEL5_PLAYER_EXIT_DELAY_MS) return;
+          g.player.x = level.truckX + 180;
+          g.player.y = 520;
+          if (level.eventCount < LEVEL5_SQUAD
+            && now >= level.eventAt + LEVEL5_PLAYER_EXIT_DELAY_MS + 300 + level.eventCount * 420) {
+            const squadIndex = level.eventCount;
+            g.npcs.push(makeLevelNpc(level.truckX + 270 + squadIndex * 120, 360 + ((squadIndex * 97) % 180), true, true));
+            level.eventCount += 1;
+          }
+          const exitFinishedAt = level.eventAt + LEVEL5_PLAYER_EXIT_DELAY_MS + 300 + LEVEL5_SQUAD * 420 + 800;
+          if (level.eventCount >= LEVEL5_SQUAD && now >= exitFinishedAt) {
+            level.eventStage = "talk";
+            level.dialog = {
+              lines: [{ speaker: "队友", text: "里面太黑了，我们需要维修电力" }],
+              index: 0,
+            };
+          }
+          return;
+        }
+        if (level.eventStage === "talk" && !level.dialog) goScene(3);
+        return;
+      }
+      // 场景 3 · 未通电隧道：抵达电力配置室后，维修队友工作 15 秒；玩家与 3 名队友守住 500 HP 围栏。
+      if (level.sceneIndex === 3) {
+        const powerX = LEVEL5_POWER_FX * g.worldW;
+        const fenceX = LEVEL5_FENCE_FX * g.worldW;
+        if (level.eventStage === "none") {
+          if (task.id === "repair-power" && g.player.x >= powerX - 150) {
+            level.eventStage = "power";
+            level.eventAt = now;
+            level.eventCount = 0;
+            level.wallHp = LEVEL5_FENCE_HP;
+            // 纵向判定段构成同一共享 HP 围栏；视觉由隧道场景绘制。
+            for (let y = 240; y <= 640; y += 52) {
+              g.barricades.push({ id: LEVEL5_FENCE_ID + y, x: fenceX, y, hp: LEVEL5_FENCE_HP, maxHp: LEVEL5_FENCE_HP });
+            }
+            g.npcs.push(makeLevelNpc(powerX - 34, 430, false, true));
+            for (const ny of [310, 430, 550]) g.npcs.push(makeLevelNpc(fenceX - 150, ny, true, true));
+            sound.alarmCrescendo(2);
+          }
+          return;
+        }
+        if (level.eventStage === "power") {
+          if (level.eventCount < LEVEL5_DEFEND_TOTAL
+            && now >= level.eventAt + 300 + level.eventCount * LEVEL5_DEFEND_EVERY_MS) {
+            g.zombies.push(makeLevelZombie(9000 + level.eventCount, "armyRunner", fenceX + 650 + Math.random() * 250, 280 + ((level.eventCount * 73) % 300), now));
+            level.eventCount += 1;
+            if (level.eventCount % 6 === 1) sound.zombieGrowl({ volume: .85 });
+          }
+          if (level.wallHp <= 0) { failLevel(); return; }
+          if (level.wallHp > 0 && now - level.eventAt >= LEVEL5_REPAIR_MS) {
+            g.flashUntil = now + 280;
+            goScene(4);
+          }
+          return;
+        }
+        return;
+      }
+      // 场景 4 · 隧道通电：单人清剿 10 军队 + 5 奔跑军队 + 5 盾兵，抵达避险间找到求救人员。
+      if (level.sceneIndex === 4) {
+        if (task.id === "find-survivor" && level.sceneKills >= LEVEL5_RESCUE_TOTAL
+          && g.player.x >= LEVEL5_SURVIVOR_FX * g.worldW - 130) {
+          goScene(5);
+          g.owned.add("m240l");
+          g.loadout = ["m240l", "m240l"];
+          g.player.weapon = "m240l";
+          g.player.ammo.m240l = WEAPONS.m240l.magazine;
+          syncSnapshot();
+        }
+        return;
+      }
+      // 场景 5 · 撤离道路：M240L 清掉 50 只军队僵尸，再走到救援车辆上车通关。
+      if (level.sceneIndex === 5) {
+        if (task.id === "clear-rescue-road" && level.sceneKills >= LEVEL5_ROAD_TOTAL) {
+          advance();
+          return;
+        }
+        if (task.id === "board-rescue-vehicle" && g.player.x >= LEVEL5_VEHICLE_FX * g.worldW - 150) completeLevel();
+        return;
+      }
+      return;
+    }
+    // ===== 第三关「防守基地」事件流 =====
+    if (level.levelId === LEVEL3_ID) {
+      // 场景 1 · 军营宿舍：睡梦（警报渐强 + 屏幕渐亮）→ 起身 → 走出军营
+      if (level.sceneIndex === 0) {
+        if (level.eventStage === "sleep" && now >= level.eventAt + LEVEL3_WAKE_MS) {
+          level.eventStage = "rise";
+          level.eventAt = now;
+          advance(); // 任务「醒来」完成
+          return;
+        }
+        if (level.eventStage === "rise" && now >= level.eventAt + LEVEL3_RISE_MS) {
+          level.eventStage = "none";
+          g.player.x = 350;
+          g.player.y = 520;
+          return;
+        }
+        if (level.eventStage === "none" && task.id === "leave-barracks" && g.player.x >= g.worldW - 130) goScene(1);
+        return;
+      }
+      // 场景 2 · 基地外墙夜防：就位 → 队友进场 + 围墙判定段 + 第一波攻势（围墙 HP 归零即失败）→ 走到基地大门
+      if (level.sceneIndex === 1) {
+        const wallX = LEVEL3_WALL_FX * g.worldW;
+        if (level.eventStage === "none") {
+          if (task.id === "take-position" && g.player.x >= wallX - 240) {
+            advance();
+            level.eventStage = "defend";
+            level.eventAt = now;
+            level.eventCount = 0;
+            level.wallHp = LEVEL3_WALL_HP;
+            // 6 名队友在围墙射击孔后就位（钉点射击）：4 × M16 士兵 + PKM 机枪手（中路压制扫射）+ 燧石66 狙击手（靠后半个身位，优先狙杀高价值目标）
+            const defenseSquad: Array<[number, number, WeaponKey]> = [
+              [-66, 280, "m16"], [-66, 400, "m16"], [-66, 460, "pkm"],
+              [-66, 520, "m16"], [-66, 600, "m16"], [-150, 340, "flint66"],
+            ];
+            for (const [dx, ny, squadWeapon] of defenseSquad) {
+              g.npcs.push(makeLevelNpc(wallX + dx, ny, true, true, squadWeapon));
+            }
+            // 围墙判定段：纵向铺满路面的共享 HP 池（复用路障承伤机制，视觉为混凝土墙不渲染路障模型）
+            for (let y = 240; y <= 640; y += 52) {
+              g.barricades.push({ id: LEVEL3_WALL_ID + y, x: wallX, y, hp: LEVEL3_WALL_HP, maxHp: LEVEL3_WALL_HP });
+            }
+            sound.alarmCrescendo(3);
+          }
+          // 过渡任务：夜防结束后从围墙走到基地大门（穿门洞向右）→ 进入土路场景
+          if (task.id === "reach-gate" && g.player.x >= g.worldW - 130) goScene(2);
+          return;
+        }
+        if (level.eventStage === "defend") {
+          // 65 只：盾兵先锋 10 只最先上场（间隔略密形成盾墙），出完后按原节奏接 55 只奔跑系（20+20+15，本关 HP 统一 500）
+          const vanguard = level.eventCount < LEVEL3_VANGUARD_TOTAL;
+          const spawnDue = vanguard
+            ? level.eventAt + 900 + level.eventCount * LEVEL3_VANGUARD_EVERY_MS
+            : level.eventAt + 900 + LEVEL3_VANGUARD_TOTAL * LEVEL3_VANGUARD_EVERY_MS + (level.eventCount - LEVEL3_VANGUARD_TOTAL) * LEVEL3_WAVE_EVERY_MS;
+          if (level.eventCount < LEVEL3_DEFEND_TOTAL && now >= spawnDue) {
+            const kind: ZombieKind = vanguard ? "shield" : LEVEL3_WAVE_KINDS[(level.eventCount - LEVEL3_VANGUARD_TOTAL) % LEVEL3_WAVE_KINDS.length];
+            g.zombies.push(applyLevel3ZombieHp(makeLevelZombie(6000 + level.eventCount, kind, g.worldW + 60 + Math.random() * 120, 300 + ((level.eventCount * 97) % 250), now)));
+            level.eventCount += 1;
+            if (level.eventCount % 5 === 1) sound.zombieGrowl({ volume: 0.85 });
+          }
+          // 围墙共享 HP：各判定段累计承伤换算剩余；归零即围墙被攻破 → 任务失败
+          let segDamage = 0;
+          for (const seg of g.barricades) if (isLevel3WallSegment(seg.id)) segDamage += LEVEL3_WALL_HP - seg.hp;
+          level.wallHp = Math.max(0, LEVEL3_WALL_HP - segDamage);
+          if (level.wallHp <= 0) { failLevel(); return; }
+          // 全数击杀 → 大门闸板升起（门洞判定段移除），任务推进到「走到基地大门」
+          if (level.eventCount >= LEVEL3_DEFEND_TOTAL && g.zombies.length === 0) {
+            advance();
+            level.eventStage = "none";
+            g.barricades = g.barricades.filter((seg) => !(isLevel3WallSegment(seg.id) && seg.y >= LEVEL3_GATE_TOP + 20 && seg.y <= LEVEL3_GATE_BOTTOM - 20));
+          }
+          return;
+        }
+        return;
+      }
+      // 场景 3 · 城外土路：清掉拦路突变僵尸并走到尽头 → 重甲僵尸现身 → 击杀通关
+      if (level.eventStage === "none") {
+        if (task.id === "scout" && level.sceneKills >= LEVEL3_MUTANTS && g.player.x >= g.worldW - 300) {
+          advance();
+          level.eventStage = "boss";
+          level.eventAt = now;
+          const bossX = Math.min(g.worldW - 130, g.player.x + 460);
+          g.zombies.push(makeLevelZombie(6999, "juggernaut", bossX, Math.max(300, Math.min(560, g.player.y)), now));
+          sound.zombieGrowl({ volume: 1 });
+        }
+        return;
+      }
+      if (level.eventStage === "boss" && level.sceneKills >= LEVEL3_MUTANTS + 1) completeLevel();
+      return;
+    }
+    // ===== 第四关「占领电台」事件流 =====
+    if (level.levelId === LEVEL4_ID) {
+      // 场景 0 · 军事基地商讨室：找到队友并完成简报 → 走到房门，切换到独立室外集合区
+      if (level.sceneIndex === 0) {
+        if (task.id === "find-teammate") {
+          const tableX = LEVEL4_TABLE_FX * g.worldW;
+          if (level.eventStage === "none" && Math.abs(g.player.x - tableX) < 180 && Math.abs(g.player.y - 400) < 150) {
+            level.eventStage = "talk";
+            level.dialog = {
+              lines: [
+                { speaker: "队友", text: "我们接到一个任务，占领电台。" },
+                { speaker: "队友", text: "10 分钟后集合。" },
+              ],
+              index: 0,
+            };
+          }
+          if (level.eventStage === "talk" && !level.dialog) {
+            level.eventStage = "none";
+            advance();
+          }
+          return;
+        }
+        if (task.id === "leave-briefing" && g.player.x >= g.worldW - 120) goScene(1);
+        return;
+      }
+      // 场景 1 · 基地集合区：走到大门上车，再转场到电台门口
+      if (level.sceneIndex === 1) {
+        if (task.id === "board-truck" && g.player.x >= LEVEL4_GATE_FX * g.worldW - 90) {
+          // 上车 → 转场电台门口：军车自左侧驶入，停稳后玩家与 4 名队友依次下车
+          goScene(2);
+          level.eventStage = "ride";
+          level.eventAt = now;
+          level.truckStopX = LEVEL4_TRUCK_STOP_FX * g.worldW;
+          level.truckY = 380;
+          level.truckX = level.truckStopX - 1500;
+          sound.truckEngine();
+        }
+        return;
+      }
+      // 场景 2 · 电台门口：军车完全刹停 → 玩家下车 → 4 名 M16 队友下车留守 → 单人进入电台
+      if (level.sceneIndex === 2) {
+        if (level.eventStage === "ride") {
+          // 军车行驶动画（2.8s 缓出刹车）：玩家模型藏在车内，停稳前不会提前出现在车外
+          const t = Math.min(1, (now - level.eventAt) / 2800);
+          const ease = 1 - (1 - t) * (1 - t);
+          level.truckX = level.truckStopX - 1500 * (1 - ease);
+          g.player.x = level.truckX + 150;
+          g.player.y = level.truckY + 140;
+          if (t >= 1) {
+            level.eventStage = "disembark";
+            level.eventAt = now;
+            level.eventCount = 0;
+            g.player.invulnerableUntil = now + 1200;
+            sound.truckBrake();
+          }
+          return;
+        }
+        if (level.eventStage === "disembark") {
+          // 刹车声结束后玩家先从车门落地，再由 4 名持 M16 队友依次下车警戒。
+          if (now < level.eventAt + LEVEL4_PLAYER_EXIT_DELAY_MS) return;
+          g.player.x = level.truckX + 115;
+          g.player.y = Math.max(ROAD_TOP + 80, Math.min(ROAD_BOTTOM - 30, level.truckY + 132));
+          if (level.eventCount < LEVEL4_SQUAD && now >= level.eventAt + LEVEL4_PLAYER_EXIT_DELAY_MS + 300 + level.eventCount * 420) {
+            const disembarkY = Math.max(ROAD_TOP + 60, Math.min(ROAD_BOTTOM - 30, level.truckY + 60 + level.eventCount * 42));
+            g.npcs.push(makeLevelNpc(level.truckX + 70, disembarkY, true, true));
+            level.eventCount += 1;
+          }
+          if (level.eventCount >= LEVEL4_SQUAD) level.eventStage = "none";
+          return;
+        }
+        if (task.id === "breach" && g.player.x >= LEVEL4_STATION_DOOR_FX * g.worldW - 40) goScene(3);
+        return;
+      }
+      // 场景 3 · 一层走廊：全清 15 只并走到安全门 → 楼梯间
+      if (level.sceneIndex === 3) {
+        if (task.id === "clear-floor-1" && level.sceneKills >= LEVEL4_FLOOR1_TOTAL && g.player.x >= g.worldW - 130) goScene(4);
+        return;
+      }
+      // 场景 4 · 楼梯间：角色脚部沿台阶轨迹上升，抵达与门槛同高的出口 → 二层走廊
+      if (level.sceneIndex === 4) {
+        if (task.id === "climb-1" && g.player.x >= g.worldW - 120 && g.player.y <= LEVEL4_STAIR_EXIT_Y + 4) goScene(5);
+        return;
+      }
+      // 场景 5 · 二层走廊：全清 15 只并走到安全门 → 楼梯间
+      if (level.sceneIndex === 5) {
+        if (task.id === "clear-floor-2" && level.sceneKills >= LEVEL4_FLOOR2_TOTAL && g.player.x >= g.worldW - 130) goScene(6);
+        return;
+      }
+      // 场景 6 · 楼梯间：沿台阶上行并穿过对齐的天台门
+      if (level.sceneIndex === 6) {
+        if (task.id === "climb-2" && g.player.x >= g.worldW - 120 && g.player.y <= LEVEL4_STAIR_EXIT_Y + 4) goScene(7);
+        return;
+      }
+      // 场景 7 · 天台：击杀重甲僵尸 → 进入通讯设备区
+      if (level.sceneIndex === 7) {
+        if (task.id === "kill-juggernaut" && level.sceneKills >= 1) goScene(8);
+        return;
+      }
+      // 场景 8 · 天台通讯设备区：3 名 M16 队友戒备 + 1 名队友维修；设备存活 20 秒 → 通关
+      if (level.sceneIndex === 8) {
+        if (level.eventStage === "none") {
+          level.eventStage = "repair";
+          level.eventAt = now;
+          level.eventCount = 0;
+          level.wallHp = LEVEL4_EQUIP_HP;
+          const equipX = LEVEL4_EQUIP_FX * g.worldW;
+          // 通讯设备判定段：纵向铺满路面的共享 HP 池（复用路障承伤机制，视觉由场景函数绘制，不渲染路障模型）
+          for (let y = 240; y <= 640; y += 52) {
+            g.barricades.push({ id: LEVEL4_EQUIP_ID + y, x: equipX, y, hp: LEVEL4_EQUIP_HP, maxHp: LEVEL4_EQUIP_HP });
+          }
+          // 3 名 M16 队友在设备左前方钉点戒备（面向右侧冲击方向），1 名队友驻守设备旁维修
+          for (const ny of [300, 420, 540]) {
+            g.npcs.push(makeLevelNpc(equipX - 150, ny, true, true));
+          }
+          g.npcs.push(makeLevelNpc(equipX - 52, 470, false, true));
+          sound.alarmCrescendo(2);
+          return;
+        }
+        if (level.eventStage === "repair") {
+          // 30 只军队奔跑僵尸自右向左冲来（0.6s 一只，全程覆盖维修窗口）
+          if (level.eventCount < LEVEL4_DEFEND_TOTAL && now >= level.eventAt + 400 + level.eventCount * LEVEL4_DEFEND_EVERY_MS) {
+            g.zombies.push(makeLevelZombie(8000 + level.eventCount, "armyRunner", g.worldW + 60 + Math.random() * 120, 280 + ((level.eventCount * 67) % 280), now));
+            level.eventCount += 1;
+            if (level.eventCount % 5 === 1) sound.zombieGrowl({ volume: 0.85 });
+          }
+          // 设备共享 HP 在僵尸命中判定段时直接扣除；归零即设备被毁 → 任务失败（可重试）
+          if (level.wallHp <= 0) { failLevel(); return; }
+          // 唯一胜利条件：维修计时达到 20 秒且通讯设备仍有 HP；不要求清空剩余尸群或等候生成队列结束。
+          if (level.wallHp > 0 && now - level.eventAt >= LEVEL4_REPAIR_MS) completeLevel();
+          return;
+        }
+        return;
+      }
+      return;
+    }
+    // ===== 第二关「加入军队」事件流 =====
+    if (level.levelId === LEVEL2_ID) {
+      if (level.sceneIndex === 0) {
+        const gasX = LEVEL2_GAS_FX * g.worldW;
+        if (level.eventStage === "none") {
+          // 任务「到达加油站」：杀够拦路僵尸并抵达加油站 → 触发伏击
+          if (level.sceneKills >= LEVEL2_ROAD_KILLS && g.player.x >= gasX - 140) {
+            level.eventStage = "ambush";
+            level.eventAt = now;
+            level.eventCount = 0;
+            level.taskIndex = 1;
+            level.taskDoneFlashUntil = now + 1600;
+            sound.taskComplete();
+          }
+          return;
+        }
+        if (level.eventStage === "ambush") {
+          // 便利店陆续涌出 30 只僵尸（每 210ms 一只，每 3 只夹 1 只头盔 → 10 头盔 + 20 普通）
+          if (level.eventCount < LEVEL2_AMBUSH_TOTAL && now >= level.eventAt + level.eventCount * 210) {
+            const kind: ZombieKind = level.eventCount % 3 === 2 ? "helmet" : "normal";
+            g.zombies.push(makeLevelZombie(5000 + level.eventCount, kind, gasX + 150 + Math.random() * 40 - 20, 300 + ((level.eventCount * 53) % 180), now));
+            level.eventCount += 1;
+            if (level.eventCount % 6 === 1) sound.zombieGrowl({ volume: 0.7 });
+          }
+          // 坚持 10 秒 → 军车自屏幕左侧驶来，终点 = 触发时刻玩家位置上方
+          if (now >= level.eventAt + LEVEL2_SURVIVE_MS) {
+            level.eventStage = "truck";
+            level.eventAt = now;
+            level.truckStopX = g.player.x + 30;
+            level.truckY = Math.max(300, Math.min(470, g.player.y - 150));
+            level.truckX = level.truckStopX - 1100;
+            sound.truckEngine();
+          }
+          return;
+        }
+        if (level.eventStage === "truck") {
+          // 军车行驶动画（2.8s 缓出刹车），停稳后士兵下车
+          const stopX = level.truckStopX;
+          const t = Math.min(1, (now - level.eventAt) / 2800);
+          const ease = 1 - (1 - t) * (1 - t);
+          level.truckX = stopX - 1100 * (1 - ease);
+          if (t >= 1) {
+            level.eventStage = "soldiers";
+            level.eventAt = now;
+            level.eventCount = 0;
+            g.player.invulnerableUntil = now + 2500;
+            sound.truckBrake();
+          }
+          return;
+        }
+        if (level.eventStage === "soldiers") {
+          // 5 名士兵依次下车（战斗型 NPC），清场后进入对话
+          if (level.eventCount < LEVEL2_SOLDIERS && now >= level.eventAt + 500 + level.eventCount * 420) {
+            // 士兵在停靠军车旁（即玩家近旁）依次下车
+            const disembarkY = Math.max(ROAD_TOP + 60, Math.min(ROAD_BOTTOM - 30, level.truckY + 60 + level.eventCount * 38));
+            g.npcs.push(makeLevelNpc(level.truckX + 60, disembarkY, true));
+            level.eventCount += 1;
+          }
+          if (level.eventCount >= LEVEL2_SOLDIERS && g.zombies.length === 0) {
+            level.eventStage = "dialog";
+            level.dialog = {
+              lines: [
+                { speaker: "士兵", text: "兄弟，我建议你加入我们。" },
+                { speaker: "你", text: "行。" },
+              ],
+              index: 0,
+            };
+          }
+          return;
+        }
+        if (level.eventStage === "dialog") {
+          // 对话被玩家推进完毕 → 完成任务并转场军事基地
+          if (!level.dialog) goScene(1);
+          return;
+        }
+        return;
+      }
+      // 场景 2 · 军事基地：到达军营 → 通关
+      if (task.id === "reach-barracks" && g.player.x >= LEVEL2_BARRACKS_FX * g.worldW - 60) completeLevel();
+      return;
+    }
     switch (task.id) {
       case "take-knife":
         if (g.melee === "fruitknife") advance();
@@ -4929,13 +8897,19 @@ export function DeadRoadGame() {
     const w = p.weapon;
     if (w === "fists") return;
     const nextId = g.pickups.reduce((max, pk) => Math.max(max, pk.id), 0) + 1;
-    g.pickups.push({ id: nextId, weapon: w, x: p.x, y: p.y + 12, onTable: false, taken: false });
+    g.pickups.push({ id: nextId, sceneIndex: g.level?.sceneIndex ?? 0, weapon: w, x: p.x, y: p.y + 12, onTable: false, taken: false });
     if (MELEE_WEAPONS.has(w)) {
       g.melee = "fists";
-      p.weapon = g.loadout[0] !== "fists" ? g.loadout[0] : "fists";
+      p.weapon = g.loadout.find((weapon) => weapon !== "fists") ?? "fists";
     } else {
-      g.loadout = ["fists", "fists"];
-      p.weapon = g.melee !== "fists" ? g.melee : "fists";
+      // 两个相同槽位表示同一把单武器；不同槽位时只丢掉手里这一把，另一把仍保留。
+      if (g.loadout[0] === w && g.loadout[1] === w) {
+        g.loadout = ["fists", "fists"];
+      } else {
+        const droppedSlot = g.loadout[0] === w ? 0 : g.loadout[1] === w ? 1 : -1;
+        if (droppedSlot >= 0) g.loadout[droppedSlot] = "fists";
+      }
+      p.weapon = g.loadout.find((weapon) => weapon !== "fists") ?? (g.melee !== "fists" ? g.melee : "fists");
     }
     p.reloadStartedAt = 0;
     p.reloadingUntil = 0;
@@ -4951,7 +8925,7 @@ export function DeadRoadGame() {
     let best: LevelPickup | null = null;
     let bestDistSq = 120 * 120;
     for (const pk of g.pickups) {
-      if (pk.taken) continue;
+      if (pk.taken || pk.sceneIndex !== g.level?.sceneIndex) continue;
       const distSq = (p.x - pk.x) * (p.x - pk.x) + (p.y - pk.y) * (p.y - pk.y);
       if (distSq < bestDistSq) { bestDistSq = distSq; best = pk; }
     }
@@ -4964,8 +8938,14 @@ export function DeadRoadGame() {
       if (prev !== "fists") best.weapon = prev;
       else best.taken = true;
     } else {
-      const prev = g.loadout[0];
-      g.loadout = [w, w];
+      const currentSlot = !MELEE_WEAPONS.has(p.weapon)
+        ? (g.loadout[0] === p.weapon ? 0 : g.loadout[1] === p.weapon ? 1 : -1)
+        : -1;
+      const emptySlot = g.loadout[0] === "fists" ? 0 : g.loadout[1] === "fists" ? 1 : -1;
+      const pickupSlot = currentSlot >= 0 ? currentSlot : emptySlot >= 0 ? emptySlot : 0;
+      const prev = g.loadout[pickupSlot];
+      if (prev !== "fists" && g.loadout[0] === prev && g.loadout[1] === prev) g.loadout = [w, w];
+      else g.loadout[pickupSlot] = w;
       p.weapon = w;
       p.ammo[w] = WEAPONS[w].magazine;
       p.reloadStartedAt = 0;
@@ -5359,7 +9339,7 @@ export function DeadRoadGame() {
   const deploySelectedItem = useCallback((now: number) => {
     const g = stateRef.current;
     const key = g.selectedItem;
-    if (!key || key === "airstrike" || g.itemInventory[key] <= 0 || screenRef.current !== "playing") return false;
+    if (!key || key === "airstrike" || g.itemInventory[key] <= 0 || screenRef.current !== "playing" || levelInputFrozen(g)) return false;
     const target = itemTargetInFront(g, mouseRef.current, key);
     const id = Math.floor(now * 1000 + Math.random() * 999);
     g.itemInventory[key] -= 1;
@@ -5429,6 +9409,7 @@ export function DeadRoadGame() {
 
   const kick = useCallback((now: number) => {
     const g = stateRef.current;
+    if (levelInputFrozen(g)) return;
     const p = g.player;
     if (now - p.lastKick < 760) return;
     p.lastKick = now;
@@ -5447,7 +9428,7 @@ export function DeadRoadGame() {
           const scale = (z.radius / 25) * CHARACTER_SCALE;
           const impactX = z.x;
           const impactY = z.y - 40 * scale;
-          z.hp -= 11 + g.day * 0.75;
+          z.hp -= (11 + g.day * 0.75) * (1 - kickDamageReduction(z, "legs"));
           z.wounds.push({ x: 0, y: -40, region: "legs", size: 4.5 });
           if (z.wounds.length > 7) z.wounds.shift();
           z.x += Math.cos(kickAngle) * 82;
@@ -5497,11 +9478,11 @@ export function DeadRoadGame() {
     }, 285);
   }, []);
 
-  const damageZombie = useCallback((g: GameState, z: Zombie, damage: number, now: number, angle: number, hit?: ZombieHit, sourceWeapon?: WeaponKey): boolean => {
+  const damageZombie = useCallback((g: GameState, z: Zombie, damage: number, now: number, angle: number, hit?: ZombieHit, sourceWeapon?: WeaponKey, bypassReduction = false, sourceOverride?: DamageSourceOverride): boolean => {
     const region = hit?.region ?? "body";
     // 盔甲/盾牌格挡判定（仅枪械实弹；爆炸与火焰不传 sourceWeapon、近战为劈砍，均不经此判定）：
     // 摩托头盔只露眼缝可爆头；盾兵只有观察窗能命中；重甲只有胸口能造成伤害——被挡下时冒金属火花、无伤害
-    if (hit && sourceWeapon && !MELEE_WEAPONS.has(sourceWeapon) && z.hp > 0) {
+    if (hit && (sourceOverride || (sourceWeapon && !MELEE_WEAPONS.has(sourceWeapon))) && z.hp > 0) {
       const faceDir = g.player.x < z.x ? -1 : 1;
       let blocked = false;
       if ((z.kind === "helmet" || z.kind === "helmetRunner") && region === "head") {
@@ -5510,11 +9491,11 @@ export function DeadRoadGame() {
         // 全身金属盾：仅眼平观察窗 (faceDir*22, -117) 可命中，判定窗与盾面玻璃窗一致
         blocked = Math.hypot(hit.localX - faceDir * 22, hit.localY + 117) > 6;
       } else if (z.kind === "juggernaut") {
-        blocked = !(region === "body" && Math.abs(hit.localX) <= 9 && hit.localY >= -96 && hit.localY <= -64);
+        blocked = !isJuggernautChestWeakHit(region, hit.localX, hit.localY);
       }
       if (blocked) {
         // 燧石66 磷燃弹：格挡只挡直接伤害，挡不住点燃——被头盔/盾牌/重甲挡下同样灼烧致死
-        if (WEAPONS[sourceWeapon].ignite) z.ignitedAt = now;
+        if (sourceWeapon && WEAPONS[sourceWeapon].ignite) z.ignitedAt = now;
         emitArmorSpark(g, hit.x, hit.y, now, angle);
         g.stats.shotsHit += 1;
         if (z.kind === "shield" && z.shieldIntact) {
@@ -5553,11 +9534,18 @@ export function DeadRoadGame() {
       bone: regionWounds >= 2,
     });
     if (z.wounds.length > 7) z.wounds.splice(0, z.wounds.length - 7);
-    // 伤害减免：仅实弹/近战直接伤害参与（爆炸与火焰直接扣血、完全无视减免）；穿透武器按梯度豁免减免
-    const reduction = z.damageReduction > 0 && sourceWeapon ? z.damageReduction * (1 - armorPenBypass(sourceWeapon)) : 0;
+    // 护甲减免：实弹/近战按穿透梯度；第六关 Boss 全身至少减伤 50%，胸腹（body）减伤 70%。
+    const penetrationBypass = sourceOverride?.penetrationBypass ?? (sourceWeapon ? armorPenBypass(sourceWeapon) : 0);
+    const armorReduction = z.damageReduction > 0
+      ? sourceWeapon || sourceOverride
+        ? z.damageReduction * (1 - penetrationBypass)
+        : z.warehouseArmor ? z.damageReduction : 0
+      : 0;
+    const bossReduction = giantMutantDamageReduction(z, region);
+    const reduction = bypassReduction ? 0 : Math.max(armorReduction, bossReduction);
     z.hp -= damage * damageMultiplier * (1 - reduction);
-    // 打腿 50% 概率倒地（重甲僵尸全身重铠，免疫此机制）
-    if (region === "legs" && z.kind !== "juggernaut" && Math.random() < .5) {
+    // 打腿 50% 概率倒地（重甲僵尸与第六关巨型 Boss 免疫此机制）
+    if (region === "legs" && z.kind !== "juggernaut" && z.bossKind !== "giantMutant" && Math.random() < .5) {
       const currentPose = zombieKnockPose(z, now);
       if (!currentPose.active) {
         z.knockedDownAt = now;
@@ -5575,7 +9563,7 @@ export function DeadRoadGame() {
       sound.zombieFall({ volume: distanceVolume(z.x, g.player.x) });
     }
     // 制动力：命中武器按 stopping 系数产生击退位移与短暂减速停滞（爆炸类不传 sourceWeapon，由爆炸击退负责）
-    const stopping = sourceWeapon ? WEAPON_HANDLING[sourceWeapon].stopping : 0;
+    const stopping = sourceOverride?.stopping ?? (sourceWeapon ? WEAPON_HANDLING[sourceWeapon].stopping : 0);
     z.x += Math.cos(angle) * (6 + stopping * 20);
     z.y += Math.sin(angle) * (6 + stopping * 20) * 0.65;
     if (stopping > 0) z.staggeredUntil = Math.max(z.staggeredUntil, now + 90 + stopping * 260);
@@ -5626,7 +9614,8 @@ export function DeadRoadGame() {
     kind: BlastKind,
   ) => {
     const angle = Math.atan2(z.y - blastY, z.x - blastX);
-    damageZombie(g, z, damage, now, angle);
+    // 全模式统一规则：爆炸冲击直接绕过僵尸自身与 Boss 的全部减伤。
+    damageZombie(g, z, damage, now, angle, undefined, undefined, true);
     // 爆炸冲击波全额震伤完好盾牌（爆炸是破盾的硬 counter；金属盾不怕火焰，燃烧瓶/点燃不伤盾）；
     // 归零即碎裂——若同一发爆炸同时击杀僵尸，死亡结算时 shieldIntact 已为 false，不会再掉落完整盾牌
     if (z.shieldIntact) {
@@ -5648,7 +9637,7 @@ export function DeadRoadGame() {
       detachZombieLimb(g, z, limb, blastX, blastY, now);
     }
     const missingLegs = Number(z.missingLimbs.has("leftLeg")) + Number(z.missingLimbs.has("rightLeg"));
-    if (missingLegs > 0) {
+    if (missingLegs > 0 && z.bossKind !== "giantMutant") {
       z.knockedDownAt = now;
       z.knockedDownUntil = Math.max(z.knockedDownUntil, now + 3000 + missingLegs * 900);
       z.knockFacing = Math.cos(angle) >= 0 ? 1 : -1;
@@ -5660,6 +9649,42 @@ export function DeadRoadGame() {
 
   const attack = useCallback((now: number) => {
     const g = stateRef.current;
+    if (levelInputFrozen(g)) return;
+    if (isLevel8Driving(g) && g.level) {
+      const level = g.level;
+      if (now < level.vehicleReloadUntil || now - level.vehicleLastShot < LEVEL8_HMG_FIRE_MS) return;
+      if (level.vehicleAmmo <= 0) {
+        level.vehicleReloadUntil = now + LEVEL8_HMG_RELOAD_MS;
+        sound.reload(LEVEL8_HMG_RELOAD_MS);
+        return;
+      }
+      level.vehicleAmmo -= 1;
+      level.vehicleLastShot = now;
+      const originX = level.truckX;
+      const originY = level.truckY - 180;
+      const aimAngle = Math.atan2(mouseRef.current.y - originY, mouseRef.current.x + g.cameraX - originX);
+      level.vehicleAimAngle = aimAngle;
+      const endX = originX + Math.cos(aimAngle) * LEVEL8_HMG_RANGE;
+      const endY = originY + Math.sin(aimAngle) * LEVEL8_HMG_RANGE;
+      const hits = g.zombies
+        .map((zombie) => ({ zombie, impact: hitZombieRegion(originX, originY, endX, endY, zombie, now) }))
+        .filter((entry): entry is { zombie: Zombie; impact: ZombieHit } => entry.impact !== null)
+        .sort((a, b) => a.impact.t - b.impact.t)
+        .slice(0, LEVEL8_HMG_PENETRATION);
+      let tracerX = endX;
+      let tracerY = endY;
+      for (const { zombie, impact } of hits) {
+        tracerX = impact.x; tracerY = impact.y;
+        const blocked = damageZombie(g, zombie, LEVEL8_HMG_DAMAGE, now, aimAngle, impact, undefined, false, {
+          penetrationBypass: LEVEL8_HMG_PENETRATION_BYPASS, stopping: LEVEL8_HMG_STOPPING,
+        });
+        if (blocked) break;
+      }
+      g.tracers.push({ x1: originX + Math.cos(aimAngle) * 136, y1: originY + Math.sin(aimAngle) * 136, x2: tracerX, y2: tracerY, until: now + 95, color: "#f6d267" });
+      g.screenShakeUntil = now + 95;
+      sound.gunshot("m240l", { fireRateMs: LEVEL8_HMG_FIRE_MS });
+      return;
+    }
     const p = g.player;
     const weapon = WEAPONS[p.weapon];
     const origin = playerGunOrigin(p);
@@ -5697,11 +9722,12 @@ export function DeadRoadGame() {
       return;
     }
 
-    p.lastShot = now;
     if (p.ammo[p.weapon] <= 0) {
-      sound.dryFire();
+      // 所有模式统一：空弹匣时左键与 R 键都启动换弹；仍有余弹时左键只负责射击。
+      reloadRef.current(now);
       return;
     }
+    p.lastShot = now;
     p.ammo[p.weapon] -= 1;
     p.lastMuzzleFlash = now;
     // 后坐力（纯视觉）：记录击发时刻；连发热度先按距上次击发冷却再叠加，自然累积且封顶不过度
@@ -5773,16 +9799,22 @@ export function DeadRoadGame() {
       const angle = p.angle + (Math.random() - .5) * (weapon.spread || 0);
       const endX = origin.x + Math.cos(angle) * weapon.range;
       const endY = origin.y + Math.sin(angle) * weapon.range;
+      // 第三关夜防：子弹仅经射击孔越过围墙，否则止于墙面（命中判定只取墙前目标）
+      const wallBlock = level3WallBlock(g, origin.x, origin.y, endX, endY);
+      const wallT = wallBlock ? (wallBlock.x - origin.x) / (endX - origin.x || 1e-6) : Infinity;
       const hits = g.zombies
         .map((z) => ({ z, impact: hitZombieRegion(origin.x, origin.y, endX, endY, z, now) }))
-        .filter((entry): entry is { z: Zombie; impact: ZombieHit } => entry.impact !== null)
+        .filter((entry): entry is { z: Zombie; impact: ZombieHit } => entry.impact !== null && entry.impact.t < wallT)
         .sort((a, b) => a.impact.t - b.impact.t)
         .slice(0, weapon.penetration);
-      // 逐目标结算；子弹被盔甲/盾牌挡下时终止穿透（曳光止于挡下点）
-      let stoppedAt: { x: number; y: number } | null = null;
+      // 逐目标结算；子弹被盔甲/盾牌挡下时终止穿透（曳光止于挡下点；无命中时止于围墙/射程）
+      let stoppedAt: { x: number; y: number } | null = wallBlock;
       for (const [index, { z, impact }] of hits.entries()) {
         const blocked = damageZombie(g, z, weaponDamage(p.weapon) * (1 - index * .2), now, angle, impact, p.weapon);
         if (blocked) { stoppedAt = { x: impact.x, y: impact.y }; break; }
+      }
+      if (wallBlock && stoppedAt === wallBlock) {
+        for (let i = 0; i < 4; i++) g.particles.push({ x: wallBlock.x, y: wallBlock.y, vx: -40 - Math.random() * 90, vy: -60 + Math.random() * 120, until: now + 280, color: "#c9c2a8", size: 2 + Math.random() * 2.5 });
       }
       const muzzle = weaponMuzzleOffset(p.weapon);
       g.tracers.push({ x1: origin.x + Math.cos(angle) * muzzle, y1: origin.y + Math.sin(angle) * muzzle, x2: stoppedAt?.x ?? endX, y2: stoppedAt?.y ?? endY, until: now + 130, color: weapon.color });
@@ -5795,13 +9827,19 @@ export function DeadRoadGame() {
       const angle = p.angle + (Math.random() - 0.5) * (weapon.spread || 0.035);
       const endX = origin.x + Math.cos(angle) * weapon.range;
       const endY = origin.y + Math.sin(angle) * weapon.range;
+      // 第三关夜防：子弹仅经射击孔越过围墙，否则止于墙面
+      const wallBlock = level3WallBlock(g, origin.x, origin.y, endX, endY);
+      const wallT = wallBlock ? (wallBlock.x - origin.x) / (endX - origin.x || 1e-6) : Infinity;
       let hit: { zombie: Zombie; impact: ZombieHit } | undefined;
       for (const z of g.zombies) {
         const impact = hitZombieRegion(origin.x, origin.y, endX, endY, z, now);
-        if (impact && (!hit || impact.t < hit.impact.t)) hit = { zombie: z, impact };
+        if (impact && impact.t < wallT && (!hit || impact.t < hit.impact.t)) hit = { zombie: z, impact };
       }
-      const tracerEndX = hit ? hit.impact.x : endX;
-      const tracerEndY = hit ? hit.impact.y : endY;
+      const tracerEndX = hit ? hit.impact.x : wallBlock?.x ?? endX;
+      const tracerEndY = hit ? hit.impact.y : wallBlock?.y ?? endY;
+      if (wallBlock && !hit) {
+        for (let i = 0; i < 4; i++) g.particles.push({ x: wallBlock.x, y: wallBlock.y, vx: -40 - Math.random() * 90, vy: -60 + Math.random() * 120, until: now + 280, color: "#c9c2a8", size: 2 + Math.random() * 2.5 });
+      }
       const muzzle = weaponMuzzleOffset(p.weapon);
       g.tracers.push({ x1: origin.x + Math.cos(angle) * muzzle, y1: origin.y + Math.sin(angle) * muzzle, x2: tracerEndX, y2: tracerEndY, until: now + 75, color: weapon.color });
       if (hit) damageZombie(g, hit.zombie, weaponDamage(p.weapon), now, angle, hit.impact, p.weapon);
@@ -5811,6 +9849,12 @@ export function DeadRoadGame() {
 
   const reload = useCallback((now: number) => {
     const g = stateRef.current;
+    if (isLevel8Driving(g) && g.level) {
+      if (g.level.vehicleAmmo >= LEVEL8_HMG_MAGAZINE || now < g.level.vehicleReloadUntil) return;
+      g.level.vehicleReloadUntil = now + LEVEL8_HMG_RELOAD_MS;
+      sound.reload(LEVEL8_HMG_RELOAD_MS);
+      return;
+    }
     const p = g.player;
     const weapon = WEAPONS[p.weapon];
     if (MELEE_WEAPONS.has(p.weapon) || p.ammo[p.weapon] === weapon.magazine || now < p.reloadingUntil) return;
@@ -5843,12 +9887,8 @@ export function DeadRoadGame() {
       });
       if (g.groundProps.length > MAX_GROUND_PROPS) g.groundProps.splice(0, g.groundProps.length - MAX_GROUND_PROPS);
     }
-    window.setTimeout(() => {
-      if (stateRef.current.player === p && performance.now() >= p.reloadingUntil) {
-        p.ammo[p.weapon] = WEAPONS[p.weapon].magazine;
-      }
-    }, weapon.reload);
   }, []);
+  useEffect(() => { reloadRef.current = reload; }, [reload]);
 
   // 搭档战斗逻辑：每帧驱动猎犬/警察/无人机的移动与自动攻击；搭档不会死亡、不被僵尸选为目标
   const updatePartner = useCallback((g: GameState, now: number, dt: number) => {
@@ -5908,7 +9948,7 @@ export function DeadRoadGame() {
         damageZombie(g, target.zombie, HOUND_DAMAGE, now, f.angle);
         // 扑倒：与打腿击倒共用 zombieKnockPose 倒地-爬起系统（倒地 3 秒后进入爬起流程）
         const z = target.zombie;
-        if (z.hp > 0) {
+        if (z.hp > 0 && z.bossKind !== "giantMutant") {
           if (!zombieKnockPose(z, now).active) {
             z.knockedDownAt = now;
             z.knockFacing = Math.cos(f.angle) >= 0 ? 1 : -1;
@@ -6035,6 +10075,158 @@ export function DeadRoadGame() {
     sound.gunshot("m16", { fireRateMs: DRONE_INTERVAL_MS, volume: 0.45 * distanceVolume(f.x, p.x) });
   }, [damageZombie]);
 
+  // 关卡 NPC AI：战斗型（救援小队）复用警察搭档体系——索敌/保持中距离射击位/M16 点射/弹匣打空换弹；
+  // 巡逻型（军事基地）在锚点附近自主游走驻守（非战斗）
+  const updateLevelNpcs = useCallback((g: GameState, now: number, dt: number) => {
+    if (g.mode !== "level" || g.npcs.length === 0) return;
+    const p = g.player;
+    for (const npc of g.npcs) {
+      if (npc.hp <= 0) continue;
+      const f = npc.field;
+      const wkey = npc.weapon;
+      const wspec = WEAPONS[wkey];
+      if (f.reloadingUntil !== 0 && now >= f.reloadingUntil) {
+        f.ammo = wspec.magazine;
+        f.reloadingUntil = 0;
+        f.reloadStartedAt = 0;
+        f.reloading = false;
+      }
+      if (npc.scripted) continue;
+      const moveToward = (goalX: number, goalY: number, speed: number, arrive: number) => {
+        const dx = goalX - f.x;
+        const dy = goalY - f.y;
+        const d = Math.hypot(dx, dy);
+        f.moving = d > arrive;
+        if (d > arrive) {
+          const step = Math.min(d - arrive, speed * dt);
+          f.x += (dx / d) * step;
+          f.y += (dy / d) * step;
+        }
+        return d;
+      };
+      if (npc.combat) {
+        // 索敌：燧石66 狙击手优先高价值目标（当前 HP 最高者，同 HP 取近）；其余就近射击
+        let target: Zombie | undefined;
+        if (wkey === "flint66") {
+          let bestHp = 0;
+          let bestHpDist = Infinity;
+          for (const z of g.zombies) {
+            if (z.hp <= 0) continue;
+            const d = Math.hypot(z.x - f.x, z.y - f.y);
+            if (z.hp > bestHp || (z.hp === bestHp && d < bestHpDist)) { bestHp = z.hp; bestHpDist = d; target = z; }
+          }
+        } else {
+          let bestDist = 820;
+          for (const z of g.zombies) {
+            if (z.hp <= 0) continue;
+            const d = Math.hypot(z.x - f.x, z.y - f.y);
+            if (d < bestDist) { bestDist = d; target = z; }
+          }
+        }
+        if (target) {
+          // hold（夜防就位）：钉在锚点不动，只转向射击；否则保持 320 环绕距离机动
+          if (!npc.hold) {
+            const formationIndex = npc.squadIndex ?? 0;
+            const side = Math.atan2(f.y - target.y, f.x - target.x);
+            const goalX = npc.followPlayer
+              ? Math.max(40, Math.min(g.worldW - 40, p.x - 72 - formationIndex * 54))
+              : Math.max(40, Math.min(g.worldW - 40, target.x + Math.cos(side) * 320));
+            const goalY = npc.followPlayer
+              ? Math.max(ROAD_TOP + 40, Math.min(ROAD_BOTTOM - 10, p.y + (formationIndex === 0 ? -62 : 62)))
+              : Math.max(ROAD_TOP + 40, Math.min(ROAD_BOTTOM - 10, target.y + Math.sin(side) * 320 * 0.7));
+            moveToward(goalX, goalY, 250, 26);
+            f.x = Math.max(40, Math.min(g.worldW - 40, f.x));
+            f.y = Math.max(ROAD_TOP + 40, Math.min(ROAD_BOTTOM - 10, f.y));
+          }
+          const shoulderY = f.y - 88 * CHARACTER_SCALE;
+          f.angle = Math.atan2(zombieBodyY(target) - shoulderY, target.x - f.x);
+          if (f.reloadingUntil > now) continue;
+          if (f.ammo <= 0) {
+            f.reloading = true;
+            f.reloadStartedAt = now;
+            f.reloadingUntil = now + wspec.reload;
+            sound.reload(wspec.reload);
+            continue;
+          }
+          // 射速节奏：M16 点射 1.6×、PKM 全自动压制 1.15×、燧石66 栓动 1.4×（射击+拉栓循环）
+          const fireRateMs = wspec.fireRate * (wkey === "pkm" ? 1.15 : wkey === "flint66" ? 1.4 : 1.6);
+          if (now - f.attackAt < fireRateMs) continue;
+          f.attackAt = now;
+          f.muzzleAt = now;
+          f.recoilHeat = Math.min(1, f.recoilHeat * Math.max(0, 1 - (now - f.recoilAt) / RECOIL_HEAT_COOL_MS) + WEAPON_RECOIL[wkey].heat);
+          f.recoilAt = now;
+          f.ammo -= 1;
+          // PKM 压制扫射：弹道带散布覆盖密集区域；燧石66/M16 为精准单线
+          const shotAngle = f.angle + (wkey === "pkm" ? (Math.random() - .5) * .09 : 0);
+          const originX = f.x + Math.cos(shotAngle) * 20;
+          const originY = shoulderY + Math.sin(shotAngle) * 8;
+          const endX = originX + Math.cos(shotAngle) * wspec.range;
+          const endY = originY + Math.sin(shotAngle) * wspec.range;
+          // 穿透：燧石66 贯穿 5 目标（沿弹道由近及远依次结算，命中点燃由 damageZombie 的 ignite 机制处理），其余武器只取首个命中
+          const pen = wspec.penetration ?? 1;
+          const hits: Array<{ zombie: Zombie; impact: ZombieHit }> = [];
+          for (const z of g.zombies) {
+            if (z.hp <= 0) continue;
+            const impact = hitZombieRegion(originX, originY, endX, endY, z, now);
+            if (impact) hits.push({ zombie: z, impact });
+          }
+          hits.sort((a, b) => a.impact.t - b.impact.t);
+          const struck = hits.slice(0, pen);
+          const lastStruck = struck[struck.length - 1];
+          g.tracers.push({
+            x1: originX + Math.cos(shotAngle) * 18,
+            y1: originY + Math.sin(shotAngle) * 18,
+            x2: lastStruck ? lastStruck.impact.x : endX,
+            y2: lastStruck ? lastStruck.impact.y : endY,
+            until: now + 75,
+            color: wspec.color,
+          });
+          for (const s of struck) damageZombie(g, s.zombie, weaponDamage(wkey), now, shotAngle, s.impact, wkey);
+          sound.gunshot(wkey, { fireRateMs, volume: 0.5 * distanceVolume(f.x, p.x) });
+        } else {
+          // 无目标：第六关突击队回到玩家身后编队，其余士兵回到下车点驻守。
+          const formationIndex = npc.squadIndex ?? 0;
+          const idleX = npc.followPlayer ? p.x - 72 - formationIndex * 54 : npc.anchorX;
+          const idleY = npc.followPlayer ? p.y + (formationIndex === 0 ? -62 : 62) : npc.anchorY;
+          const travelAngle = Math.atan2(idleY - f.y, idleX - f.x);
+          moveToward(idleX, idleY, npc.followPlayer ? 250 : 190, 12);
+          f.angle = f.moving ? travelAngle : -0.2;
+        }
+        continue;
+      }
+      // 驻守型（非战斗 hold，如第四关维修通讯设备的队友）：钉在锚点，面向作业对象（右侧）
+      if (npc.hold) {
+        moveToward(npc.anchorX, npc.anchorY, 190, 6);
+        f.angle = 0.12;
+        continue;
+      }
+      // 巡逻型：锚点附近随机选点游走，到点驻留片刻再换点
+      const arrived = Math.hypot(f.roamX - f.x, f.roamY - f.y) < 14;
+      if (arrived) {
+        f.moving = false;
+        if (now >= f.nextRoamAt) {
+          f.roamX = Math.max(60, Math.min(g.worldW - 60, npc.anchorX + (Math.random() * 2 - 1) * 200));
+          f.roamY = Math.max(ROAD_TOP + 60, Math.min(ROAD_BOTTOM - 20, npc.anchorY + (Math.random() * 2 - 1) * 90));
+          f.nextRoamAt = now + 1600 + Math.random() * 2600;
+        }
+      } else {
+        const d = moveToward(f.roamX, f.roamY, 150, 12);
+        if (d > 4) f.angle = Math.atan2(f.roamY - f.y, f.roamX - f.x);
+      }
+    }
+    g.npcs = g.npcs.filter((npc) => npc.hp > 0);
+  }, [damageZombie]);
+
+  // 关卡对话推进（任意键/点击）：台词读完即关闭，后续转场由任务链检测
+  const advanceLevelDialog = useCallback(() => {
+    const g = stateRef.current;
+    const dialog = g.level?.dialog;
+    if (!dialog) return;
+    dialog.index += 1;
+    if (dialog.index >= dialog.lines.length && g.level) g.level.dialog = null;
+    sound.uiClick();
+  }, []);
+
   useEffect(() => {
     const keyDown = (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
@@ -6082,6 +10274,11 @@ export function DeadRoadGame() {
         return;
       }
       if (screenRef.current === "playing" && !pausedRef.current) {
+        // 关卡对话中：任意键推进台词，其余操作挂起
+        if (stateRef.current.mode === "level" && stateRef.current.level?.dialog) {
+          if (!event.repeat) advanceLevelDialog();
+          return;
+        }
         if (key === "f") kick(performance.now());
         if (key === "g" && !event.repeat && stateRef.current.mode === "level") { dropWeapon(); return; }
         if (key === "q") cycleWeapon();
@@ -6101,7 +10298,7 @@ export function DeadRoadGame() {
       window.removeEventListener("keydown", keyDown);
       window.removeEventListener("keyup", keyUp);
     };
-  }, [callAirstrike, closeCodex, closeLevels, cycleWeapon, dropWeapon, flipCodex, kick, openRangeShop, reload, resumeRange, saveProgressAndMenu, selectItem, toggleMute, togglePause]);
+  }, [advanceLevelDialog, callAirstrike, closeCodex, closeLevels, cycleWeapon, dropWeapon, flipCodex, kick, openRangeShop, reload, resumeRange, saveProgressAndMenu, selectItem, toggleMute, togglePause]);
 
   const pointerPosition = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
     // 以位图实际尺寸（动态 worldW × H）按比例换算：CSS 等比缩放下鼠标映射恒正确
@@ -6197,8 +10394,43 @@ export function DeadRoadGame() {
 
     // 关卡道具（桌子/废弃车辆/拾取物/出口标记）：背景之后、角色之前
     if (g.mode === "level") drawLevelProps(ctx, g, now);
+    // 关卡载具演出：第二/四关军车；第五关隧道入口军用直升机。
+    if (g.mode === "level" && g.level && g.level.truckX >= 0) {
+      if (g.level.levelId === LEVEL8_ID && g.level.sceneIndex === 2) {
+        drawLevel8ArmoredVehicle(ctx, g.level, now);
+      } else if (g.level.levelId === LEVEL5_ID && g.level.sceneIndex === 2) {
+        drawMilitaryHelicopter(ctx, g.level.truckX, g.level.truckY >= 0 ? g.level.truckY : 500, g.level.eventStage === "flight", now);
+      } else {
+        drawMilitaryTruck(ctx, g.level.truckX, g.level.truckY >= 0 ? g.level.truckY : 360, g.level.eventStage === "truck" || g.level.eventStage === "ride", now);
+      }
+    }
+    if (g.mode === "level") {
+      for (const npc of g.npcs) {
+        if (npc.hp <= 0) continue;
+        drawLevelSoldier(ctx, npc.field, now, npc.weapon);
+        if (npc.carryingCrate) {
+          ctx.save(); ctx.translate(npc.field.x, npc.field.y - 88);
+          ctx.fillStyle = "#7a5b35"; ctx.fillRect(-34, -24, 68, 48);
+          ctx.strokeStyle = "#3d2d1d"; ctx.lineWidth = 4; ctx.strokeRect(-34, -24, 68, 48);
+          ctx.strokeStyle = "#b38a4f"; ctx.lineWidth = 5;
+          ctx.beginPath(); ctx.moveTo(-30, -9); ctx.lineTo(30, -9); ctx.moveTo(-30, 11); ctx.lineTo(30, 11); ctx.stroke();
+          drawText(ctx, "物资", 0, 5, 13, "#ead8ad", "center");
+          ctx.restore();
+        }
+        if (npc.targetable) {
+          const ratio = Math.max(0, npc.hp / npc.maxHp);
+          ctx.fillStyle = "rgba(8,12,14,.78)";
+          ctx.fillRect(npc.field.x - 28, npc.field.y - 154, 56, 7);
+          ctx.fillStyle = ratio > .35 ? "#62d889" : "#e05a45";
+          ctx.fillRect(npc.field.x - 27, npc.field.y - 153, 54 * ratio, 5);
+        }
+      }
+    }
 
     const p = g.player;
+    // 第三关开场演出（睡卧/起身阶段）：隐藏玩家模型，由床铺演出人物接管
+    const cutsceneHidden = levelPlayerHidden(g, now);
+    if (!cutsceneHidden) {
     const armor = ARMORS[p.armor];
     const reloadProgress = p.reloadingUntil > now && p.reloadStartedAt > 0
       ? Math.min(1, (now - p.reloadStartedAt) / Math.max(1, p.reloadingUntil - p.reloadStartedAt))
@@ -6549,6 +10781,7 @@ export function DeadRoadGame() {
     }
     ctx.restore();
     ctx.restore();
+    }
 
     // 搭档绘制：猎犬 / 警察 / 无人机（紧随玩家之后，僵尸与特效在上层）
     if (g.partner === "hound") drawHound(ctx, g.partnerField, now);
@@ -6654,6 +10887,8 @@ export function DeadRoadGame() {
     }
 
     for (const barricade of g.barricades) {
+      // 剧情结构判定段只承伤不渲染；各场景函数负责围墙、通讯设备与隧道围栏视觉。
+      if (isScriptedLevelStructure(barricade.id)) continue;
       ctx.save(); ctx.translate(barricade.x, barricade.y);
       drawBarricadeModel(ctx);
       const ratio = Math.max(0, barricade.hp / barricade.maxHp);
@@ -6691,8 +10926,10 @@ export function DeadRoadGame() {
       ctx.fill();
       ctx.translate(pose.body.originX - z.x, pose.body.originY - z.y);
       ctx.rotate(pose.body.rotation);
-      // 呕吐僵尸喷吐前摇：上身后仰蓄力（550ms），喉部绿光膨胀、嘴角滴落毒涎
-      const spitWindup = z.kind === "spitter" && z.spitAt > 0 ? 1 - Math.max(0, Math.min(1, (z.spitAt - now) / 550)) : 0;
+      // 呕吐僵尸与巨型变异体喷吐前摇：上身后仰蓄力，喉部绿光膨胀。
+      const spitWindupMs = z.bossKind === "giantMutant" ? LEVEL6_BOSS_SPIT_WINDUP_MS : 550;
+      const spitWindup = (z.kind === "spitter" || z.bossKind === "giantMutant") && z.spitAt > 0
+        ? 1 - Math.max(0, Math.min(1, (z.spitAt - now) / spitWindupMs)) : 0;
       if (spitWindup > 0) ctx.rotate(-poseFacing * spitWindup * .13);
       drawZombieLegAssembly(ctx, z, pose.body.rearLeg, pose.body.frontLeg, scale);
       drawZombieTorso(ctx, z, scale);
@@ -6738,15 +10975,19 @@ export function DeadRoadGame() {
       ctx.restore();
     }
 
-    // 呕吐僵尸的唾沫：绿色液体抛物线（主体 + 两滴尾迹）
+    // 绿色液体抛物线：普通呕吐物为短尾迹；巨型变异体为连续大液滴酸液束。
     for (const spit of g.spits) {
+      if (now < spit.createdAt) continue;
       const t = Math.max(0, Math.min(1, (now - spit.createdAt) / (spit.landAt - spit.createdAt)));
-      for (let k = 2; k >= 0; k--) {
-        const tk = Math.max(0, t - k * .07);
+      const trailCount = spit.burst ? 5 : 2;
+      for (let k = trailCount; k >= 0; k--) {
+        const tk = Math.max(0, t - k * (spit.burst ? .035 : .07));
         const sx = spit.fromX + (spit.targetX - spit.fromX) * tk;
-        const sy = spit.fromY + (spit.targetY - spit.fromY) * tk - Math.sin(tk * Math.PI) * 70;
-        ctx.fillStyle = k === 0 ? "#a4d957" : `rgba(126,179,60,${(.55 - k * .15).toFixed(2)})`;
-        ctx.beginPath(); ctx.arc(sx, sy, k === 0 ? 5.5 : 3.6 - k * .8, 0, Math.PI * 2); ctx.fill();
+        const sy = spit.fromY + (spit.targetY - spit.fromY) * tk - Math.sin(tk * Math.PI) * (spit.arcHeight ?? 70);
+        ctx.fillStyle = k === 0 ? "#a4d957" : `rgba(126,179,60,${Math.max(.08, .55 - k * .09).toFixed(2)})`;
+        const headSize = spit.burst ? 9 : 5.5;
+        const trailSize = spit.burst ? Math.max(2.4, 6.8 - k * .75) : 3.6 - k * .8;
+        ctx.beginPath(); ctx.arc(sx, sy, k === 0 ? headSize : trailSize, 0, Math.PI * 2); ctx.fill();
       }
     }
 
@@ -6768,6 +11009,9 @@ export function DeadRoadGame() {
     ctx.globalAlpha = 1;
     for (const blast of g.blastEffects) drawBlastEffect(ctx, blast, now);
     ctx.restore();
+
+    // 第三关黑夜光照：暗色覆盖层 + 枪灯/探照灯/警灯光洞（世界之上、HUD 之下，屏幕坐标）
+    drawNightLighting(ctx, g, now);
 
     if (now < g.flashUntil) {
       const remaining = Math.max(0, (g.flashUntil - now) / 280);
@@ -6820,14 +11064,18 @@ export function DeadRoadGame() {
     ctx.fillStyle = "rgba(8,11,9,.9)";
     roundedRect(ctx, 26, 24, 306, 91, 13);
     ctx.fill();
-    drawText(ctx, g.mode === "range" ? "靶场模式" : g.mode === "level" ? `第 1 关 · ${LEVEL1_TITLE}` : `第 ${g.day} 天`, 47, 60, 27, "#f1c643");
+    drawText(ctx, g.mode === "range" ? "靶场模式" : g.mode === "level" ? levelTitleById(g.level?.levelId ?? null) : `第 ${g.day} 天`, 47, 60, 27, "#f1c643");
     // 靶场 HUD：endless 显示无尽文案；batch 显示批次清剿进度，队列与场上全空后提示按 B 配置下一批
     const rangeHudLine = g.rangeSpawnMode === "batch"
       ? g.rangeSpawnQueue.length === 0 && g.zombies.length === 0
         ? `批次已清剿完毕 · 按 B 配置下一批`
         : `配置批次 ${g.rangeBatchTotal - g.rangeSpawnQueue.length - g.zombies.length}/${g.rangeBatchTotal} 已清剿 · 待上场 ${g.rangeSpawnQueue.length}`
       : `无尽目标 · 场上 ${g.zombies.length} · B 免费军需`;
-    drawText(ctx, g.mode === "range" ? rangeHudLine : g.mode === "level" ? levelTaskText(g) : `${backgroundName(g.day)} · 尸潮 ${Math.min(g.spawned, g.waveTotal)}/${g.waveTotal}`, 47, 91, 15, "#c4c9bf");
+    drawText(ctx, g.mode === "range" ? rangeHudLine : g.mode === "level" ? levelTaskText(g, now) : `${backgroundName(g.day)} · 尸潮 ${Math.min(g.spawned, g.waveTotal)}/${g.waveTotal}`, 47, 91, 15, "#c4c9bf");
+    // 第三关：破片手榴弹存量提示（关卡模式隐藏道具快捷栏，需告知快捷键）
+    if (g.mode === "level" && g.level?.levelId === LEVEL3_ID && g.itemInventory.frag > 0) {
+      drawText(ctx, `破片手榴弹 ×${g.itemInventory.frag}（按 3 选择 · 左键投掷）`, 47, 116, 13, "#9fb38a");
+    }
     ctx.fillStyle = "#262b27";
     roundedRect(ctx, 181, 48, 127, 17, 8);
     ctx.fill();
@@ -6851,11 +11099,17 @@ export function DeadRoadGame() {
       drawText(ctx, `◉ ${g.coins}`, W - 312, 62, 25, "#f1c643");
     }
     drawText(ctx, `击杀 ${g.kills}`, W - 312, 91, 17, "#c4c9bf");
+    const drivingArmoredVehicle = isLevel8Driving(g) && g.level;
     const weapon = WEAPONS[p.weapon];
-    const ammoText = MELEE_WEAPONS.has(p.weapon) ? "∞" : `${p.ammo[p.weapon]} / ${weapon.magazine}`;
-    drawText(ctx, weapon.name, W - 48, 57, 17, weapon.color, "right");
-    drawText(ctx, now < p.reloadingUntil ? "换弹中…" : ammoText, W - 48, 91, 25, "#fff", "right");
+    const ammoText = drivingArmoredVehicle
+      ? `${g.level?.vehicleAmmo ?? 0} / ${LEVEL8_HMG_MAGAZINE}`
+      : MELEE_WEAPONS.has(p.weapon) ? "∞" : `${p.ammo[p.weapon]} / ${weapon.magazine}`;
+    drawText(ctx, drivingArmoredVehicle ? "车载重机枪" : weapon.name, W - 48, 57, 17, drivingArmoredVehicle ? "#e3c461" : weapon.color, "right");
+    drawText(ctx, drivingArmoredVehicle && now < (g.level?.vehicleReloadUntil ?? 0) ? "换弹中…" : now < p.reloadingUntil ? "换弹中…" : ammoText, W - 48, 91, 25, "#fff", "right");
     ctx.restore();
+
+    // 关卡剧情对话框（最顶层，屏幕坐标）
+    if (g.mode === "level") drawLevelDialog(ctx, g, W, now);
   }, []);
 
   useEffect(() => {
@@ -6872,7 +11126,8 @@ export function DeadRoadGame() {
         if (screenRef.current === "playing") {
           const p = g.player;
           sound.setHeartbeat(p.hp > 0 && p.hp <= 35 ? p.hp : null);
-          sound.setGatlingSpin(mouseRef.current.down && p.weapon === "gatling" && p.ammo.gatling > 0 && now >= p.reloadingUntil);
+          sound.setGatlingSpin(mouseRef.current.down && ((p.weapon === "gatling" && p.ammo.gatling > 0 && now >= p.reloadingUntil)
+            || (isLevel8Driving(g) && (g.level?.vehicleAmmo ?? 0) > 0 && now >= (g.level?.vehicleReloadUntil ?? 0))));
           const keys = keysRef.current;
           // 携带重量影响移速：轻装 5kg 内全速，每多 1kg 减 0.7%（最低 72%）
           const speed = 250 * playerSpeedFactor(g);
@@ -6880,10 +11135,45 @@ export function DeadRoadGame() {
           let dy = (keys.has("s") ? 1 : 0) - (keys.has("w") ? 1 : 0);
           if (dx && dy) { dx *= 0.707; dy *= 0.707; }
           p.moving = dx !== 0 || dy !== 0;
+          // 关卡对话中：冻结移动与射击（剧情演出）；第三关开场演出（睡卧/起身）同样挂起操控
+          const levelDialogOpen = g.mode === "level" && g.level?.dialog != null;
+          const cutsceneFrozen = levelInputFrozen(g);
+          if (levelDialogOpen || cutsceneFrozen) { dx = 0; dy = 0; p.moving = false; }
           // 水平仅公路左右两端阻挡；纵向可在整幅路面自由走动（脚踏线上至头顶不出画面上沿、下至路面下缘）
           p.x = Math.max(52, Math.min(g.worldW - 52, p.x + dx * speed * dt));
           const minimumPlayerFootY = BASE_HUMAN_HEIGHT * CHARACTER_SCALE + 5;
-          p.y = Math.max(minimumPlayerFootY, Math.min(ROAD_BOTTOM - 18, p.y + dy * speed * dt));
+          if (isLevel4StairScene(g)) {
+            // 楼梯场景锁定到与踏步共用的纵向轨迹：按 D 向右行走即可逐级上楼，门槛与最终脚部高度一致。
+            p.y = level4StairFootY(g.worldW, p.x);
+          } else {
+            p.y = Math.max(minimumPlayerFootY, Math.min(ROAD_BOTTOM - 18, p.y + dy * speed * dt));
+          }
+          if (isLevel8Driving(g) && g.level) {
+            const level = g.level;
+            const tollStopX = LEVEL8_TOLL_FX * g.worldW - 220;
+            level.truckX = Math.max(LEVEL8_VEHICLE_START_X, Math.min(tollStopX, level.truckX + dx * LEVEL8_VEHICLE_SPEED * dt));
+            level.truckY = Math.max(330, Math.min(570, level.truckY + dy * LEVEL8_VEHICLE_SPEED * .72 * dt));
+            p.x = level.truckX;
+            p.y = level.truckY;
+            p.moving = dx !== 0 || dy !== 0;
+            level.vehicleAimAngle = Math.atan2(mouseRef.current.y - (level.truckY - 180), mouseRef.current.x + g.cameraX - level.truckX);
+          }
+          // 第三关夜防：混凝土围墙不可越过（玩家始终在墙后防守位；大门开启前往土路时解除）
+          if (g.mode === "level" && g.level?.levelId === LEVEL3_ID && g.level.sceneIndex === 1 && g.level.taskIndex < 2) {
+            p.x = Math.min(p.x, LEVEL3_WALL_FX * g.worldW - 46);
+          }
+          // 第四关防守战：玩家在通讯设备后方掩护位（不越过设备线，僵尸冲击设备承伤）
+          if (g.mode === "level" && g.level?.levelId === LEVEL4_ID && g.level.sceneIndex === 8) {
+            p.x = Math.min(p.x, LEVEL4_EQUIP_FX * g.worldW - 60);
+          }
+          // 第五关电力维修：玩家留在右侧防护围栏后方，与三名队友共同阻击冲击群。
+          if (g.mode === "level" && g.level?.levelId === LEVEL5_ID && g.level.sceneIndex === 3 && g.level.eventStage === "power") {
+            p.x = Math.min(p.x, LEVEL5_FENCE_FX * g.worldW - 60);
+          }
+          // 第七关仓库防守：玩家与 M16 小队留在围墙左侧阻击右侧来袭护甲僵尸。
+          if (g.mode === "level" && g.level?.levelId === LEVEL7_ID && g.level.sceneIndex === 3 && g.level.eventStage === "warehouse-defense") {
+            p.x = Math.min(p.x, LEVEL7_WALL_FX * g.worldW - 60);
+          }
           // 关卡模式：障碍物（车辆/桌子）矩形外推碰撞，然后再钳回世界边界
           if (g.mode === "level" && g.obstacles.length > 0) {
             const [ox, oy] = collideObstacles(g.obstacles, p.x, p.y, 16);
@@ -6897,8 +11187,13 @@ export function DeadRoadGame() {
             const viewW = ctx.canvas.width;
             g.cameraX = Math.max(0, Math.min(g.worldW - viewW, p.x - viewW * 0.42));
           }
-          if (mouseRef.current.down && WEAPONS[p.weapon].automatic) attack(now);
+          if (!levelDialogOpen && !cutsceneFrozen && mouseRef.current.down && (isLevel8Driving(g) || WEAPONS[p.weapon].automatic)) attack(now);
+          if (isLevel8Driving(g) && g.level && now >= g.level.vehicleReloadUntil && g.level.vehicleReloadUntil !== 0) {
+            g.level.vehicleAmmo = LEVEL8_HMG_MAGAZINE;
+            g.level.vehicleReloadUntil = 0;
+          }
           if (now >= p.reloadingUntil && p.reloadingUntil !== 0) {
+            p.ammo[p.weapon] = WEAPONS[p.weapon].magazine;
             p.reloadingUntil = 0;
             p.reloadStartedAt = 0;
           }
@@ -6947,7 +11242,11 @@ export function DeadRoadGame() {
               }
               for (const z of g.zombies) {
                 const distance = Math.hypot(z.x - item.x, z.y - item.y);
-                if (distance <= itemDefinition.radius) z.hp -= itemDefinition.damage * dt * (1 - distance / (itemDefinition.radius * 2));
+                if (distance <= itemDefinition.radius) {
+                  const burnDamage = itemDefinition.damage * dt * (1 - distance / (itemDefinition.radius * 2));
+                  // 全模式统一规则：燃烧伤害直接绕过所有护甲与 Boss 减伤。
+                  z.hp -= burnDamage;
+                }
               }
               if (Math.random() < .72) g.particles.push({ x: item.x - 82 + Math.random() * 164, y: item.y + 25 - Math.random() * 45, vx: -14 + Math.random() * 28, vy: -85 - Math.random() * 110, until: now + 620, color: Math.random() > .45 ? "#ef6a27" : "#e5c346", size: 5 + Math.random() * 9 });
               continue;
@@ -7002,9 +11301,23 @@ export function DeadRoadGame() {
             if (Math.random() < dt * 0.05) sound.zombieGrowl({ volume: distanceVolume(z.x, p.x) });
             const barricade = g.barricades
               .filter((entry) => entry.hp > 0 && entry.x <= z.x + z.radius && entry.x > p.x && Math.abs(entry.y - z.y) < ITEMS.barricade.radius)
-              .sort((a, b) => b.x - a.x)[0];
-            const targetX = barricade?.x ?? p.x;
-            const targetY = barricade?.y ?? p.y;
+              // 同 x 并列（第三关围墙判定段）时取 y 最近的一段：僵尸沿墙散开各自攻击就近墙体
+              .sort((a, b) => (b.x - a.x) || (Math.abs(a.y - z.y) - Math.abs(b.y - z.y)))[0];
+            // 第六关可攻击队友与玩家按距离共同参与仇恨选择；防御结构仍拥有最高优先级。
+            let targetNpc: LevelNpc | undefined;
+            if (!barricade) {
+              let nearestTargetDistance = Math.hypot(p.x - z.x, p.y - z.y);
+              for (const npc of g.npcs) {
+                if (!npc.targetable || npc.hp <= 0) continue;
+                const npcDistance = Math.hypot(npc.field.x - z.x, npc.field.y - z.y);
+                if (npcDistance < nearestTargetDistance) {
+                  nearestTargetDistance = npcDistance;
+                  targetNpc = npc;
+                }
+              }
+            }
+            const targetX = barricade?.x ?? targetNpc?.field.x ?? p.x;
+            const targetY = barricade?.y ?? targetNpc?.field.y ?? p.y;
             const zx = targetX - z.x;
             const zy = targetY - z.y;
             const dist = Math.hypot(zx, zy);
@@ -7015,21 +11328,61 @@ export function DeadRoadGame() {
             // 武器制动：被高制动力命中后短暂减速停滞；被猎犬咬住时完全定身且无法攻击
             const staggerFactor = now < z.staggeredUntil ? .3 : 1;
             const held = now < z.heldUntil;
-            const contactDistance = z.radius + (barricade ? 30 : 24);
+            const targetingVehicle = isLevel8Driving(g) && !barricade && !targetNpc;
+            const contactDistance = z.radius + (barricade ? 30 : targetingVehicle ? 125 : 24);
             if (held) continue;
+            // 第六关巨型变异 Boss：每 7 秒蓄力一次，向当前目标前方连续喷出大量绿色酸液；每滴接触伤害 50。
+            if (z.bossKind === "giantMutant") {
+              if (z.spitAt > 0 && now >= z.spitAt) {
+                z.spitAt = 0;
+                z.nextSpitAt = now + LEVEL6_BOSS_SPIT_INTERVAL_MS - LEVEL6_BOSS_SPIT_WINDUP_MS;
+                const aimAngle = Math.atan2(targetY - z.y, targetX - z.x);
+                const aimX = Math.cos(aimAngle);
+                const aimY = Math.sin(aimAngle);
+                const sideX = -aimY;
+                const sideY = aimX;
+                const bossScale = (z.radius / 25) * CHARACTER_SCALE;
+                for (let i = 0; i < LEVEL6_BOSS_SPIT_COUNT; i++) {
+                  const forward = 45 + i * 17;
+                  const lateral = ((i % 5) - 2) * 22 + (Math.random() - .5) * 22;
+                  const createdAt = now + i * 70;
+                  g.spits.push({
+                    id: Math.floor(now * 1000 + i * 17 + Math.random() * 9),
+                    fromX: z.x + aimX * 15 * bossScale,
+                    fromY: z.y - 112 * bossScale,
+                    targetX: targetX + aimX * forward + sideX * lateral,
+                    targetY: targetY + aimY * forward + sideY * lateral,
+                    createdAt,
+                    landAt: createdAt + 560 + i * 16,
+                    damage: 50,
+                    splashRadius: 58,
+                    arcHeight: 95,
+                    burst: true,
+                  });
+                }
+                sound.vomit({ volume: distanceVolume(z.x, p.x) });
+                continue;
+              }
+              if (z.spitAt === 0 && now >= z.nextSpitAt) {
+                z.spitAt = now + LEVEL6_BOSS_SPIT_WINDUP_MS;
+                sound.zombieGrowl({ volume: distanceVolume(z.x, p.x) });
+                continue;
+              }
+              if (z.spitAt > 0) continue;
+            }
             // 呕吐僵尸：不近战；接近至 250 内停下，前摇 550ms 后仰后喷吐绿色唾沫（抛物线，命中 20 伤害，落地成渍）
             if (z.kind === "spitter") {
               const spitterScale = (z.radius / 25) * CHARACTER_SCALE;
               if (z.spitAt > 0 && now >= z.spitAt) {
                 z.spitAt = 0;
                 z.nextSpitAt = now + 2400 + Math.random() * 900;
-                const spitFace = p.x < z.x ? -1 : 1;
+                const spitFace = targetX < z.x ? -1 : 1;
                 g.spits.push({
                   id: Math.floor(now * 1000 + Math.random() * 999),
                   fromX: z.x + spitFace * 10 * spitterScale,
                   fromY: z.y - 112 * spitterScale,
-                  targetX: p.x + (Math.random() - .5) * 22,
-                  targetY: p.y + (Math.random() - .5) * 14,
+                  targetX: targetX + (Math.random() - .5) * 22,
+                  targetY: targetY + (Math.random() - .5) * 14,
                   createdAt: now,
                   landAt: now + 480,
                 });
@@ -7071,7 +11424,46 @@ export function DeadRoadGame() {
                 const attackDamage = z.attack * (debuffed ? .5 : 1) * limbAttackFactor;
                 if (barricade) {
                   barricade.hp -= attackDamage;
+                  // 第四关设备使用单一共享 HP 池：伤害发生时直接累计，不能依赖仍留在数组中的判定段反推，
+                  // 否则某段被移除后其历史伤害会丢失，设备生命值会错误回升。
+                  if (g.level?.levelId === LEVEL4_ID && g.level.sceneIndex === 8 && isLevel4EquipmentSegment(barricade.id)) {
+                    g.level.wallHp = Math.max(0, g.level.wallHp - attackDamage);
+                  }
+                  if (g.level?.levelId === LEVEL5_ID && g.level.sceneIndex === 3 && isLevel5FenceSegment(barricade.id)) {
+                    g.level.wallHp = Math.max(0, g.level.wallHp - attackDamage * LEVEL5_FENCE_DAMAGE_FACTOR);
+                  }
+                  if (g.level?.levelId === LEVEL7_ID && g.level.sceneIndex === 3 && isLevel7WallSegment(barricade.id)) {
+                    g.level.wallHp = Math.max(0, g.level.wallHp - attackDamage);
+                  }
                   for (let i = 0; i < 6; i++) g.particles.push({ x: barricade.x, y: barricade.y - 30 + Math.random() * 60, vx: -70 + Math.random() * 140, vy: -70 + Math.random() * 80, until: now + 380, color: i % 2 ? "#a97b45" : "#646a63", size: 3 + Math.random() * 5 });
+                } else if (targetNpc) {
+                  if (now <= targetNpc.invulnerableUntil) continue;
+                  targetNpc.hp = Math.max(0, targetNpc.hp - attackDamage);
+                  targetNpc.invulnerableUntil = now + 260;
+                  if (targetNpc.squadIndex !== undefined && g.level?.levelId === LEVEL6_ID) {
+                    g.level.squadHp[targetNpc.squadIndex] = targetNpc.hp;
+                  }
+                  for (let i = 0; i < 8; i++) g.particles.push({
+                    x: targetNpc.field.x,
+                    y: targetNpc.field.y - 80,
+                    vx: -90 + Math.random() * 180,
+                    vy: -90 + Math.random() * 120,
+                    until: now + 360,
+                    color: i % 2 ? "#8c1620" : "#b21f2c",
+                    size: 2 + Math.random() * 4,
+                  });
+                } else if (targetingVehicle && g.level) {
+                  g.level.vehicleHp = Math.max(0, g.level.vehicleHp - attackDamage);
+                  for (let i = 0; i < 7; i++) g.particles.push({
+                    x: g.level.truckX + (Math.random() - .5) * 210,
+                    y: g.level.truckY - 70 + (Math.random() - .5) * 90,
+                    vx: -80 + Math.random() * 160,
+                    vy: -100 + Math.random() * 90,
+                    until: now + 340,
+                    color: i % 2 ? "#e0a34d" : "#596057",
+                    size: 2 + Math.random() * 4,
+                  });
+                  sound.armorClank({ volume: 1 });
                 } else {
                   if (now <= p.invulnerableUntil) continue;
                   p.hp -= attackDamage;
@@ -7090,14 +11482,16 @@ export function DeadRoadGame() {
           }
           g.barricades = g.barricades.filter((entry) => entry.hp > 0);
 
-          // 唾沫落地：绿色污渍（10 秒渐隐清除）+ 溅射；命中玩家造成 20 伤害
+          // 绿色液体落地：普通唾沫 20 伤害；第六关 Boss 连续酸液每次接触 50 伤害，也会伤到可攻击队友。
           for (const spit of g.spits) {
             if (now < spit.landAt) continue;
+            const spitDamage = spit.damage ?? 20;
+            const splashRadius = spit.splashRadius ?? 46;
             g.bloodStains.push({
               id: spit.id,
               x: Math.max(12, Math.min(g.worldW - 12, spit.targetX)),
               y: Math.max(ROAD_TOP + 8, Math.min(ROAD_BOTTOM - 6, spit.targetY)),
-              rx: 7 + Math.random() * 5,
+              rx: (spit.burst ? 14 : 7) + Math.random() * (spit.burst ? 8 : 5),
               removeAt: now + BLOOD_STAIN_MS,
               tint: "vomit",
             });
@@ -7106,11 +11500,20 @@ export function DeadRoadGame() {
               const a = Math.random() * Math.PI * 2;
               g.particles.push({ x: spit.targetX, y: spit.targetY - 4, vx: Math.cos(a) * (30 + Math.random() * 90), vy: -30 - Math.random() * 80, until: now + 380, color: i % 2 ? "#8fce4a" : "#5e9a2e", size: 2.5 + Math.random() * 4 });
             }
-            if (Math.hypot(p.x - spit.targetX, p.y - spit.targetY) < 46 && now > p.invulnerableUntil) {
-              p.hp -= 20;
+            if (Math.hypot(p.x - spit.targetX, p.y - spit.targetY) < splashRadius && now > p.invulnerableUntil) {
+              p.hp -= spitDamage;
               p.invulnerableUntil = now + 260;
               sound.playerHurt();
               g.screenShakeUntil = now + 160;
+            }
+            for (const targetNpc of g.npcs) {
+              if (!targetNpc.targetable || targetNpc.hp <= 0 || now <= targetNpc.invulnerableUntil) continue;
+              if (Math.hypot(targetNpc.field.x - spit.targetX, targetNpc.field.y - spit.targetY) >= splashRadius) continue;
+              targetNpc.hp = Math.max(0, targetNpc.hp - spitDamage);
+              targetNpc.invulnerableUntil = now + 260;
+              if (targetNpc.squadIndex !== undefined && g.level?.levelId === LEVEL6_ID) {
+                g.level.squadHp[targetNpc.squadIndex] = targetNpc.hp;
+              }
             }
           }
           g.spits = g.spits.filter((spit) => now < spit.landAt);
@@ -7163,6 +11566,7 @@ export function DeadRoadGame() {
           if (before !== g.zombies.length) syncSnapshot();
           // 关卡模式：任务链推进（拾取/抵达/清场判定、场景切换、通关结算）
           if (g.mode === "level") updateLevelTasks(g, now);
+          if (g.mode === "level") updateLevelNpcs(g, now, dt);
 
           for (const pt of g.particles) {
             pt.x += pt.vx * dt;
@@ -7259,7 +11663,7 @@ export function DeadRoadGame() {
     };
     rafRef.current = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [attack, changeScreen, damageZombie, damageZombieFromExplosion, drawWorld, saveBest, spawnZombie, syncSnapshot, updateLevelTasks, updatePartner]);
+  }, [attack, changeScreen, damageZombie, damageZombieFromExplosion, drawWorld, saveBest, spawnZombie, syncSnapshot, updateLevelNpcs, updateLevelTasks, updatePartner]);
 
   const rangeFree = snapshot.mode === "range";
   const spawnTotal = ZOMBIE_CONFIG_KINDS.reduce((sum, kind) => sum + spawnCounts[kind], 0);
@@ -7467,6 +11871,11 @@ export function DeadRoadGame() {
           onContextMenu={(e) => e.preventDefault()}
           onPointerMove={(e) => { mouseRef.current = { ...mouseRef.current, ...pointerPosition(e) }; }}
           onPointerDown={(e) => {
+            // 关卡对话中：点击推进台词
+            if (screenRef.current === "playing" && stateRef.current.mode === "level" && stateRef.current.level?.dialog) {
+              advanceLevelDialog();
+              return;
+            }
             // 关卡模式：右键拾取附近武器
             if (e.button === 2) {
               if (screenRef.current === "playing" && stateRef.current.mode === "level") tryPickupWeapon();
@@ -7555,30 +11964,50 @@ export function DeadRoadGame() {
             <h2>关卡模式</h2>
             <p className="levels-copy">沿 17 号封锁公路逐关推进的战役正在制作中——每一关都有独立目标与剧情。敬请期待。</p>
             <div className="levels-list">
-              {LEVEL_DEFS.map((level) => level.playable ? (
-                <button key={level.id} className="level-card level-card-playable" onClick={() => startLevel(level.id)}>
-                  <span className="level-order">{String(level.order).padStart(2, "0")}</span>
-                  <div className="level-card-info">
-                    <strong>{level.title}</strong>
-                    <small>{level.briefing}</small>
-                  </div>
-                  <em className="level-badge level-badge-go">开始 →</em>
-                </button>
-              ) : (
-                <div key={level.id} className="level-card" aria-disabled="true">
-                  <span className="level-order">{String(level.order).padStart(2, "0")}</span>
-                  <div className="level-card-info">
-                    <strong>{level.title}</strong>
-                    <small>{level.briefing}</small>
-                  </div>
-                  <em className="level-badge">制作中</em>
-                </div>
-              ))}
+              {LEVEL_DEFS.map((level) => {
+                if (!level.playable) {
+                  return (
+                    <div key={level.id} className="level-card" aria-disabled="true">
+                      <span className="level-order">{String(level.order).padStart(2, "0")}</span>
+                      <div className="level-card-info">
+                        <strong>{level.title}</strong>
+                        <small>{level.briefing}</small>
+                      </div>
+                      <em className="level-badge">制作中</em>
+                    </div>
+                  );
+                }
+                // 解锁链：第一关始终可玩，后续关卡需通关上一关；未解锁为锁定态（灰化 + 🔒，不可点击）
+                const unlocked = isLevelUnlocked(level.id, clearedLevels);
+                const cleared = clearedLevels.includes(level.id);
+                if (!unlocked) {
+                  return (
+                    <div key={level.id} className="level-card level-card-locked" aria-disabled="true" title="通关上一关后解锁">
+                      <span className="level-order">{String(level.order).padStart(2, "0")}</span>
+                      <div className="level-card-info">
+                        <strong>{level.title}</strong>
+                        <small>{level.briefing}</small>
+                      </div>
+                      <em className="level-badge level-badge-lock">🔒 通关上一关后解锁</em>
+                    </div>
+                  );
+                }
+                return (
+                  <button key={level.id} className="level-card level-card-playable" onClick={() => startLevel(level.id)}>
+                    <span className="level-order">{String(level.order).padStart(2, "0")}</span>
+                    <div className="level-card-info">
+                      <strong>{level.title}{cleared && <i className="level-cleared-mark" title="已通关">✓</i>}</strong>
+                      <small>{level.briefing}</small>
+                    </div>
+                    <em className="level-badge level-badge-go">{cleared ? "重玩 →" : "开始 →"}</em>
+                  </button>
+                );
+              })}
             </div>
             <div className="end-actions">
               <button className="ghost-button" onClick={closeLevels}>返回主菜单</button>
             </div>
-            <small className="pause-hint">按 ESC 返回主菜单 · 关卡内容与剧情将在后续版本开放</small>
+            <small className="pause-hint">按 ESC 返回主菜单 · 通关上一关后解锁下一关</small>
           </div>
         )}
 
@@ -7942,7 +12371,7 @@ export function DeadRoadGame() {
         {screen === "playing" && paused && (
           <div className="pause-panel overlay-panel">
             <p className="eyebrow">行动暂停</p>
-            <h2>原地待命<br /><em>{snapshot.mode === "level" ? `第 1 关 · ${LEVEL1_TITLE}` : rangeFree ? "靶场训练" : `第 ${snapshot.day} 天`}</em></h2>
+            <h2>原地待命<br /><em>{snapshot.mode === "level" ? levelTitleById(snapshot.levelId) : rangeFree ? "靶场训练" : `第 ${snapshot.day} 天`}</em></h2>
             <div className="end-actions">
               <button className="primary-button" onClick={resumeGame}><span>继续战斗</span><b>▶</b></button>
               <button className="ghost-button" onClick={() => openCodex("pause")}>僵尸图鉴</button>
@@ -7957,11 +12386,25 @@ export function DeadRoadGame() {
             {snapshot.mode === "level" ? (
               <>
                 <p className="eyebrow">关卡失败</p>
-                <h2>你倒在了<br /><em>逃出小区的路上</em></h2>
+                {snapshot.levelId === LEVEL8_ID ? (
+                  <h2>装甲车停在高速中央<br /><em>收费站仍被尸群占据</em></h2>
+                ) : snapshot.levelId === LEVEL7_ID ? (
+                  <h2>围墙被尸群撕开<br /><em>物资没能送回基地</em></h2>
+                ) : snapshot.levelId === LEVEL6_ID ? (
+                  <h2>市政大楼仍在<br /><em>感染者的阴影之下</em></h2>
+                ) : snapshot.levelId === LEVEL5_ID ? (
+                  <h2>围栏倒下时<br /><em>隧道再次归于黑暗</em></h2>
+                ) : snapshot.levelId === LEVEL3_ID ? (
+                  <h2>基地陷落在<br /><em>黎明前的黑暗里</em></h2>
+                ) : snapshot.levelId === LEVEL2_ID ? (
+                  <h2>你倒在了<br /><em>加入军队的路上</em></h2>
+                ) : (
+                  <h2>你倒在了<br /><em>逃出小区的路上</em></h2>
+                )}
                 <div className="settlement-board">
                   <div className="settlement-row"><span>击杀数</span><b>{snapshot.kills}</b></div>
                 </div>
-                <div className="end-actions"><button className="primary-button" onClick={() => startLevel(LEVEL1_ID)}><span>重玩本关</span><b>↻</b></button><button className="ghost-button" onClick={() => changeScreen("menu")}>返回菜单</button></div>
+                <div className="end-actions"><button className="primary-button" onClick={() => startLevel(snapshot.levelId ?? LEVEL1_ID)}><span>重玩本关</span><b>↻</b></button><button className="ghost-button" onClick={() => changeScreen("menu")}>返回菜单</button></div>
               </>
             ) : (
               <>
@@ -7997,8 +12440,24 @@ export function DeadRoadGame() {
 
         {screen === "levelComplete" && levelResult && (
           <div className="levelcomplete-panel overlay-panel">
-            <p className="eyebrow">关卡完成 · 第 1 关</p>
-            <h2>逃出了<br /><em>沦陷的小区</em></h2>
+            <p className="eyebrow">关卡完成 · {levelTitleById(levelResult.levelId)}</p>
+            {levelResult.levelId === LEVEL8_ID ? (
+              <h2>高速上的最后一辆车驶入收费站<br /><em>通往前方的道路，重新属于活着的人</em></h2>
+            ) : levelResult.levelId === LEVEL7_ID ? (
+              <h2>最后一箱物资装上卡车<br /><em>仓库里的希望，正在运回基地</em></h2>
+            ) : levelResult.levelId === LEVEL6_ID ? (
+              <h2>枪声在中央大厅停下<br /><em>这座大楼重新属于活着的人</em></h2>
+            ) : levelResult.levelId === LEVEL5_ID ? (
+              <h2>灯光穿透隧道的尽头<br /><em>每一个求救信号，都值得有人回应</em></h2>
+            ) : levelResult.levelId === LEVEL4_ID ? (
+              <h2>电台重新接通的那一刻<br /><em>人类不再是孤岛</em></h2>
+            ) : levelResult.levelId === LEVEL3_ID ? (
+              <h2>你守住了基地<br /><em>也看清了黑暗里的东西</em></h2>
+            ) : levelResult.levelId === LEVEL2_ID ? (
+              <h2>从今天起<br /><em>你不再是一个人在战斗</em></h2>
+            ) : (
+              <h2>你逃出了小区<br /><em>但城市已经沦陷</em></h2>
+            )}
             <div className="settlement-board">
               <div className="settlement-row"><span>通关用时</span><b>{Math.floor(levelResult.timeMs / 60000)}:{String(Math.floor(levelResult.timeMs / 1000) % 60).padStart(2, "0")}</b></div>
               <div className="settlement-row"><span>击杀数</span><b>{levelResult.kills}</b></div>
@@ -8007,7 +12466,7 @@ export function DeadRoadGame() {
               <button className="primary-button" onClick={() => startLevel(levelResult.levelId)}><span>重玩本关</span><b>↻</b></button>
               <button className="ghost-button" onClick={closeLevels}>返回主菜单</button>
             </div>
-            <small className="pause-hint">第 2 关正在制作中，敬请期待 · 按 ESC 返回主菜单</small>
+            <small className="pause-hint">{levelCompleteHint(levelResult.levelId, clearedLevels)}</small>
           </div>
         )}
       </section>
