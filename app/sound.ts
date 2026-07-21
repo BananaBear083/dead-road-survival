@@ -336,6 +336,11 @@ const GUN_TIMBRE: Record<string, GunTimbre> = {
     thump: { from: 205, to: 92, duration: 0.06, volume: 0.38 },
     tail: { filterType: "bandpass", from: 3400, q: 3.5, duration: 0.05, volume: 0.07, delay: 0.045, playbackRate: 1.6 },
   },
+  m4: { // 短枪管卡宾枪：比 M16 更紧凑、更干脆
+    crack: { filterType: "bandpass", from: 3050, q: 0.95, duration: 0.066, volume: 0.48, playbackRate: 1.65 },
+    thump: { from: 215, to: 96, duration: 0.055, volume: 0.36 },
+    tail: { filterType: "bandpass", from: 3600, q: 3.8, duration: 0.04, volume: 0.065, delay: 0.04, playbackRate: 1.7 },
+  },
   scarh: { // 7.62 重锤：比 M16 更沉更慢
     crack: { filterType: "bandpass", from: 1300, q: 0.7, duration: 0.13, volume: 0.55, playbackRate: 1.15 },
     thump: { from: 130, to: 54, duration: 0.16, volume: 0.58 },
@@ -347,6 +352,13 @@ const GUN_TIMBRE: Record<string, GunTimbre> = {
     thump: { from: 120, to: 38, duration: 0.5, volume: 0.75 },
     body: { filterType: "lowpass", from: 480, duration: 0.7, volume: 0.4, playbackRate: 0.7 },
     echo: { filterType: "bandpass", from: 1600, q: 1, duration: 0.55, volume: 0.16, delay: 0.26, playbackRate: 0.8, attack: 0.03 },
+    critical: true,
+  },
+  m107: { // .50 BMG 半自动反器材：强烈低频冲击与机械回响
+    crack: { filterType: "bandpass", from: 1350, q: 0.75, duration: 0.24, volume: 0.66, playbackRate: 1.05 },
+    thump: { from: 88, to: 27, duration: 0.68, volume: 0.9 },
+    body: { filterType: "lowpass", from: 350, duration: 0.85, volume: 0.47, playbackRate: 0.58 },
+    echo: { filterType: "bandpass", from: 980, q: 1, duration: 0.75, volume: 0.2, delay: 0.31, playbackRate: 0.68, attack: 0.04 },
     critical: true,
   },
   flint66: { // 12.7 反器材：比 AWM 更低沉的胸腔爆音 + 远距滚雷尾音
@@ -391,6 +403,11 @@ const GUN_TIMBRE: Record<string, GunTimbre> = {
     crack: { filterType: "bandpass", from: 1500, q: 0.8, duration: 0.095, volume: 0.42, playbackRate: 1.25 },
     thump: { from: 136, to: 56, duration: 0.1, volume: 0.46 },
     body: { filterType: "lowpass", from: 680, duration: 0.12, volume: 0.26, playbackRate: 0.95 },
+  },
+  mg42: { // 1200 RPM：短促锐裂、密集机械节奏
+    crack: { filterType: "bandpass", from: 2050, q: 0.9, duration: 0.048, volume: 0.34, playbackRate: 1.5 },
+    thump: { from: 158, to: 68, duration: 0.046, volume: 0.34 },
+    body: { filterType: "lowpass", from: 760, duration: 0.05, volume: 0.13, playbackRate: 1.05 },
   },
   gatling: { // 单发极短，靠 42ms 射速连成蜂鸣；旋转底噪由 setGatlingSpin 提供
     crack: { filterType: "bandpass", from: 2550, q: 1, duration: 0.034, volume: 0.24, playbackRate: 1.7 },

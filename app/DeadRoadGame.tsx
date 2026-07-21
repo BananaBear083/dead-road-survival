@@ -29,8 +29,8 @@ type ShopTab = "weapons" | "armor" | "supplies" | "items" | "partners" | "zombie
 type WeaponKey =
   | "glock17" | "m1911" | "pkm" | "fruitknife" | "combatknife" | "crowbar"
   | "hammer" | "fireaxe" | "baseballbat" | "sawedoff"
-  | "mac11" | "mp5k" | "ak47" | "m16" | "scarh"
-  | "saiga12" | "rem870" | "awm" | "flint66" | "m240l"
+  | "mac11" | "mp5k" | "ak47" | "m4" | "m16" | "scarh"
+  | "saiga12" | "rem870" | "awm" | "m107" | "flint66" | "m240l" | "mg42"
   | "rpg7" | "m32" | "gatling" | "fists";
 
 type Weapon = {
@@ -51,6 +51,8 @@ type Weapon = {
   blastKind?: "rocket" | "grenade";
   penetration?: number;
   automatic?: boolean;
+  /** 新增枪械按详情标称伤害直接结算，不再重复套用旧武器的历史平衡倍率。 */
+  usesListedDamage?: boolean;
   /** 磷燃弹：命中点燃目标，持续灼烧直至死亡 */
   ignite?: boolean;
 };
@@ -164,6 +166,11 @@ const WEAPONS: Record<WeaponKey, Weapon> = {
     spread: 0.055,
     automatic: true,
   },
+  m4: {
+    key: "m4", name: "M4", price: 7800, damage: 34, fireRate: 86,
+    magazine: 30, reload: 1450, range: 1110, color: "#91ad8a",
+    description: "紧凑型军用卡宾枪，操控灵活、连射稳定", caliber: "5.56×45mm · 30 发", spread: .025, automatic: true, usesListedDamage: true,
+  },
   m16: {
     key: "m16", name: "M16", price: 10800, damage: 36, fireRate: 98,
     magazine: 30, reload: 1420, range: 1180, color: "#86a58c",
@@ -199,16 +206,26 @@ const WEAPONS: Record<WeaponKey, Weapon> = {
     magazine: 5, reload: 2150, range: 1450, color: "#7f9c75",
     description: "远程重型狙击枪，可贯穿多个目标", caliber: ".338 Lapua · 5 发", spread: .006, penetration: 3,
   },
+  m107: {
+    key: "m107", name: "Barrett M107", price: 14500, damage: 200, fireRate: 720,
+    magazine: 10, reload: 2600, range: 1550, color: "#879178",
+    description: "半自动反器材狙击枪，强制动力与五目标穿透", caliber: ".50 BMG · 10 发", spread: .005, penetration: 5, usesListedDamage: true,
+  },
   flint66: {
     key: "flint66", name: "燧石66", price: 15000, damage: 50, fireRate: 750,
     magazine: 10, reload: 2400, range: 1500, color: "#c96f3b",
     description: "栓动重型狙击枪，磷燃穿甲弹贯穿整列尸群，命中即点燃（格挡也挡不住灼烧），灼烧直至死亡",
-    caliber: "12.7 磷燃穿甲 · 10 发", spread: .004, penetration: 5, ignite: true,
+    caliber: "12.7 磷燃穿甲 · 10 发", spread: .004, penetration: 15, ignite: true,
   },
   m240l: {
     key: "m240l", name: "M240L", price: 24000, damage: 49, fireRate: 88,
     magazine: 100, reload: 2850, range: 1180, color: "#768b61",
     description: "通用机枪，百发弹链持续压制尸潮", caliber: "7.62×51mm · 100 发", spread: .052, automatic: true,
+  },
+  mg42: {
+    key: "mg42", name: "MG42", price: 26000, damage: 40, fireRate: 50,
+    magazine: 100, reload: 3300, range: 1280, color: "#968767",
+    description: "高射速通用机枪，1200 发/分并可连续穿透两个目标", caliber: "7.92×57mm · 100 发", spread: .058, penetration: 2, automatic: true, usesListedDamage: true,
   },
   rpg7: {
     key: "rpg7", name: "RPG-7", price: 25000, damage: 310, fireRate: 1350,
@@ -250,20 +267,24 @@ const WEAPON_HANDLING: Record<WeaponKey, { weightKg: number; stopping: number }>
   baseballbat: { weightKg: 1.05, stopping: 0.6 }, sawedoff: { weightKg: 2.6, stopping: 0.85 },
   mac11: { weightKg: 1.6, stopping: 0.2 }, mp5k: { weightKg: 2.5, stopping: 0.25 },
   ak47: { weightKg: 4.3, stopping: 0.45 }, m16: { weightKg: 3.6, stopping: 0.4 },
+  m4: { weightKg: 3.1, stopping: 0.4 },
   scarh: { weightKg: 4.5, stopping: 0.55 }, saiga12: { weightKg: 3.8, stopping: 0.75 },
-  rem870: { weightKg: 3.6, stopping: 0.85 }, awm: { weightKg: 6.8, stopping: 1 },
+  rem870: { weightKg: 3.6, stopping: 0.85 }, awm: { weightKg: 6.8, stopping: 1 }, m107: { weightKg: 12.9, stopping: 1 },
   flint66: { weightKg: 12, stopping: 1 },
-  m240l: { weightKg: 10.9, stopping: 0.5 }, rpg7: { weightKg: 8.6, stopping: 0 },
+  m240l: { weightKg: 10.9, stopping: 0.5 }, mg42: { weightKg: 11.6, stopping: .5 }, rpg7: { weightKg: 8.6, stopping: 0 },
   m32: { weightKg: 6, stopping: 0 }, gatling: { weightKg: 16.8, stopping: 0.35 },
   fists: { weightKg: 0, stopping: 0.1 },
 };
 // 平衡：非爆炸武器（枪械+近战）伤害统一 ×0.75；爆炸类 RPG-7/M32 与道具爆炸物保持原值
 const BALLISTIC_DAMAGE_FACTOR = 0.75;
+// 本轮全模式平衡：所有霰弹枪在现有结算伤害基础上再乘 75%，详情面板与实战共用该函数。
+const SHOTGUN_DAMAGE_FACTOR = .75;
 // 磷燃弹灼烧：点燃后每秒伤害（持续至目标死亡；普通僵尸 62hp 约 4.4 秒烧死）
 const IGNITE_DPS = 14;
 function weaponDamage(key: WeaponKey) {
   const spec = WEAPONS[key];
-  return spec.explosionRadius ? spec.damage : spec.damage * BALLISTIC_DAMAGE_FACTOR;
+  const baseDamage = spec.explosionRadius || spec.usesListedDamage ? spec.damage : spec.damage * BALLISTIC_DAMAGE_FACTOR;
+  return spec.pellets ? baseDamage * SHOTGUN_DAMAGE_FACTOR : baseDamage;
 }
 // 栓动步枪：每次击发后播放完整拉栓循环（上抬→后拉→前推→下压），时长小于其射速冷却，不改数值
 const BOLT_ACTION_WEAPONS = new Set<WeaponKey>(["awm", "flint66"]);
@@ -279,11 +300,12 @@ const WEAPON_RECOIL: Record<WeaponKey, { rise: number; back: number; heat: numbe
   glock17: { rise: .055, back: 2.0, heat: .34 }, m1911: { rise: .07, back: 2.6, heat: .4 },
   mp5k: { rise: .032, back: 1.5, heat: .2 }, mac11: { rise: .03, back: 1.4, heat: .18 },
   ak47: { rise: .05, back: 2.4, heat: .26 }, m16: { rise: .042, back: 2.1, heat: .24 },
+  m4: { rise: .039, back: 1.9, heat: .22 },
   scarh: { rise: .06, back: 2.8, heat: .3 },
   sawedoff: { rise: .12, back: 4.8, heat: .6 }, rem870: { rise: .11, back: 4.4, heat: .55 }, saiga12: { rise: .09, back: 3.6, heat: .42 },
-  awm: { rise: .13, back: 5.0, heat: .7 },
+  awm: { rise: .13, back: 5.0, heat: .7 }, m107: { rise: .14, back: 5.4, heat: .62 },
   flint66: { rise: .11, back: 4.6, heat: .55 },
-  pkm: { rise: .036, back: 1.9, heat: .26 }, m240l: { rise: .038, back: 2.0, heat: .26 },
+  pkm: { rise: .036, back: 1.9, heat: .26 }, m240l: { rise: .038, back: 2.0, heat: .26 }, mg42: { rise: .041, back: 2.2, heat: .28 },
   gatling: { rise: .014, back: 1.0, heat: .1 },
   rpg7: { rise: .085, back: 4.2, heat: .55 }, m32: { rise: .06, back: 2.8, heat: .4 },
   fruitknife: { rise: 0, back: 0, heat: 0 }, combatknife: { rise: 0, back: 0, heat: 0 },
@@ -514,6 +536,8 @@ type Player = {
   lastKick: number;
   reloadStartedAt: number;
   reloadingUntil: number;
+  /** 空仓左键自动换弹锁：必须松开左键后才能再次射击/再次触发空仓换弹。 */
+  emptyReloadLatch: boolean;
   invulnerableUntil: number;
   moving: boolean;
 };
@@ -535,8 +559,8 @@ type ZombieOutfit = {
 
 // 僵尸种类：normal/brute 为既有体系（数值不变）；其余为按天解锁的扩展种类
 type ZombieKind =
-  | "normal" | "brute" | "runner" | "spitter" | "helmet" | "helmetRunner"
-  | "mutant" | "army" | "armyRunner" | "shield" | "juggernaut";
+  | "normal" | "brute" | "runner" | "spitter" | "largeSpitter" | "zombieDog" | "helmet" | "helmetRunner"
+  | "armored" | "armoredRunner" | "mutant" | "army" | "armyRunner" | "shield" | "juggernaut";
 // 扩展种类规格：unlockDay=出现天数（当日起混入生成池，4 天内权重渐进爬满）；hp/radius 缺省沿用普通僵尸公式；
 // speedFactor 叠乘普通僵尸速度；damageReduction 为子弹伤害减免基数（爆炸/火焰无视，穿透武器按梯度豁免）
 const ZOMBIE_KIND_SPECS: Record<Exclude<ZombieKind, "normal" | "brute">, {
@@ -549,14 +573,18 @@ const ZOMBIE_KIND_SPECS: Record<Exclude<ZombieKind, "normal" | "brute">, {
   damageReduction?: number;
 }> = {
   runner: { unlockDay: 3, weight: 26, speedFactor: 3 },
+  zombieDog: { unlockDay: 4, weight: 18, hp: 60, radius: 20, speedFactor: 4, attack: 9 },
   spitter: { unlockDay: 5, weight: 16 },
+  armored: { unlockDay: 6, weight: 12, hp: 100, speedFactor: 1.5, damageReduction: .99 },
   helmet: { unlockDay: 5, weight: 14, hp: 200 },
   helmetRunner: { unlockDay: 5, weight: 10, hp: 200, speedFactor: 3 },
   mutant: { unlockDay: 7, weight: 12, hp: 500, radius: 36 },
+  armoredRunner: { unlockDay: 9, weight: 10, hp: 100, speedFactor: 3, damageReduction: .99 },
   army: { unlockDay: 9, weight: 12, hp: 350, damageReduction: .5 },
   armyRunner: { unlockDay: 11, weight: 10, hp: 350, damageReduction: .5, speedFactor: 3 },
+  largeSpitter: { unlockDay: 12, weight: 9, hp: 200, radius: 37, attack: 12 },
   shield: { unlockDay: 15, weight: 9, hp: 350, damageReduction: .5 },
-  juggernaut: { unlockDay: 20, weight: 7, hp: 500, radius: 35, attack: 16, damageReduction: .7 },
+  juggernaut: { unlockDay: 18, weight: 7, hp: 500, radius: 35, attack: 16, damageReduction: .7 },
 };
 // 重甲弱点严格限制在上胸的受损装甲板；腹部与其余部位仍由完整重甲覆盖。
 const JUGGERNAUT_CHEST_WEAK_HALF_WIDTH = 15;
@@ -579,14 +607,18 @@ const ZOMBIE_KIND_INFO: Record<ZombieKind, { name: string; unlockDay: number; hp
   normal: { name: "普通僵尸", unlockDay: 1, hp: 62, speed: "中速", trait: "基础感染者，无特殊能力" },
   brute: { name: "大块头", unlockDay: 3, hp: 128, speed: "迟缓", trait: "高 HP 巨型感染者" },
   runner: { name: "奔跑僵尸", unlockDay: 3, hp: 62, speed: "3× 疾速", trait: "移动速度为普通僵尸 3 倍" },
+  zombieDog: { name: "僵尸狗", unlockDay: 4, hp: 60, speed: "4× 极快", trait: "四足冲刺，速度为普通僵尸 4 倍" },
   spitter: { name: "呕吐僵尸", unlockDay: 5, hp: 62, speed: "中速", trait: "远程喷吐毒液 20 伤害，不近战" },
+  armored: { name: "护甲僵尸", unlockDay: 6, hp: 100, speed: "1.5× 快速", trait: "全身插板护甲，基础伤害减免 99%" },
   helmet: { name: "摩托头盔僵尸", unlockDay: 5, hp: 200, speed: "中速", trait: "只有眼缝能造成爆头" },
   helmetRunner: { name: "头盔奔跑僵尸", unlockDay: 5, hp: 200, speed: "3× 疾速", trait: "3 倍奔跑 + 摩托头盔眼缝" },
   mutant: { name: "突变强壮僵尸", unlockDay: 7, hp: 500, speed: "中速", trait: "HP 500 肌肉巨体" },
+  armoredRunner: { name: "奔跑护甲僵尸", unlockDay: 9, hp: 100, speed: "3× 疾速", trait: "奔跑僵尸速度 + 护甲僵尸 99% 减伤" },
   army: { name: "军队僵尸", unlockDay: 9, hp: 350, speed: "中速", trait: "防弹衣头盔，伤害减免 50%" },
   armyRunner: { name: "军队奔跑僵尸", unlockDay: 11, hp: 350, speed: "3× 疾速", trait: "3 倍奔跑 + 减免 50%" },
+  largeSpitter: { name: "大型喷吐僵尸", unlockDay: 12, hp: 200, speed: "中速", trait: "连续喷出 3 股腐蚀液，每股接触伤害 20" },
   shield: { name: "盾兵僵尸", unlockDay: 15, hp: 350, speed: "中速", trait: "全身金属盾 500 HP，击碎后失效；仅眼平观察窗可命中，踹可落盾，减免 50%" },
-  juggernaut: { name: "重甲僵尸", unlockDay: 20, hp: 500, speed: "中速", trait: "仅胸口可伤、免疫打腿倒地，减免 70%；高穿透武器可削弱减伤" },
+  juggernaut: { name: "重甲僵尸", unlockDay: 18, hp: 500, speed: "中速", trait: "仅胸口可伤、免疫打腿倒地，减免 70%；高穿透武器可削弱减伤" },
 };
 const ZOMBIE_CONFIG_KINDS = Object.keys(ZOMBIE_KIND_INFO) as ZombieKind[];
 
@@ -595,12 +627,16 @@ const CODEX_DESCRIPTIONS: Record<ZombieKind, string> = {
   normal: "封锁区里最常见的感染者，动作僵硬却从不停歇。单个威胁有限——真正的麻烦是它们从不单独出现。",
   brute: "感染后异常增生的巨型个体，皮糙肉厚、HP 远超普通僵尸。保持距离，别让它近身挥击。",
   runner: "病毒强化了腿部肌肉的快速个体，移动速度是普通僵尸的 3 倍。听到急促脚步声时，它通常已经近在咫尺。",
+  zombieDog: "感染后的军犬以四足姿态高速冲刺，只有 60 HP，却拥有普通僵尸 4 倍速度。腿部受创后同样会翻倒并进入爬起流程。",
   spitter: "喉部异变的远程个体，不近身，只会远远喷吐腐蚀性毒液（20 伤害）逼你走位。建议优先点名清除。",
+  armored: "与仓库中遇到的护甲感染者相同：100 HP，全身附着重型插板并减免 99% 常规伤害。燃烧与爆炸仍可绕过护甲。",
   helmet: "戴着摩托头盔的感染者，头部只剩一道眼缝能造成爆头。瞄不准那条缝，就老老实实打身体。",
   helmetRunner: "速度与防护的麻烦组合：3 倍奔跑速度，头盔眼缝仍是唯一的爆头通道。",
   mutant: "肌肉过度膨胀的突变体，HP 高达 500。没有取巧的弱点，只有倾泻火力的诚意。",
+  armoredRunner: "奔跑僵尸与护甲感染者的结合体，兼具 3 倍冲刺速度、100 HP 与 99% 常规伤害减免。",
   army: "生前是封锁区驻军，防弹衣与头盔仍在发挥作用，受到的所有伤害减半；高穿透武器可部分无视其防护。",
   armyRunner: "军队感染者的快速变体：3 倍速度外加伤害减半，是尸潮里最该优先处理的目标。",
+  largeSpitter: "体型膨胀的远程感染者，拥有 200 HP。一次蓄力会连续喷出三股绿色腐蚀液，每股接触造成 20 伤害。",
   shield: "举着全身防暴盾的特警感染者，盾牌拥有独立 500 HP，击碎后失效；眼平观察窗是唯一命中通道，踹击可以把整面盾踹飞。",
   juggernaut: "全身重甲的行走堡垒，拥有 500 HP，只有胸口能造成有效伤害，且基础减伤 70%、免疫打腿倒地；武器穿透力越强，受到减伤的影响越小。",
 };
@@ -1333,6 +1369,9 @@ const LEVEL8_HMG_RANGE = 1420;
 const LEVEL8_HMG_PENETRATION = 7;
 const LEVEL8_HMG_PENETRATION_BYPASS = .8;
 const LEVEL8_HMG_STOPPING = 1;
+const LEVEL8_HMG_MOUNT_X = -18;
+const LEVEL8_HMG_MOUNT_Y = -211;
+const LEVEL8_HMG_MUZZLE_X = 163;
 
 function level8ZombieLine(kind: ZombieKind, count: number, start: number, end: number): Array<{ kind: ZombieKind; fx: number }> {
   return Array.from({ length: count }, (_, index) => ({ kind, fx: start + (end - start) * (count === 1 ? 0 : index / (count - 1)) }));
@@ -1492,6 +1531,7 @@ function makeLevelZombie(id: number, kind: ZombieKind, x: number, y: number, now
   return {
     id,
     kind,
+    warehouseArmor: kind === "armored" || kind === "armoredRunner",
     x,
     y,
     hp,
@@ -1597,6 +1637,7 @@ function loadLevelScene(g: GameState, sceneIndex: number, now: number, canvasW: 
   g.detachedLimbs = [];
   g.metalShards = [];
   g.blastEffects = [];
+  g.explosiveProjectiles = [];
   g.spits = [];
   g.barricades = [];
   g.deployedItems = [];
@@ -1808,21 +1849,114 @@ function drawLevel8ArmoredVehicle(ctx: CanvasRenderingContext2D, level: LevelRun
   const x = parkedX;
   const y = parkedY;
   ctx.save(); ctx.translate(x, y);
-  ctx.fillStyle = "#252b27";
-  for (const wx of [-105, -35, 35, 105]) { ctx.beginPath(); ctx.arc(wx, 0, 34, 0, Math.PI * 2); ctx.fill(); }
-  ctx.fillStyle = "#59634e"; ctx.beginPath(); ctx.roundRect(-155, -112, 310, 108, 22); ctx.fill();
-  ctx.strokeStyle = "#2d352b"; ctx.lineWidth = 8; ctx.stroke();
-  ctx.fillStyle = "#657158"; ctx.beginPath(); ctx.moveTo(-112, -112); ctx.lineTo(-62, -166); ctx.lineTo(82, -166); ctx.lineTo(132, -112); ctx.closePath(); ctx.fill();
-  ctx.fillStyle = "#27322e"; ctx.fillRect(-45, -152, 62, 34); ctx.fillRect(35, -152, 48, 34);
-  ctx.fillStyle = "#414b3d"; ctx.beginPath(); ctx.ellipse(0, -172, 64, 29, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.save(); ctx.translate(0, -180); ctx.rotate(level.vehicleAimAngle);
-  ctx.fillStyle = "#1f2521"; ctx.fillRect(0, -8, 132, 16); ctx.fillRect(112, -12, 34, 24);
-  ctx.fillStyle = "#6d765f"; ctx.fillRect(-28, -24, 58, 48);
+  // M-ATV-inspired four-wheel MRAP silhouette：参照真实 M-ATV 的短轴距、高离地间隙、独立发动机舱和单体装甲乘员舱。
+  ctx.fillStyle = "rgba(0,0,0,.38)"; ctx.beginPath(); ctx.ellipse(0, 13, 187, 29, 0, 0, Math.PI * 2); ctx.fill();
+
+  // 后挂备胎先绘制在乘员舱之后，形成真实车尾轮廓。
+  ctx.fillStyle = "#171a17"; ctx.beginPath(); ctx.arc(-157, -102, 31, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = "#454b43"; ctx.lineWidth = 6; ctx.stroke();
+  ctx.fillStyle = "#555d53"; ctx.beginPath(); ctx.arc(-157, -102, 11, 0, Math.PI * 2); ctx.fill();
+
+  const wheelCenters = [-108, 104];
+  // TAK-4-style independent suspension：可见的上/下摆臂、减振筒和高离地车架。
+  ctx.strokeStyle = "#252b26"; ctx.lineWidth = 8; ctx.beginPath(); ctx.moveTo(-143, -44); ctx.lineTo(139, -44); ctx.stroke();
+  for (const wx of wheelCenters) {
+    ctx.strokeStyle = "#343b34"; ctx.lineWidth = 6;
+    ctx.beginPath(); ctx.moveTo(wx - 27, -48); ctx.lineTo(wx, -13); ctx.lineTo(wx + 31, -47); ctx.stroke();
+    ctx.strokeStyle = "#697167"; ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.moveTo(wx - 8, -56); ctx.lineTo(wx + 7, -18); ctx.stroke();
+    ctx.fillStyle = "#151916"; ctx.beginPath(); ctx.arc(wx, 0, 43, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = "#3b423b"; ctx.lineWidth = 8; ctx.stroke();
+    ctx.strokeStyle = "#0b0e0c"; ctx.lineWidth = 3;
+    for (let lug = 0; lug < 12; lug++) {
+      const a = lug * Math.PI / 6;
+      ctx.beginPath(); ctx.moveTo(wx + Math.cos(a) * 34, Math.sin(a) * 34); ctx.lineTo(wx + Math.cos(a) * 41, Math.sin(a) * 41); ctx.stroke();
+    }
+    ctx.fillStyle = "#667067"; ctx.beginPath(); ctx.arc(wx, 0, 17, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#2b312c"; ctx.beginPath(); ctx.arc(wx, 0, 7, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#a2a89e";
+    for (let bolt = 0; bolt < 6; bolt++) { const a = bolt * Math.PI / 3; ctx.beginPath(); ctx.arc(wx + Math.cos(a) * 11, Math.sin(a) * 11, 1.8, 0, Math.PI * 2); ctx.fill(); }
+  }
+
+  // V-hull keel：从两侧装甲向中央低点收束，前后以独立车架承托。
+  const hullGradient = ctx.createLinearGradient(0, -72, 0, 9);
+  hullGradient.addColorStop(0, "#56604f"); hullGradient.addColorStop(1, "#2c342d");
+  ctx.fillStyle = hullGradient; ctx.beginPath();
+  ctx.moveTo(-150, -78); ctx.lineTo(142, -78); ctx.lineTo(128, -35); ctx.lineTo(18, 8); ctx.lineTo(-127, -33); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = "#252c26"; ctx.lineWidth = 4; ctx.stroke();
+  ctx.fillStyle = "#1f2520"; ctx.fillRect(-178, -61, 31, 20); ctx.fillRect(143, -63, 37, 22);
+  ctx.strokeStyle = "#4f594e"; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(-172, -51); ctx.lineTo(-186, -35); ctx.moveTo(168, -51); ctx.lineTo(184, -34); ctx.stroke();
+
+  // 单体装甲乘员舱：高而窄、车尾近乎垂直，前风挡与车鼻之间有明确折线。
+  const capsuleGradient = ctx.createLinearGradient(-30, -194, 20, -62);
+  capsuleGradient.addColorStop(0, "#78826c"); capsuleGradient.addColorStop(.55, "#626d5a"); capsuleGradient.addColorStop(1, "#465043");
+  ctx.fillStyle = capsuleGradient; ctx.beginPath();
+  ctx.moveTo(-148, -69); ctx.lineTo(-151, -144); ctx.lineTo(-119, -190); ctx.lineTo(25, -190); ctx.lineTo(73, -137); ctx.lineTo(77, -70); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = "#2c342d"; ctx.lineWidth = 5; ctx.stroke();
+  // 前置发动机舱：低于乘员舱，斜置引擎盖与近垂直散热器构成真实车头。
+  ctx.fillStyle = "#596451"; ctx.beginPath();
+  ctx.moveTo(68, -132); ctx.lineTo(145, -119); ctx.lineTo(170, -91); ctx.lineTo(164, -59); ctx.lineTo(76, -59); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = "#293129"; ctx.lineWidth = 4; ctx.stroke();
+  ctx.fillStyle = "#303932"; ctx.beginPath(); ctx.moveTo(146, -112); ctx.lineTo(169, -89); ctx.lineTo(163, -66); ctx.lineTo(148, -68); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = "#707a69"; ctx.lineWidth = 2;
+  for (let gy = -103; gy <= -74; gy += 7) { ctx.beginPath(); ctx.moveTo(151, gy); ctx.lineTo(165, gy + 3); ctx.stroke(); }
+  ctx.fillStyle = "#d8cf9a"; ctx.beginPath(); ctx.ellipse(157, -111, 10, 7, -.15, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#8c2f2b"; ctx.fillRect(-154, -116, 8, 21);
+
+  // ballistic-glass trapezoids：小面积厚防弹玻璃嵌入两扇重型装甲门，前窗沿 A 柱倾斜。
+  const glassGradient = ctx.createLinearGradient(0, -181, 0, -139);
+  glassGradient.addColorStop(0, "#26383a"); glassGradient.addColorStop(1, "#122124");
+  ctx.fillStyle = glassGradient;
+  ctx.beginPath(); ctx.moveTo(-108, -178); ctx.lineTo(-57, -178); ctx.lineTo(-54, -145); ctx.lineTo(-116, -145); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(-44, -178); ctx.lineTo(18, -178); ctx.lineTo(53, -139); ctx.lineTo(-40, -139); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = "#9aa99f"; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.moveTo(-108, -178); ctx.lineTo(-57, -178); ctx.lineTo(-54, -145); ctx.lineTo(-116, -145); ctx.closePath(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-44, -178); ctx.lineTo(18, -178); ctx.lineTo(53, -139); ctx.lineTo(-40, -139); ctx.closePath(); ctx.stroke();
+  ctx.fillStyle = "rgba(190,215,205,.18)"; ctx.beginPath(); ctx.moveTo(-102, -174); ctx.lineTo(-78, -174); ctx.lineTo(-91, -150); ctx.lineTo(-109, -150); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(-36, -174); ctx.lineTo(-8, -174); ctx.lineTo(28, -145); ctx.lineTo(-31, -145); ctx.closePath(); ctx.fill();
+
+  // 四人乘员舱的前后门、外露铰链、门闩、射击孔和侧踏板。
+  ctx.strokeStyle = "#2b332c"; ctx.lineWidth = 2.5;
+  ctx.strokeRect(-129, -136, 73, 68); ctx.beginPath(); ctx.moveTo(-49, -137); ctx.lineTo(56, -137); ctx.lineTo(65, -70); ctx.lineTo(-49, -70); ctx.closePath(); ctx.stroke();
+  ctx.fillStyle = "#30382f";
+  for (const hinge of [[-126, -124], [-126, -81], [-45, -124], [-45, -81]]) { ctx.fillRect(hinge[0], hinge[1], 8, 13); }
+  ctx.fillStyle = "#1d241e"; ctx.fillRect(-78, -112, 15, 5); ctx.fillRect(23, -110, 15, 5);
+  ctx.fillStyle = "#232a24"; ctx.beginPath(); ctx.arc(-84, -125, 4, 0, Math.PI * 2); ctx.fill(); ctx.beginPath(); ctx.arc(10, -123, 4, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#3c463b"; ctx.fillRect(-131, -60, 76, 10); ctx.fillRect(-47, -60, 105, 10);
+  ctx.strokeStyle = "#222922"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-123, -50); ctx.lineTo(-112, -39); ctx.lineTo(-64, -39); ctx.moveTo(-37, -50); ctx.lineTo(-26, -39); ctx.lineTo(38, -39); ctx.stroke();
+  // 轮拱边缘与装甲接缝强调车体并非规则矩形。
+  ctx.strokeStyle = "#252c26"; ctx.lineWidth = 5;
+  for (const wx of wheelCenters) { ctx.beginPath(); ctx.arc(wx, -2, 51, Math.PI * 1.08, Math.PI * 1.92); ctx.stroke(); }
+  ctx.fillStyle = "#242b25"; for (const px of [-140, -123, -55, -47, 57, 72, 139]) for (const py of [-132, -73]) { ctx.beginPath(); ctx.arc(px, py, 2, 0, Math.PI * 2); ctx.fill(); }
+
+  // 后置排气筒、前视镜、天线座和拖车钩。
+  ctx.strokeStyle = "#303730"; ctx.lineWidth = 7; ctx.beginPath(); ctx.moveTo(-136, -144); ctx.lineTo(-169, -157); ctx.lineTo(-169, -194); ctx.stroke();
+  ctx.fillStyle = "#171d19"; ctx.fillRect(-174, -199, 10, 14);
+  ctx.strokeStyle = "#252c26"; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(61, -148); ctx.lineTo(88, -163); ctx.stroke();
+  ctx.fillStyle = "#182023"; ctx.fillRect(84, -172, 18, 14);
+  ctx.strokeStyle = "#313a32"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-96, -188); ctx.lineTo(-116, -238); ctx.moveTo(17, -190); ctx.lineTo(25, -247); ctx.stroke();
+  ctx.fillStyle = "#242b25"; ctx.beginPath(); ctx.arc(171, -48, 8, 0, Math.PI * 2); ctx.stroke();
+
+  // 低矮遥控武器站：旋转座圈、装甲光电舱、弹药箱与带散热套筒的重机枪。
+  ctx.fillStyle = "#374137"; ctx.beginPath(); ctx.ellipse(LEVEL8_HMG_MOUNT_X, -191, 51, 13, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = "#202721"; ctx.lineWidth = 3; ctx.stroke();
+  ctx.save(); ctx.translate(LEVEL8_HMG_MOUNT_X, LEVEL8_HMG_MOUNT_Y); ctx.rotate(level.vehicleAimAngle);
+  ctx.fillStyle = "#66725e"; ctx.beginPath(); roundedRect(ctx, -27, -25, 55, 49, 6); ctx.fill();
+  ctx.strokeStyle = "#2b332c"; ctx.lineWidth = 3; ctx.stroke();
+  ctx.fillStyle = "#202722"; ctx.beginPath(); roundedRect(ctx, -17, -34, 30, 15, 3); ctx.fill();
+  ctx.fillStyle = "#a7b4a9"; ctx.beginPath(); ctx.arc(-3, -27, 4, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#475246"; ctx.beginPath(); roundedRect(ctx, -48, -17, 19, 34, 3); ctx.fill();
+  ctx.fillStyle = "#161b18"; ctx.fillRect(22, -8, LEVEL8_HMG_MUZZLE_X - 22, 15); ctx.fillRect(132, -12, LEVEL8_HMG_MUZZLE_X - 132, 23);
+  ctx.strokeStyle = "#7a8378"; ctx.lineWidth = 1.5;
+  for (let bx = 45; bx < 132; bx += 14) { ctx.beginPath(); ctx.moveTo(bx, -7); ctx.lineTo(bx, 6); ctx.stroke(); }
   if (now - level.vehicleLastShot < 70) {
-    ctx.fillStyle = "#fff2a0"; ctx.beginPath(); ctx.moveTo(150, 0); ctx.lineTo(184, -14); ctx.lineTo(174, 0); ctx.lineTo(184, 14); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#fff2b0"; ctx.beginPath(); ctx.moveTo(LEVEL8_HMG_MUZZLE_X, 0); ctx.lineTo(196, -12); ctx.lineTo(181, 0); ctx.lineTo(197, 14); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "rgba(238,151,46,.35)"; ctx.beginPath(); ctx.arc(LEVEL8_HMG_MUZZLE_X + 6, 0, 21, 0, Math.PI * 2); ctx.fill();
   }
   ctx.restore();
-  ctx.fillStyle = "#eef1dc"; ctx.fillRect(-118, -88, 38, 24); drawText(ctx, "08", -99, -69, 15, "#253027", "center");
+
+  ctx.fillStyle = "#e2e5d8"; ctx.fillRect(-114, -105, 36, 22); drawText(ctx, "08", -96, -88, 14, "#273127", "center");
+  drawText(ctx, "M-ATV", -16, -77, 11, "rgba(224,231,216,.72)", "center");
   ctx.restore();
 }
 
@@ -4393,7 +4527,7 @@ type LevelRunState = {
   /** 对话状态：台词队列与当前句索引（null = 无对话） */
   dialog: { lines: Array<{ speaker: string; text: string }>; index: number } | null;
 };
-// 穿透豁免：penetration 缺省 1；penBypass = min(.8, (pen-1)/4)——手枪 0 → AWM(3) .5 → 燧石66(5) .8；
+// 穿透豁免：penetration 缺省 1；penBypass = min(.8, (pen-1)/4)——手枪 0 → AWM(3) .5 → 燧石66(15) .8；
 // 实际减免 = damageReduction × (1 - penBypass)：重甲基础 70%，AWM 削到 35%，燧石66 削到 14%。
 function armorPenBypass(sourceWeapon: WeaponKey) {
   return Math.min(.8, ((WEAPONS[sourceWeapon].penetration ?? 1) - 1) / 4);
@@ -4613,6 +4747,22 @@ type BlastEffect = {
   kind: BlastKind;
 };
 
+type ExplosiveProjectile = {
+  id: number;
+  weapon: "rpg7" | "m32";
+  kind: "rocket" | "grenade";
+  startX: number;
+  startY: number;
+  targetX: number;
+  targetY: number;
+  createdAt: number;
+  impactAt: number;
+  angle: number;
+  arcHeight: number;
+  radius: number;
+  damage: number;
+};
+
 type GameState = {
   mode: GameMode;
   day: number;
@@ -4635,6 +4785,7 @@ type GameState = {
   barricades: Barricade[];
   deployedItems: DeployedItem[];
   blastEffects: BlastEffect[];
+  explosiveProjectiles: ExplosiveProjectile[];
   spits: Spit[];
   /** 靶场生成模式：无尽自动刷 / 按配置批次 */
   rangeSpawnMode: "endless" | "batch";
@@ -4693,8 +4844,8 @@ const freshState = (mode: GameMode = "survival", worldW: number = DEFAULT_WORLD_
     ammo: {
       glock17: 17, m1911: 7, pkm: 100, fruitknife: 1, combatknife: 1, crowbar: 1,
       hammer: 1, fireaxe: 1, baseballbat: 1, sawedoff: 2, mac11: 32, mp5k: 30,
-      ak47: 30, m16: 30, scarh: 20, saiga12: 8, rem870: 7, awm: 5, flint66: 10,
-      m240l: 100, rpg7: 1, m32: 6, gatling: 180, fists: 1,
+      ak47: 30, m4: 30, m16: 30, scarh: 20, saiga12: 8, rem870: 7, awm: 5, m107: 10, flint66: 10,
+      m240l: 100, mg42: 100, rpg7: 1, m32: 6, gatling: 180, fists: 1,
     },
     lastShot: 0,
     lastMuzzleFlash: 0,
@@ -4703,6 +4854,7 @@ const freshState = (mode: GameMode = "survival", worldW: number = DEFAULT_WORLD_
     lastMeleeAttack: 0,
     meleeMode: "slash",
     lastKick: 0,
+    emptyReloadLatch: false,
     reloadStartedAt: 0,
     reloadingUntil: 0,
     invulnerableUntil: 0,
@@ -4719,6 +4871,7 @@ const freshState = (mode: GameMode = "survival", worldW: number = DEFAULT_WORLD_
   barricades: [],
   deployedItems: [],
   blastEffects: [],
+  explosiveProjectiles: [],
   spits: [],
   rangeSpawnMode: "endless",
   rangeSpawnQueue: [],
@@ -4797,6 +4950,7 @@ function shiftTimeline(g: GameState, delta: number) {
   for (const prop of g.groundProps) { prop.visibleAt += delta; prop.removeAt += delta; }
   for (const stain of g.bloodStains) stain.removeAt += delta;
   for (const blast of g.blastEffects) { blast.startedAt += delta; blast.until += delta; }
+  for (const projectile of g.explosiveProjectiles) { projectile.createdAt += delta; projectile.impactAt += delta; }
   for (const spit of g.spits) { spit.createdAt += delta; spit.landAt += delta; }
   for (const item of g.deployedItems) {
     item.createdAt += delta;
@@ -4956,7 +5110,7 @@ function drawBlastEffect(ctx: CanvasRenderingContext2D, blast: BlastEffect, now:
       alpha,
     );
   }
-  // 中央烟柱（重型爆炸）：数团堆叠翻滚上升，底部浓、顶部淡
+  // central smoke column：数团堆叠翻滚并明显向上抬升，避免爆炸像贴在路面的平面贴纸。
   if (blast.kind === "airstrike" || blast.kind === "rocket" || blast.kind === "grenade") {
     const smokeScale = blast.kind === "airstrike" ? 1 : blast.kind === "rocket" ? .72 : .48;
     const columnTop = smokeProgress * blast.radius * 1.15 * smokeScale;
@@ -4976,12 +5130,17 @@ function drawBlastEffect(ctx: CanvasRenderingContext2D, blast: BlastEffect, now:
     ? easeOut(progress / 0.35)
     : Math.max(0, 1 - (progress - 0.35) / 0.3));
   if (fireballRadius > 0.5 && fireFade > 0) {
-    const glow = ctx.createRadialGradient(0, 0, 1, 0, 0, fireballRadius);
+    const glow = ctx.createRadialGradient(0, -fireballRadius * .18, 1, 0, -fireballRadius * .18, fireballRadius);
     glow.addColorStop(0, `rgba(255,252,224,${.98 * fireFade})`);
     glow.addColorStop(.3, `rgba(255,196,64,${.92 * fireFade})`);
     glow.addColorStop(.62, `rgba(226,90,32,${.78 * fireFade})`);
     glow.addColorStop(1, "rgba(60,40,30,0)");
-    ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(0, 0, fireballRadius, 0, Math.PI * 2); ctx.fill();
+    ctx.save(); ctx.scale(.94, 1.22); ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(0, -fireballRadius * .12, fireballRadius, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+    // 向上卷起的高温焰柱，重型火箭弹比榴弹更高、更窄。
+    const plumeHeight = fireballRadius * (blast.kind === "rocket" || blast.kind === "airstrike" ? 1.25 : .88);
+    ctx.fillStyle = `rgba(242,119,36,${(.62 * fireFade).toFixed(3)})`;
+    ctx.beginPath(); ctx.moveTo(-fireballRadius * .38, 5); ctx.quadraticCurveTo(-fireballRadius * .28, -plumeHeight * .55, -fireballRadius * .08, -plumeHeight);
+    ctx.quadraticCurveTo(fireballRadius * .35, -plumeHeight * .48, fireballRadius * .42, 5); ctx.closePath(); ctx.fill();
   }
   // 冲击环：起爆瞬间快速扩张并消散的薄压环
   if (progress < 0.3) {
@@ -4989,7 +5148,39 @@ function drawBlastEffect(ctx: CanvasRenderingContext2D, blast: BlastEffect, now:
     const ringRadius = blast.radius * (0.25 + 1.5 * easeOut(ringT));
     ctx.strokeStyle = `rgba(255,238,170,${(1 - ringT) * .85})`;
     ctx.lineWidth = 1.5 + 6 * (1 - ringT) + (blast.kind === "airstrike" ? 3 : 0);
-    ctx.beginPath(); ctx.arc(0, 0, ringRadius, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(0, 5, ringRadius, ringRadius * .28, 0, 0, Math.PI * 2); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawExplosiveProjectile(ctx: CanvasRenderingContext2D, projectile: ExplosiveProjectile, now: number) {
+  const duration = Math.max(1, projectile.impactAt - projectile.createdAt);
+  const t = Math.max(0, Math.min(1, (now - projectile.createdAt) / duration));
+  const x = projectile.startX + (projectile.targetX - projectile.startX) * t;
+  const groundY = projectile.startY + (projectile.targetY - projectile.startY) * t;
+  const y = groundY - Math.sin(t * Math.PI) * projectile.arcHeight;
+  const travelAngle = Math.atan2(projectile.targetY - projectile.startY, projectile.targetX - projectile.startX);
+  ctx.save(); ctx.translate(x, y);
+  if (projectile.kind === "rocket") {
+    // 火箭弹实体：弹头、推进段、尾翼和连续体积尾烟；不使用子弹曳光线。
+    for (let puff = 1; puff <= 5; puff++) {
+      const trailT = Math.max(0, t - puff * .018);
+      const trailX = (projectile.startX + (projectile.targetX - projectile.startX) * trailT) - x;
+      const trailGroundY = projectile.startY + (projectile.targetY - projectile.startY) * trailT;
+      const trailY = trailGroundY - Math.sin(trailT * Math.PI) * projectile.arcHeight - y;
+      softPuff(ctx, trailX, trailY, 9 + puff * 2.8, "78,76,68", .2 * (1 - puff / 7));
+    }
+    ctx.rotate(travelAngle);
+    ctx.fillStyle = "#3f4939"; roundedRect(ctx, -26, -6, 38, 12, 5); ctx.fill();
+    ctx.fillStyle = "#7a8054"; ctx.beginPath(); ctx.moveTo(25, 0); ctx.lineTo(10, -8); ctx.lineTo(10, 8); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#2b312a"; ctx.beginPath(); ctx.moveTo(-23, -5); ctx.lineTo(-32, -12); ctx.lineTo(-28, 0); ctx.lineTo(-32, 12); ctx.lineTo(-23, 5); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#f0a33a"; ctx.beginPath(); ctx.moveTo(-29, 0); ctx.lineTo(-42, -5); ctx.lineTo(-38, 0); ctx.lineTo(-42, 5); ctx.closePath(); ctx.fill();
+  } else {
+    // 40mm 榴弹实体沿抛物线旋转飞行，短粗弹体清晰可见。
+    ctx.rotate(travelAngle + t * Math.PI * 5);
+    ctx.fillStyle = "#54604a"; ctx.beginPath(); ctx.ellipse(0, 0, 12, 7, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#232a24"; ctx.fillRect(-10, -6, 5, 12);
+    ctx.fillStyle = "#b08a43"; ctx.fillRect(5, -5, 3, 10);
   }
   ctx.restore();
 }
@@ -5001,27 +5192,50 @@ function emitExplosionVisuals(
   now: number,
   radius: number,
   kind: BlastKind,
-  particleCount: number,
+  _particleCount: number,
   duration: number,
   shakeMs: number,
 ) {
   game.blastEffects.push({ id: Math.floor(now * 1000 + Math.random() * 999), x, y, startedAt: now, until: now + duration, radius, kind });
-  const heavy = kind === "airstrike" || kind === "rocket";
-  for (let index = 0; index < particleCount; index++) {
-    const angle = Math.random() * Math.PI * 2;
-    const speed = 95 + Math.random() * (heavy ? 520 : 350);
-    const color = index % 5 === 0 ? "#ffe083" : index % 4 === 0 ? "#ef6b32" : index % 3 === 0 ? "#4a4c47" : index % 2 === 0 ? "#786956" : "#a08667";
-    game.particles.push({
-      x,
-      y,
-      vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed - (heavy ? 135 : 95),
-      until: now + (heavy ? 1080 : 780),
-      color,
-      size: 4 + Math.random() * (heavy ? 16 : 11),
-    });
-  }
   game.screenShakeUntil = Math.max(game.screenShakeUntil, now + shakeMs);
+}
+
+type ExplosionDamageApplier = (
+  game: GameState,
+  zombie: Zombie,
+  damage: number,
+  now: number,
+  blastX: number,
+  blastY: number,
+  distance: number,
+  radius: number,
+  kind: BlastKind,
+) => void;
+
+function detonateExplosiveProjectile(game: GameState, projectile: ExplosiveProjectile, now: number, applyDamage: ExplosionDamageApplier) {
+  const blastX = projectile.targetX;
+  const blastY = projectile.targetY;
+  for (const zombie of game.zombies) {
+    const distance = Math.hypot(zombie.x - blastX, zombieBodyY(zombie) - blastY);
+    if (distance > projectile.radius) continue;
+    const falloff = .45 + .55 * (1 - distance / projectile.radius);
+    applyDamage(game, zombie, projectile.damage * falloff, now, blastX, blastY, distance, projectile.radius, projectile.kind);
+    const blastAngle = Math.atan2(zombie.y - blastY, zombie.x - blastX);
+    zombie.x += Math.cos(blastAngle) * (projectile.kind === "rocket" ? 54 : 38);
+    zombie.y += Math.sin(blastAngle) * (projectile.kind === "rocket" ? 34 : 24);
+  }
+  emitExplosionVisuals(
+    game,
+    blastX,
+    blastY,
+    now,
+    projectile.radius,
+    projectile.kind,
+    0,
+    projectile.kind === "rocket" ? 1550 : 1250,
+    projectile.kind === "rocket" ? 500 : 350,
+  );
+  sound.explosion(projectile.kind);
 }
 
 function detachZombieLimb(game: GameState, zombie: Zombie, limb: ZombieLimb, blastX: number, blastY: number, now: number) {
@@ -5276,6 +5490,10 @@ function remapWorldX(g: GameState, factor: number) {
   for (const limb of g.detachedLimbs) limb.x *= factor;
   for (const shard of g.metalShards) shard.x *= factor;
   for (const blast of g.blastEffects) blast.x *= factor;
+  for (const projectile of g.explosiveProjectiles) {
+    projectile.startX *= factor;
+    projectile.targetX *= factor;
+  }
   for (const spit of g.spits) { spit.fromX *= factor; spit.targetX *= factor; }
   for (const prop of g.groundProps) prop.x *= factor;
   for (const tracer of g.tracers) { tracer.x1 *= factor; tracer.x2 *= factor; }
@@ -6083,7 +6301,7 @@ function drawZombieHeadAndWounds(ctx: CanvasRenderingContext2D, zombie: Zombie, 
       ctx.stroke();
     }
     // 松垂口腔（呕吐僵尸与巨型变异 Boss 为肿胀的绿色毒喉）
-    const toxicMouth = zombie.kind === "spitter" || zombie.bossKind === "giantMutant";
+    const toxicMouth = zombie.kind === "spitter" || zombie.kind === "largeSpitter" || zombie.bossKind === "giantMutant";
     ctx.fillStyle = toxicMouth ? "#5e9a2e" : "#5d171b";
     ctx.beginPath();
     ctx.moveTo(facing * 4 * scale, -113 * scale); ctx.lineTo(facing * 8 * scale, -112.5 * scale); ctx.lineTo(facing * 5 * scale, -109.5 * scale);
@@ -6145,6 +6363,55 @@ function drawZombieHeadAndWounds(ctx: CanvasRenderingContext2D, zombie: Zombie, 
   }
 }
 
+function zombieDogLunge(zombie: Zombie, now: number) {
+  const attackAge = now - zombie.lastHit;
+  return attackAge >= 0 && attackAge < 560 ? Math.sin(Math.min(1, attackAge / 560) * Math.PI) : 0;
+}
+
+function drawZombieDog(ctx: CanvasRenderingContext2D, zombie: Zombie, scale: number, facing: number, now: number) {
+  const gait = Math.sin(now / 68 + zombie.wobble * Math.PI * 2);
+  const lunge = zombieDogLunge(zombie, now);
+  const skin = "#667150";
+  const dark = "#30372d";
+  ctx.save();
+  ctx.translate(facing * lunge * 13 * scale, -lunge * 5 * scale);
+  // 四足骨架：前后腿交替摆动；断肢字段继续复用公共结构损伤系统。
+  const legs: Array<{ limb: ZombieLimb; x: number; phase: number }> = [
+    { limb: "leftLeg", x: -20, phase: gait }, { limb: "rightLeg", x: -11, phase: -gait },
+    { limb: "leftArm", x: 13, phase: -gait }, { limb: "rightArm", x: 22, phase: gait },
+  ];
+  ctx.strokeStyle = dark; ctx.lineWidth = 7 * scale; ctx.lineCap = "round";
+  for (const leg of legs) {
+    if (zombie.missingLimbs.has(leg.limb)) continue;
+    const kneeX = leg.x + facing * leg.phase * 4;
+    const pawX = leg.x - facing * leg.phase * 7;
+    ctx.beginPath(); ctx.moveTo(leg.x * scale, -45 * scale); ctx.lineTo(kneeX * scale, -23 * scale); ctx.lineTo(pawX * scale, -3 * scale); ctx.stroke();
+    ctx.fillStyle = "#1d211c"; ctx.beginPath(); ctx.ellipse((pawX + facing * 4) * scale, -2 * scale, 7 * scale, 3 * scale, 0, 0, Math.PI * 2); ctx.fill();
+  }
+  // 水平胸腔与突出的肩胛，保留低饱和感染皮肤和破损血肉。
+  ctx.fillStyle = skin;
+  ctx.beginPath(); ctx.ellipse(0, -54 * scale, 31 * scale, 17 * scale, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "rgba(0,0,0,.2)"; ctx.beginPath(); ctx.ellipse(-8 * scale, -49 * scale, 20 * scale, 7 * scale, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = "rgba(35,44,30,.7)"; ctx.lineWidth = 1.4 * scale;
+  for (let rib = -12; rib <= 10; rib += 7) { ctx.beginPath(); ctx.moveTo(rib * scale, -64 * scale); ctx.quadraticCurveTo((rib - 4) * scale, -54 * scale, rib * scale, -45 * scale); ctx.stroke(); }
+  // 尾部与犬首：攻击时前探张嘴，区别于人形僵尸但继续使用同一受击、血液和倒地链。
+  ctx.strokeStyle = skin; ctx.lineWidth = 6 * scale; ctx.beginPath(); ctx.moveTo(-27 * scale, -58 * scale); ctx.quadraticCurveTo(-43 * scale, -70 * scale, -48 * scale, -52 * scale); ctx.stroke();
+  const headX = facing * (31 + lunge * 7);
+  ctx.fillStyle = skin; ctx.beginPath(); ctx.ellipse(headX * scale, -65 * scale, 15 * scale, 13 * scale, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.moveTo((headX - facing * 9) * scale, -74 * scale); ctx.lineTo((headX - facing * 4) * scale, -90 * scale); ctx.lineTo((headX + facing * 2) * scale, -75 * scale); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "#151915"; ctx.beginPath(); ctx.ellipse((headX + facing * 13) * scale, -62 * scale, 10 * scale, (5 + lunge * 4) * scale, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#c54b3c"; ctx.beginPath(); ctx.ellipse((headX + facing * 10) * scale, (-59 + lunge * 3) * scale, 6 * scale, 2.5 * scale, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#d5b65a"; ctx.beginPath(); ctx.arc((headX + facing * 4) * scale, -69 * scale, 2.2 * scale, 0, Math.PI * 2); ctx.fill();
+  for (const wound of zombie.wounds) {
+    // 犬首伤口以“面向前方”的规范坐标保存，渲染时随当前朝向镜像，转身后仍贴在头上。
+    const woundX = wound.region === "head" ? facing * wound.x : wound.x;
+    ctx.fillStyle = "#33070b";
+    ctx.beginPath(); ctx.ellipse(woundX * scale, wound.y * scale, wound.size * scale, wound.size * .65 * scale, .2, 0, Math.PI * 2); ctx.fill();
+    if (wound.bone) { ctx.strokeStyle = "#d5d0bd"; ctx.lineWidth = 1.2 * scale; ctx.beginPath(); ctx.moveTo((woundX - 3) * scale, wound.y * scale); ctx.lineTo((woundX + 4) * scale, (wound.y - 2) * scale); ctx.stroke(); }
+  }
+  ctx.restore();
+}
+
 function drawZombieCorpse(ctx: CanvasRenderingContext2D, corpse: ZombieCorpse, now: number) {
   const zombie = corpse.zombie;
   const scale = (zombie.radius / 25) * CHARACTER_SCALE;
@@ -6174,10 +6441,13 @@ function drawZombieCorpse(ctx: CanvasRenderingContext2D, corpse: ZombieCorpse, n
   ctx.translate(originX, originY);
   ctx.rotate(rotation);
 
-  drawZombieLegAssembly(ctx, zombie, rearLeg, frontLeg, scale);
-  drawZombieTorso(ctx, zombie, scale);
-  drawZombieArmAssembly(ctx, zombie, leftArm, rightArm, scale, skin);
-  drawZombieHeadAndWounds(ctx, zombie, scale, facing, false);
+  if (zombie.kind === "zombieDog") drawZombieDog(ctx, zombie, scale, facing, now);
+  else {
+    drawZombieLegAssembly(ctx, zombie, rearLeg, frontLeg, scale);
+    drawZombieTorso(ctx, zombie, scale);
+    drawZombieArmAssembly(ctx, zombie, leftArm, rightArm, scale, skin);
+    drawZombieHeadAndWounds(ctx, zombie, scale, facing, false);
+  }
   ctx.restore();
 }
 
@@ -6501,7 +6771,7 @@ function drawWeaponModel(ctx: CanvasRenderingContext2D, key: WeaponKey, scale = 
     ctx.fillRect(37, 3, 18, 2);
   }
 
-  if (key === "m16") {
+  if (key === "m16" || key === "m4") {
     ctx.fillStyle = polymer;
     ctx.beginPath(); ctx.moveTo(-37,-8); ctx.lineTo(-7,-8); ctx.lineTo(2,-3); ctx.lineTo(-6,7); ctx.lineTo(-34,8); ctx.closePath(); ctx.fill();
     ctx.fillStyle = metal; roundedRect(ctx, -4, -9, 43, 17, 2); ctx.fill();
@@ -6594,7 +6864,7 @@ function drawWeaponModel(ctx: CanvasRenderingContext2D, key: WeaponKey, scale = 
     ctx.strokeStyle=accent;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(pumpX + 5,2);ctx.lineTo(pumpX + 23,2);ctx.stroke();
   }
 
-  if (key === "awm") {
+  if (key === "awm" || key === "m107") {
     ctx.fillStyle="#708064";
     ctx.beginPath();ctx.moveTo(-42,-10);ctx.lineTo(-8,-10);ctx.lineTo(5,-4);ctx.lineTo(-1,8);ctx.lineTo(-18,9);ctx.quadraticCurveTo(-10,20,-24,21);ctx.lineTo(-38,12);ctx.closePath();ctx.fill();
     ctx.fillStyle=metal;roundedRect(ctx,-4,-9,43,17,3);ctx.fill();
@@ -6640,7 +6910,7 @@ function drawWeaponModel(ctx: CanvasRenderingContext2D, key: WeaponKey, scale = 
     ctx.fillStyle = accent; ctx.fillRect(-2,3,11,3);
   }
 
-  if (key === "m240l") {
+  if (key === "m240l" || key === "mg42") {
     ctx.fillStyle=polymer;ctx.beginPath();ctx.moveTo(-39,-9);ctx.lineTo(-8,-9);ctx.lineTo(2,-3);ctx.lineTo(-4,8);ctx.lineTo(-35,9);ctx.closePath();ctx.fill();
     ctx.fillStyle=metal;roundedRect(ctx,-4,-12,51,22,3);ctx.fill();
     if(!hideMagazine){ctx.fillStyle="#3c4039";roundedRect(ctx,7,8,27,27,3);ctx.fill();}
@@ -6713,8 +6983,8 @@ function drawWeaponModel(ctx: CanvasRenderingContext2D, key: WeaponKey, scale = 
   }
 
   const pistolKeys: WeaponKey[] = ["glock17", "m1911"];
-  const receiverKeys: WeaponKey[] = ["mp5k", "mac11", "ak47", "m16", "scarh", "saiga12", "awm", "flint66", "m240l", "pkm"];
-  const rifleGripKeys: WeaponKey[] = ["ak47", "m16", "scarh", "saiga12", "awm", "flint66", "m240l", "pkm"];
+  const receiverKeys: WeaponKey[] = ["mp5k", "mac11", "ak47", "m4", "m16", "scarh", "saiga12", "awm", "m107", "flint66", "m240l", "mg42", "pkm"];
+  const rifleGripKeys: WeaponKey[] = ["ak47", "m4", "m16", "scarh", "saiga12", "awm", "m107", "flint66", "m240l", "mg42", "pkm"];
 
   if (pistolKeys.includes(key)) {
     const length = key === "m1911" ? 48 : 45;
@@ -6758,7 +7028,7 @@ function drawWeaponModel(ctx: CanvasRenderingContext2D, key: WeaponKey, scale = 
     ctx.beginPath(); ctx.moveTo(2, 10); ctx.lineTo(8, 11); ctx.moveTo(2, 15); ctx.lineTo(7, 16); ctx.stroke();
   }
 
-  if (["saiga12", "rem870", "m240l", "pkm"].includes(key)) {
+  if (["saiga12", "rem870", "m240l", "mg42", "pkm"].includes(key)) {
     const length = WEAPON_GEOMETRY[key].muzzleX;
     ctx.strokeStyle = "#737b76";
     ctx.lineWidth = 1.4;
@@ -6774,7 +7044,7 @@ function drawWeaponModel(ctx: CanvasRenderingContext2D, key: WeaponKey, scale = 
     ctx.strokeStyle = "#858d87"; ctx.beginPath(); ctx.arc(6, 7, 8, 0, Math.PI); ctx.stroke();
   }
 
-  if (key === "awm" || key === "flint66") {
+  if (key === "awm" || key === "m107" || key === "flint66") {
     // 栓柄：静止时位于扳机上方机匣后段（真实栓位，随 WEAPON_HOLD.charge 点位）；拉栓循环时上抬开锁→后拉（枪机尾段外露、抛壳）→前推→下压锁定
     const charge = WEAPON_HOLD[key].charge;
     if (charge) {
@@ -6849,10 +7119,10 @@ function drawWeaponModel(ctx: CanvasRenderingContext2D, key: WeaponKey, scale = 
       const hx = charge.x + charge.pull[0] * cycleOffset;
       const hy = charge.y + charge.pull[1] * cycleOffset;
       ctx.fillStyle = "#0a0d0b";
-      if (key === "m16") {
+      if (key === "m16" || key === "m4") {
         // T 形拉机柄
         ctx.fillRect(hx - 5, hy - 2, 8, 4); ctx.fillRect(hx - 1, hy - 4, 3, 8);
-      } else if (key === "awm") {
+      } else if (key === "awm" || key === "m107") {
         ctx.beginPath(); ctx.arc(hx, hy, 3.2, 0, Math.PI * 2); ctx.fill();
         ctx.strokeStyle = "#0a0d0b"; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(hx + 2, hy + 2); ctx.lineTo(hx + 6, hy + 7); ctx.stroke();
       } else {
@@ -6887,13 +7157,16 @@ const WEAPON_GEOMETRY: Record<WeaponKey, { stockEnd: number; receiverStart: numb
   mac11: { stockEnd: -21, receiverStart: -4, receiverEnd: 43, barrelStart: 43, muzzleX: 70 },
   mp5k: { stockEnd: -13, receiverStart: 0, receiverEnd: 43, barrelStart: 42, muzzleX: 69 },
   ak47: { stockEnd: -36, receiverStart: -3, receiverEnd: 36, barrelStart: 57, muzzleX: 91 },
+  m4: { stockEnd: -34, receiverStart: -4, receiverEnd: 39, barrelStart: 58, muzzleX: 96 },
   m16: { stockEnd: -37, receiverStart: -4, receiverEnd: 39, barrelStart: 62, muzzleX: 104 },
   scarh: { stockEnd: -38, receiverStart: -5, receiverEnd: 43, barrelStart: 41, muzzleX: 97 },
   saiga12: { stockEnd: -36, receiverStart: -3, receiverEnd: 39, barrelStart: 63, muzzleX: 105 },
   rem870: { stockEnd: -38, receiverStart: -3, receiverEnd: 35, barrelStart: 61, muzzleX: 117 },
   awm: { stockEnd: -42, receiverStart: -4, receiverEnd: 39, barrelStart: 37, muzzleX: 114 },
+  m107: { stockEnd: -46, receiverStart: -5, receiverEnd: 48, barrelStart: 56, muzzleX: 140 },
   flint66: { stockEnd: -44, receiverStart: -6, receiverEnd: 44, barrelStart: 44, muzzleX: 132 },
   m240l: { stockEnd: -39, receiverStart: -4, receiverEnd: 47, barrelStart: 72, muzzleX: 127 },
+  mg42: { stockEnd: -42, receiverStart: -5, receiverEnd: 50, barrelStart: 70, muzzleX: 132 },
   rpg7: { stockEnd: -40, receiverStart: -30, receiverEnd: 56, barrelStart: -30, muzzleX: 108 },
   m32: { stockEnd: -36, receiverStart: -7, receiverEnd: 34, barrelStart: 30, muzzleX: 90 },
   gatling: { stockEnd: -27, receiverStart: -17, receiverEnd: 29, barrelStart: 25, muzzleX: 120 },
@@ -6902,16 +7175,16 @@ const WEAPON_GEOMETRY: Record<WeaponKey, { stockEnd: number; receiverStart: numb
 const REAL_LENGTH_MM: Record<WeaponKey, number> = {
   glock17: 204, m1911: 216, pkm: 1192, fruitknife: 180, combatknife: 300,
   crowbar: 760, hammer: 700, fireaxe: 900, baseballbat: 860, sawedoff: 500,
-  mac11: 248, mp5k: 325, ak47: 880, m16: 1006, scarh: 969,
-  saiga12: 1145, rem870: 978, awm: 1270, flint66: 1450, m240l: 1115,
+  mac11: 248, mp5k: 325, ak47: 880, m4: 838, m16: 1006, scarh: 969,
+  saiga12: 1145, rem870: 978, awm: 1270, m107: 1448, flint66: 1450, m240l: 1115, mg42: 1220,
   rpg7: 950, m32: 813, gatling: 801, fists: 620,
 };
 
 const REAL_BARREL_MM: Record<WeaponKey, number> = {
   glock17: 114, m1911: 127, pkm: 658, fruitknife: 0, combatknife: 0,
   crowbar: 0, hammer: 0, fireaxe: 0, baseballbat: 0, sawedoff: 300,
-  mac11: 129, mp5k: 115, ak47: 415, m16: 508, scarh: 406.4,
-  saiga12: 430, rem870: 457, awm: 686, flint66: 860, m240l: 551,
+  mac11: 129, mp5k: 115, ak47: 415, m4: 368, m16: 508, scarh: 406.4,
+  saiga12: 430, rem870: 457, awm: 686, m107: 737, flint66: 860, m240l: 551, mg42: 533,
   rpg7: 0, m32: 305, gatling: 559, fists: 0,
 };
 
@@ -6939,10 +7212,12 @@ const WEAPON_HOLD: Record<WeaponKey, WeaponHold> = {
   mp5k: { stance: "rifle", grip: [9, 12], fore: [39, 15], reloadKind: "mag", magWell: [21, 20], charge: { x: 45, y: -8, pull: [-11, 0] } },
   // 步枪：AK 系右侧大行程拉机柄；M16 拉机柄在机匣后方
   ak47: { stance: "rifle", grip: [4, 12], fore: [45, 1], reloadKind: "mag", magWell: [16, 12], charge: { x: 23, y: -1, pull: [-19, 0] } },
+  m4: { stance: "rifle", grip: [4, 12], fore: [47, 0], reloadKind: "mag", magWell: [17, 14], charge: { x: -1, y: -7, pull: [-10, 0] } },
   m16: { stance: "rifle", grip: [4, 12], fore: [50, 0], reloadKind: "mag", magWell: [17, 14], charge: { x: -1, y: -7, pull: [-10, 0] } },
   scarh: { stance: "rifle", grip: [5, 13], fore: [54, 1], reloadKind: "mag", magWell: [19, 15], charge: { x: 36, y: -9, pull: [-15, 0] } },
   saiga12: { stance: "rifle", grip: [4, 12], fore: [49, 0], reloadKind: "mag", magWell: [18, 13], charge: { x: 24, y: -1, pull: [-19, 0] } },
   awm: { stance: "rifle", grip: [4, 12], fore: [50, 2], reloadKind: "mag", magWell: [16, 14], charge: { x: 20, y: -3, pull: [-11, -1] } },
+  m107: { stance: "rifle", grip: [4, 12], fore: [60, 2], reloadKind: "mag", magWell: [20, 15], charge: { x: 31, y: -4, pull: [-16, 0] } },
   // 燧石66：半自动反器材步枪，长枪管 + 两脚架，前手握持点相应前移
   flint66: { stance: "rifle", grip: [4, 12], fore: [56, 2], reloadKind: "mag", magWell: [18, 14], charge: { x: 26, y: -3, pull: [-13, 0] } },
   // 霰弹枪：管状弹仓逐发装填 + 泵动上膛
@@ -6950,6 +7225,7 @@ const WEAPON_HOLD: Record<WeaponKey, WeaponHold> = {
   sawedoff: { stance: "rifle", grip: [4, 12], fore: [40, 0], reloadKind: "shells", feed: [12, 9] },
   // 机枪：弹箱/弹鼓挂于机匣下方，右侧拉机柄
   m240l: { stance: "rifle", grip: [4, 12], fore: [58, 3], reloadKind: "mag", magWell: [20, 20], charge: { x: 26, y: 3, pull: [-21, 0] } },
+  mg42: { stance: "rifle", grip: [4, 12], fore: [60, 3], reloadKind: "mag", magWell: [23, 20], charge: { x: 31, y: 3, pull: [-22, 0] } },
   pkm: { stance: "rifle", grip: [4, 12], fore: [57, 3], reloadKind: "mag", magWell: [22, 20], charge: { x: 28, y: 3, pull: [-21, 0] } },
   gatling: { stance: "rifle", grip: [-21, 18], fore: [22, 13], reloadKind: "mag", magWell: [-2, 18] },
   // RPG-7：肩扛式，弹头从筒口塞入
@@ -6994,7 +7270,7 @@ function playerGunOrigin(player: Player) {
 }
 
 function zombieBodyY(zombie: Zombie) {
-  return zombie.y - 79 * (zombie.radius / 25) * CHARACTER_SCALE;
+  return zombie.y - (zombie.kind === "zombieDog" ? 55 : 79) * (zombie.radius / 25) * CHARACTER_SCALE;
 }
 
 function zombieInClaymoreCone(item: DeployedItem, zombie: Zombie, radius: number) {
@@ -7171,7 +7447,7 @@ function drawReloadProps(ctx: CanvasRenderingContext2D, key: WeaponKey, visual: 
     ctx.rotate(rot);
     ctx.globalAlpha = alpha;
     ctx.fillStyle = fill;
-    if (["m240l", "pkm", "gatling"].includes(key)) {
+    if (["m240l", "mg42", "pkm", "gatling"].includes(key)) {
       roundedRect(ctx, -8, -7, 26, 25, 3); ctx.fill();
     } else if (key === "ak47" || key === "saiga12") {
       ctx.beginPath(); ctx.moveTo(-6, -6); ctx.lineTo(8, -6); ctx.quadraticCurveTo(13, 8, 5, 21); ctx.lineTo(-4, 19); ctx.quadraticCurveTo(4, 8, -6, -6); ctx.fill();
@@ -7237,7 +7513,7 @@ function drawGroundProp(ctx: CanvasRenderingContext2D, prop: GroundProp) {
   ctx.scale(propScale, propScale);
   ctx.fillStyle = "#151a18";
   const key = prop.weapon ?? "glock17";
-  if (["m240l", "pkm", "gatling"].includes(key)) {
+  if (["m240l", "mg42", "pkm", "gatling"].includes(key)) {
     roundedRect(ctx, -8, -7, 26, 25, 3); ctx.fill();
   } else if (key === "ak47" || key === "saiga12") {
     ctx.beginPath(); ctx.moveTo(-6, -6); ctx.lineTo(8, -6); ctx.quadraticCurveTo(13, 8, 5, 21); ctx.lineTo(-4, 19); ctx.quadraticCurveTo(4, 8, -6, -6); ctx.fill();
@@ -7631,12 +7907,12 @@ function PartnerPreview({ partner }: { partner: PartnerKey }) {
 // 靶场"僵尸生成"页签预览：服装按种类缓存（避免每次渲染换 outfit），站姿固定、朝向左侧（面向玩家一侧）
 const PREVIEW_OUTFITS = new Map<ZombieKind, ZombieOutfit>();
 function previewZombie(kind: ZombieKind): Zombie {
-  const radius = kind === "brute" ? 33 : kind === "mutant" ? 36 : kind === "juggernaut" ? 35 : 25;
+  const radius = kind === "brute" ? 33 : kind === "normal" ? 25 : ZOMBIE_KIND_SPECS[kind].radius ?? 25;
   const skin = radius > 29 ? "#6e7c52" : "#7e8c60";
   let outfit = PREVIEW_OUTFITS.get(kind);
   if (!outfit) { outfit = randomZombieOutfit(skin); PREVIEW_OUTFITS.set(kind, outfit); }
   return {
-    id: 0, kind, x: 0, y: 0, hp: 1, maxHp: 1, speed: 0, radius, attack: 0,
+    id: 0, kind, warehouseArmor: kind === "armored" || kind === "armoredRunner", x: 0, y: 0, hp: 1, maxHp: 1, speed: 0, radius, attack: 0,
     damageReduction: 0, shieldIntact: kind === "shield", shieldHp: kind === "shield" ? SHIELD_HP : 0, shieldDents: [], spitAt: 0, nextSpitAt: 0,
     lastHit: 0, attackHitApplied: true, knockedDownAt: 0, knockedDownUntil: 0,
     knockFacing: -1, knockStartFactor: 0, knockStartLift: 0, knockStartRecoveryProgress: 0,
@@ -7659,10 +7935,13 @@ function ZombieKindPreview({ kind, width = 150, height = 200, className = "spawn
     const skin = z.radius > 29 ? "#6e7c52" : "#7e8c60";
     ctx.save();
     ctx.translate(canvas.width / 2, canvas.height - 6);
-    drawZombieLegAssembly(ctx, z, standingLegPose(-1, -5), standingLegPose(-1, 5), scale);
-    drawZombieTorso(ctx, z, scale);
-    drawZombieArmAssembly(ctx, z, zombieSmashArmPose(0, -1, -1), zombieSmashArmPose(0, -1, 1), scale, skin);
-    drawZombieHeadAndWounds(ctx, z, scale, -1, true);
+    if (z.kind === "zombieDog") drawZombieDog(ctx, z, scale, -1, 0);
+    else {
+      drawZombieLegAssembly(ctx, z, standingLegPose(-1, -5), standingLegPose(-1, 5), scale);
+      drawZombieTorso(ctx, z, scale);
+      drawZombieArmAssembly(ctx, z, zombieSmashArmPose(0, -1, -1), zombieSmashArmPose(0, -1, 1), scale, skin);
+      drawZombieHeadAndWounds(ctx, z, scale, -1, true);
+    }
     if (z.kind === "shield" && z.shieldIntact) drawZombieShield(ctx, z, scale, -1);
     ctx.restore();
   }, [kind, width, height]);
@@ -7716,7 +7995,7 @@ function lineCircleClosestT(x1: number, y1: number, x2: number, y2: number, cx: 
   return (closestX - cx) ** 2 + (closestY - cy) ** 2 <= radius * radius ? t : null;
 }
 
-function hitZombieRegion(x1: number, y1: number, x2: number, y2: number, zombie: Zombie, now: number): ZombieHit | null {
+function hitZombieRegion(x1: number, y1: number, x2: number, y2: number, zombie: Zombie, now: number, facingTargetX = x1): ZombieHit | null {
   const scale = (zombie.radius / 25) * CHARACTER_SCALE;
   const pose = zombieKnockPose(zombie, now);
   const rotation = pose.rotation;
@@ -7724,11 +8003,21 @@ function hitZombieRegion(x1: number, y1: number, x2: number, y2: number, zombie:
   const pivotY = pose.pivotY;
   const cos = Math.cos(rotation);
   const sin = Math.sin(rotation);
-  const regions: Array<{ region: HitRegion; localX: number; localY: number; radius: number }> = [
-    { region: "head", localX: 0, localY: -114, radius: 10.5 * scale },
-    { region: "body", localX: 0, localY: -80, radius: (zombie.kind === "juggernaut" ? JUGGERNAUT_BODY_HIT_RADIUS : 18) * scale },
-    { region: "legs", localX: 0, localY: -29, radius: 17 * scale },
-  ];
+  const dogFacing = pose.active ? zombie.knockFacing : facingTargetX >= zombie.x ? 1 : -1;
+  const dogLunge = zombie.kind === "zombieDog" ? zombieDogLunge(zombie, now) : 0;
+  const dogShiftX = dogFacing * dogLunge * 13;
+  const dogShiftY = -dogLunge * 5;
+  const regions: Array<{ region: HitRegion; localX: number; localY: number; radius: number }> = zombie.kind === "zombieDog"
+    ? [
+      { region: "head", localX: dogShiftX + dogFacing * (31 + dogLunge * 7), localY: dogShiftY - 65, radius: 15 * scale },
+      { region: "body", localX: dogShiftX, localY: dogShiftY - 54, radius: 25 * scale },
+      { region: "legs", localX: dogShiftX, localY: dogShiftY - 18, radius: 18 * scale },
+    ]
+    : [
+      { region: "head", localX: 0, localY: -114, radius: 10.5 * scale },
+      { region: "body", localX: 0, localY: -80, radius: (zombie.kind === "juggernaut" ? JUGGERNAUT_BODY_HIT_RADIUS : 18) * scale },
+      { region: "legs", localX: 0, localY: -29, radius: 17 * scale },
+    ];
   let nearest: ZombieHit | null = null;
   for (const region of regions) {
     const regionX = pivotX + (cos * region.localX - sin * region.localY) * scale;
@@ -7744,13 +8033,21 @@ function hitZombieRegion(x1: number, y1: number, x2: number, y2: number, zombie:
     const y = y1 + (y2 - y1) * sampleT;
     const relativeX = x - pivotX;
     const relativeY = y - pivotY;
+    let hitLocalX = (cos * relativeX + sin * relativeY) / scale;
+    let hitLocalY = (-sin * relativeX + cos * relativeY) / scale;
+    // 命中盒跟随犬首前探；伤口则还原到稳定的模型局部坐标，避免攻击动画结束后漂移。
+    if (zombie.kind === "zombieDog") {
+      hitLocalX -= dogShiftX + (region.region === "head" ? dogFacing * dogLunge * 7 : 0);
+      hitLocalY -= dogShiftY;
+      if (region.region === "head") hitLocalX *= dogFacing;
+    }
     nearest = {
       region: region.region,
       t: orderT,
       x,
       y,
-      localX: (cos * relativeX + sin * relativeY) / scale,
-      localY: (-sin * relativeX + cos * relativeY) / scale,
+      localX: hitLocalX,
+      localY: hitLocalY,
     };
   }
   return nearest;
@@ -7796,7 +8093,8 @@ export function DeadRoadGame() {
   const [shopTab, setShopTab] = useState<ShopTab>("weapons");
   // 靶场"僵尸生成"页签：各品种配置数量（0~30），纯 UI state，不进游戏快照
   const [spawnCounts, setSpawnCounts] = useState<Record<ZombieKind, number>>({
-    normal: 6, brute: 0, runner: 0, spitter: 0, helmet: 0, helmetRunner: 0,
+    normal: 6, brute: 0, runner: 0, spitter: 0, largeSpitter: 0, zombieDog: 0,
+    helmet: 0, helmetRunner: 0, armored: 0, armoredRunner: 0,
     mutant: 0, army: 0, armyRunner: 0, shield: 0, juggernaut: 0,
   });
   // 商店详情视图：点击商品卡先展开详情面板，确认后再购买/装备
@@ -9199,6 +9497,7 @@ export function DeadRoadGame() {
     g.barricades = [];
     g.deployedItems = [];
     g.blastEffects = [];
+    g.explosiveProjectiles = [];
     g.flashUntil = 0;
     g.selectedItem = null;
     g.waveClearedAt = null;
@@ -9402,6 +9701,7 @@ export function DeadRoadGame() {
     const carry: WeaponKey[] = [g.loadout[0], g.loadout[1], g.melee];
     const current = carry.indexOf(g.player.weapon);
     g.player.weapon = carry[(current + 1 + carry.length) % carry.length];
+    g.player.emptyReloadLatch = false;
     g.player.reloadStartedAt = 0;
     g.player.reloadingUntil = 0;
     syncSnapshot();
@@ -9660,14 +9960,16 @@ export function DeadRoadGame() {
       }
       level.vehicleAmmo -= 1;
       level.vehicleLastShot = now;
-      const originX = level.truckX;
-      const originY = level.truckY - 180;
-      const aimAngle = Math.atan2(mouseRef.current.y - originY, mouseRef.current.x + g.cameraX - originX);
+      const mountX = level.truckX + LEVEL8_HMG_MOUNT_X;
+      const mountY = level.truckY + LEVEL8_HMG_MOUNT_Y;
+      const aimAngle = Math.atan2(mouseRef.current.y - mountY, mouseRef.current.x + g.cameraX - mountX);
       level.vehicleAimAngle = aimAngle;
-      const endX = originX + Math.cos(aimAngle) * LEVEL8_HMG_RANGE;
-      const endY = originY + Math.sin(aimAngle) * LEVEL8_HMG_RANGE;
+      const muzzleX = mountX + Math.cos(aimAngle) * LEVEL8_HMG_MUZZLE_X;
+      const muzzleY = mountY + Math.sin(aimAngle) * LEVEL8_HMG_MUZZLE_X;
+      const endX = muzzleX + Math.cos(aimAngle) * LEVEL8_HMG_RANGE;
+      const endY = muzzleY + Math.sin(aimAngle) * LEVEL8_HMG_RANGE;
       const hits = g.zombies
-        .map((zombie) => ({ zombie, impact: hitZombieRegion(originX, originY, endX, endY, zombie, now) }))
+        .map((zombie) => ({ zombie, impact: hitZombieRegion(muzzleX, muzzleY, endX, endY, zombie, now, g.player.x) }))
         .filter((entry): entry is { zombie: Zombie; impact: ZombieHit } => entry.impact !== null)
         .sort((a, b) => a.impact.t - b.impact.t)
         .slice(0, LEVEL8_HMG_PENETRATION);
@@ -9680,13 +9982,14 @@ export function DeadRoadGame() {
         });
         if (blocked) break;
       }
-      g.tracers.push({ x1: originX + Math.cos(aimAngle) * 136, y1: originY + Math.sin(aimAngle) * 136, x2: tracerX, y2: tracerY, until: now + 95, color: "#f6d267" });
+      g.tracers.push({ x1: muzzleX, y1: muzzleY, x2: tracerX, y2: tracerY, until: now + 95, color: "#f6d267" });
       g.screenShakeUntil = now + 95;
       sound.gunshot("m240l", { fireRateMs: LEVEL8_HMG_FIRE_MS });
       return;
     }
     const p = g.player;
     const weapon = WEAPONS[p.weapon];
+    if (p.emptyReloadLatch) return;
     const origin = playerGunOrigin(p);
     if (now < p.reloadingUntil || now - p.lastShot < weapon.fireRate) return;
 
@@ -9724,6 +10027,7 @@ export function DeadRoadGame() {
 
     if (p.ammo[p.weapon] <= 0) {
       // 所有模式统一：空弹匣时左键与 R 键都启动换弹；仍有余弹时左键只负责射击。
+      p.emptyReloadLatch = true;
       reloadRef.current(now);
       return;
     }
@@ -9760,38 +10064,38 @@ export function DeadRoadGame() {
     if (weapon.explosionRadius) {
       const blastKind = weapon.blastKind ?? "grenade";
       const angle = p.angle + (Math.random() - .5) * (weapon.spread || 0);
-      const cursorDistance = Math.hypot(mouseRef.current.x - origin.x, mouseRef.current.y - origin.y);
+      const pointerWorldX = mouseRef.current.x + g.cameraX;
+      const cursorDistance = Math.hypot(pointerWorldX - origin.x, mouseRef.current.y - origin.y);
       const distance = Math.min(weapon.range, Math.max(120, cursorDistance));
-      let blastX = origin.x + Math.cos(angle) * distance;
-      let blastY = origin.y + Math.sin(angle) * distance;
+      let targetX = origin.x + Math.cos(angle) * distance;
+      let targetY = origin.y + Math.sin(angle) * distance;
       let nearest: { zombie: Zombie; impact: ZombieHit } | undefined;
       for (const z of g.zombies) {
-        const impact = hitZombieRegion(origin.x, origin.y, blastX, blastY, z, now);
+        const impact = hitZombieRegion(origin.x, origin.y, targetX, targetY, z, now, g.player.x);
         if (impact && (!nearest || impact.t < nearest.impact.t)) nearest = { zombie: z, impact };
       }
-      if (nearest) { blastX = nearest.impact.x; blastY = nearest.impact.y; }
+      if (nearest) { targetX = nearest.impact.x; targetY = nearest.impact.y; }
       const muzzle = weaponMuzzleOffset(p.weapon);
-      g.tracers.push({ x1: origin.x + Math.cos(angle) * muzzle, y1: origin.y + Math.sin(angle) * muzzle, x2: blastX, y2: blastY, until: now + 150, color: weapon.color });
-      for (const z of g.zombies) {
-        const d = Math.hypot(z.x - blastX, zombieBodyY(z) - blastY);
-        if (d <= weapon.explosionRadius) {
-          const falloff = .45 + .55 * (1 - d / weapon.explosionRadius);
-          damageZombieFromExplosion(g, z, weapon.damage * falloff, now, blastX, blastY, d, weapon.explosionRadius, blastKind);
-          z.x += Math.cos(Math.atan2(z.y - blastY, z.x - blastX)) * 42;
-        }
-      }
-      emitExplosionVisuals(
-        g,
-        blastX,
-        blastY,
-        now,
-        weapon.explosionRadius,
-        blastKind,
-        blastKind === "rocket" ? 100 : 76,
-        blastKind === "rocket" ? 1350 : 1050,
-        blastKind === "rocket" ? 470 : 330,
-      );
-      sound.explosion(blastKind);
+      const startX = origin.x + Math.cos(angle) * muzzle;
+      const startY = origin.y + Math.sin(angle) * muzzle;
+      const travelDistance = Math.hypot(targetX - startX, targetY - startY);
+      const flightMs = Math.max(180, travelDistance / (blastKind === "rocket" ? 980 : 610) * 1000);
+      g.explosiveProjectiles.push({
+        id: Math.floor(now * 1000 + Math.random() * 999),
+        weapon: p.weapon === "rpg7" ? "rpg7" : "m32",
+        kind: blastKind,
+        startX,
+        startY,
+        targetX,
+        targetY,
+        createdAt: now,
+        impactAt: now + flightMs,
+        angle,
+        arcHeight: blastKind === "rocket" ? 10 : Math.min(150, 48 + travelDistance * .11),
+        radius: weapon.explosionRadius,
+        damage: weapon.damage,
+      });
+      g.screenShakeUntil = now + (blastKind === "rocket" ? 110 : 65);
       return;
     }
 
@@ -9803,14 +10107,16 @@ export function DeadRoadGame() {
       const wallBlock = level3WallBlock(g, origin.x, origin.y, endX, endY);
       const wallT = wallBlock ? (wallBlock.x - origin.x) / (endX - origin.x || 1e-6) : Infinity;
       const hits = g.zombies
-        .map((z) => ({ z, impact: hitZombieRegion(origin.x, origin.y, endX, endY, z, now) }))
+        .map((z) => ({ z, impact: hitZombieRegion(origin.x, origin.y, endX, endY, z, now, g.player.x) }))
         .filter((entry): entry is { z: Zombie; impact: ZombieHit } => entry.impact !== null && entry.impact.t < wallT)
         .sort((a, b) => a.impact.t - b.impact.t)
         .slice(0, weapon.penetration);
       // 逐目标结算；子弹被盔甲/盾牌挡下时终止穿透（曳光止于挡下点；无命中时止于围墙/射程）
       let stoppedAt: { x: number; y: number } | null = wallBlock;
       for (const [index, { z, impact }] of hits.entries()) {
-        const blocked = damageZombie(g, z, weaponDamage(p.weapon) * (1 - index * .2), now, angle, impact, p.weapon);
+        // 旧的 20%/目标衰减保留，但高穿透武器后续目标至少造成 10%，绝不产生负伤害给僵尸回血。
+        const penetrationDamageFactor = Math.max(.1, 1 - index * .2);
+        const blocked = damageZombie(g, z, weaponDamage(p.weapon) * penetrationDamageFactor, now, angle, impact, p.weapon);
         if (blocked) { stoppedAt = { x: impact.x, y: impact.y }; break; }
       }
       if (wallBlock && stoppedAt === wallBlock) {
@@ -9832,7 +10138,7 @@ export function DeadRoadGame() {
       const wallT = wallBlock ? (wallBlock.x - origin.x) / (endX - origin.x || 1e-6) : Infinity;
       let hit: { zombie: Zombie; impact: ZombieHit } | undefined;
       for (const z of g.zombies) {
-        const impact = hitZombieRegion(origin.x, origin.y, endX, endY, z, now);
+        const impact = hitZombieRegion(origin.x, origin.y, endX, endY, z, now, g.player.x);
         if (impact && impact.t < wallT && (!hit || impact.t < hit.impact.t)) hit = { zombie: z, impact };
       }
       const tracerEndX = hit ? hit.impact.x : wallBlock?.x ?? endX;
@@ -9845,7 +10151,7 @@ export function DeadRoadGame() {
       if (hit) damageZombie(g, hit.zombie, weaponDamage(p.weapon), now, angle, hit.impact, p.weapon);
     }
     g.screenShakeUntil = now + (weapon.pellets ? 135 : ["scarh", "m240l", "pkm"].includes(p.weapon) ? 92 : ["ak47", "m16"].includes(p.weapon) ? 72 : 45);
-  }, [damageZombie, damageZombieFromExplosion]);
+  }, [damageZombie]);
 
   const reload = useCallback((now: number) => {
     const g = stateRef.current;
@@ -10012,7 +10318,7 @@ export function DeadRoadGame() {
       let hit: { zombie: Zombie; impact: ZombieHit } | undefined;
       for (const z of g.zombies) {
         if (z.hp <= 0) continue;
-        const impact = hitZombieRegion(originX, originY, endX, endY, z, now);
+        const impact = hitZombieRegion(originX, originY, endX, endY, z, now, g.player.x);
         if (impact && (!hit || impact.t < hit.impact.t)) hit = { zombie: z, impact };
       }
       g.tracers.push({
@@ -10053,7 +10359,7 @@ export function DeadRoadGame() {
     // 机载机枪单发穿透 2 个目标
     const hits = g.zombies
       .filter((z) => z.hp > 0)
-      .map((z) => ({ z, impact: hitZombieRegion(originX, originY, endX, endY, z, now) }))
+      .map((z) => ({ z, impact: hitZombieRegion(originX, originY, endX, endY, z, now, g.player.x) }))
       .filter((entry): entry is { z: Zombie; impact: ZombieHit } => entry.impact !== null)
       .sort((a, b) => a.impact.t - b.impact.t)
       .slice(0, 2);
@@ -10162,12 +10468,12 @@ export function DeadRoadGame() {
           const originY = shoulderY + Math.sin(shotAngle) * 8;
           const endX = originX + Math.cos(shotAngle) * wspec.range;
           const endY = originY + Math.sin(shotAngle) * wspec.range;
-          // 穿透：燧石66 贯穿 5 目标（沿弹道由近及远依次结算，命中点燃由 damageZombie 的 ignite 机制处理），其余武器只取首个命中
+          // 穿透：燧石66 贯穿 15 目标（沿弹道由近及远依次结算，命中点燃由 damageZombie 的 ignite 机制处理），其余武器按各自穿透值取目标
           const pen = wspec.penetration ?? 1;
           const hits: Array<{ zombie: Zombie; impact: ZombieHit }> = [];
           for (const z of g.zombies) {
             if (z.hp <= 0) continue;
-            const impact = hitZombieRegion(originX, originY, endX, endY, z, now);
+            const impact = hitZombieRegion(originX, originY, endX, endY, z, now, g.player.x);
             if (impact) hits.push({ zombie: z, impact });
           }
           hits.sort((a, b) => a.impact.t - b.impact.t);
@@ -10342,6 +10648,7 @@ export function DeadRoadGame() {
     g.zombies.push({
       id: g.day * 1000 + g.spawned,
       kind,
+      warehouseArmor: kind === "armored" || kind === "armoredRunner",
       x: g.worldW + 45 + Math.random() * 130,
       y: minimumFootY + Math.random() * Math.max(1, maximumFootY - minimumFootY),
       hp,
@@ -10928,14 +11235,17 @@ export function DeadRoadGame() {
       ctx.rotate(pose.body.rotation);
       // 呕吐僵尸与巨型变异体喷吐前摇：上身后仰蓄力，喉部绿光膨胀。
       const spitWindupMs = z.bossKind === "giantMutant" ? LEVEL6_BOSS_SPIT_WINDUP_MS : 550;
-      const spitWindup = (z.kind === "spitter" || z.bossKind === "giantMutant") && z.spitAt > 0
+      const spitWindup = (z.kind === "spitter" || z.kind === "largeSpitter" || z.bossKind === "giantMutant") && z.spitAt > 0
         ? 1 - Math.max(0, Math.min(1, (z.spitAt - now) / spitWindupMs)) : 0;
       if (spitWindup > 0) ctx.rotate(-poseFacing * spitWindup * .13);
-      drawZombieLegAssembly(ctx, z, pose.body.rearLeg, pose.body.frontLeg, scale);
-      drawZombieTorso(ctx, z, scale);
       const skin = z.radius > 29 ? "#6e7c52" : "#7e8c60";
-      drawZombieArmAssembly(ctx, z, pose.body.leftArm, pose.body.rightArm, scale, skin);
-      drawZombieHeadAndWounds(ctx, z, scale, poseFacing, true);
+      if (z.kind === "zombieDog") drawZombieDog(ctx, z, scale, poseFacing, now);
+      else {
+        drawZombieLegAssembly(ctx, z, pose.body.rearLeg, pose.body.frontLeg, scale);
+        drawZombieTorso(ctx, z, scale);
+        drawZombieArmAssembly(ctx, z, pose.body.leftArm, pose.body.rightArm, scale, skin);
+        drawZombieHeadAndWounds(ctx, z, scale, poseFacing, true);
+      }
       if (spitWindup > 0) {
         ctx.fillStyle = `rgba(143,206,74,${(.35 + spitWindup * .45).toFixed(3)})`;
         ctx.beginPath(); ctx.arc(poseFacing * 5 * scale, -110 * scale, (3 + spitWindup * 5) * scale, 0, Math.PI * 2); ctx.fill();
@@ -11000,6 +11310,7 @@ export function DeadRoadGame() {
       ctx.lineTo(t.x2, t.y2);
       ctx.stroke();
     }
+    for (const projectile of g.explosiveProjectiles) drawExplosiveProjectile(ctx, projectile, now);
     ctx.globalAlpha = 1;
     for (const pt of g.particles) {
       ctx.fillStyle = pt.color;
@@ -11156,7 +11467,10 @@ export function DeadRoadGame() {
             p.x = level.truckX;
             p.y = level.truckY;
             p.moving = dx !== 0 || dy !== 0;
-            level.vehicleAimAngle = Math.atan2(mouseRef.current.y - (level.truckY - 180), mouseRef.current.x + g.cameraX - level.truckX);
+            level.vehicleAimAngle = Math.atan2(
+              mouseRef.current.y - (level.truckY + LEVEL8_HMG_MOUNT_Y),
+              mouseRef.current.x + g.cameraX - (level.truckX + LEVEL8_HMG_MOUNT_X),
+            );
           }
           // 第三关夜防：混凝土围墙不可越过（玩家始终在墙后防守位；大门开启前往土路时解除）
           if (g.mode === "level" && g.level?.levelId === LEVEL3_ID && g.level.sceneIndex === 1 && g.level.taskIndex < 2) {
@@ -11291,6 +11605,9 @@ export function DeadRoadGame() {
             if (isFlash) g.screenShakeUntil = now + itemDefinition.shakeMs;
           }
           g.deployedItems = g.deployedItems.filter((item) => item.until === null || now < item.until);
+          const impactedProjectiles = g.explosiveProjectiles.filter((projectile) => now >= projectile.impactAt);
+          for (const projectile of impactedProjectiles) detonateExplosiveProjectile(g, projectile, now, damageZombieFromExplosion);
+          if (impactedProjectiles.length > 0) g.explosiveProjectiles = g.explosiveProjectiles.filter((projectile) => now < projectile.impactAt);
           g.blastEffects = g.blastEffects.filter((blast) => now < blast.until);
 
           for (const z of g.zombies) {
@@ -11371,21 +11688,29 @@ export function DeadRoadGame() {
               if (z.spitAt > 0) continue;
             }
             // 呕吐僵尸：不近战；接近至 250 内停下，前摇 550ms 后仰后喷吐绿色唾沫（抛物线，命中 20 伤害，落地成渍）
-            if (z.kind === "spitter") {
+            if (z.kind === "spitter" || z.kind === "largeSpitter") {
               const spitterScale = (z.radius / 25) * CHARACTER_SCALE;
               if (z.spitAt > 0 && now >= z.spitAt) {
                 z.spitAt = 0;
                 z.nextSpitAt = now + 2400 + Math.random() * 900;
                 const spitFace = targetX < z.x ? -1 : 1;
-                g.spits.push({
-                  id: Math.floor(now * 1000 + Math.random() * 999),
-                  fromX: z.x + spitFace * 10 * spitterScale,
-                  fromY: z.y - 112 * spitterScale,
-                  targetX: targetX + (Math.random() - .5) * 22,
-                  targetY: targetY + (Math.random() - .5) * 14,
-                  createdAt: now,
-                  landAt: now + 480,
-                });
+                const spitCount = z.kind === "largeSpitter" ? 3 : 1;
+                for (let stream = 0; stream < spitCount; stream++) {
+                  const createdAt = now + stream * 105;
+                  g.spits.push({
+                    id: Math.floor(now * 1000 + stream * 31 + Math.random() * 29),
+                    fromX: z.x + spitFace * 10 * spitterScale,
+                    fromY: z.y - 112 * spitterScale,
+                    targetX: targetX + (stream - (spitCount - 1) / 2) * 34 + (Math.random() - .5) * 18,
+                    targetY: targetY + (Math.random() - .5) * 18,
+                    createdAt,
+                    landAt: createdAt + 510,
+                    damage: 20,
+                    splashRadius: z.kind === "largeSpitter" ? 38 : undefined,
+                    arcHeight: z.kind === "largeSpitter" ? 72 : undefined,
+                    burst: z.kind === "largeSpitter",
+                  });
+                }
                 sound.vomit({ volume: distanceVolume(z.x, p.x) });
               } else if (z.spitAt === 0 && dist < 300 && now >= z.nextSpitAt) {
                 z.spitAt = now + 550;
@@ -11891,8 +12216,9 @@ export function DeadRoadGame() {
           onPointerUp={(e) => {
             if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
             mouseRef.current.down = false;
+            stateRef.current.player.emptyReloadLatch = false;
           }}
-          onPointerLeave={() => { mouseRef.current.down = false; }}
+          onPointerLeave={() => { mouseRef.current.down = false; stateRef.current.player.emptyReloadLatch = false; }}
         />
 
         {screen === "menu" && (

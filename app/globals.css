@@ -326,6 +326,8 @@ button { -webkit-tap-highlight-color: transparent; }
 .loadout-list .weapon-card { min-height: 0; padding: 10px; }
 .loadout-list .weapon-card strong { font-size: 13px; margin-top: 2px; }
 .loadout-list .weapon-card .weapon-price { display: block; margin-top: 4px; font-size: 11px; }
+.select-grid .weapon-card { min-height: 238px; overflow: visible; }
+.select-grid .weapon-card small { min-height: 0; white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.45; overflow-wrap: anywhere; }
 .loadout-list .armor-card { min-height: 86px; grid-template-columns: 34px minmax(0, 1fr); }
 .loadout-list .armor-card em { position: static; display: block; margin-top: 3px; }
 .loadout-actions { display: flex; align-items: center; gap: 12px; }

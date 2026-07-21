@@ -93,8 +93,8 @@ test("mixes unlockable zombie variants into the spawn pool with armor and shield
     assert.match(source, new RegExp(`${kind}: \\{ unlockDay: \\d+`));
   }
   assert.match(source, /runner: \{ unlockDay: 3, weight: 26, speedFactor: 3 \}/);
-  assert.match(source, /juggernaut: \{ unlockDay: 20, weight: 7, hp: 500, radius: 35, attack: 16, damageReduction: \.7 \}/);
-  assert.match(source, /juggernaut: \{ name: "重甲僵尸", unlockDay: 20, hp: 500, speed: "中速", trait: "仅胸口可伤、免疫打腿倒地，减免 70%；高穿透武器可削弱减伤" \}/);
+  assert.match(source, /juggernaut: \{ unlockDay: 18, weight: 7, hp: 500, radius: 35, attack: 16, damageReduction: \.7 \}/);
+  assert.match(source, /juggernaut: \{ name: "重甲僵尸", unlockDay: 18, hp: 500, speed: "中速", trait: "仅胸口可伤、免疫打腿倒地，减免 70%；高穿透武器可削弱减伤" \}/);
   // 奔跑系 3 倍速与新 HP 表（头盔 200 / 突变 500 / 军队 350 / 盾兵 350）
   assert.match(source, /helmet: \{ unlockDay: 5, weight: 14, hp: 200 \}/);
   assert.match(source, /helmetRunner: \{ unlockDay: 5, weight: 10, hp: 200, speedFactor: 3 \}/);
@@ -270,6 +270,8 @@ test("range shop configures batch zombie spawns per kind", async () => {
     assert.match(source, new RegExp(`${kind}: \\{ name: "`));
   }
   assert.match(source, /const ZOMBIE_CONFIG_KINDS = Object\.keys\(ZOMBIE_KIND_INFO\) as ZombieKind\[\]/);
+  assert.match(source, /normal: 6, brute: 0, runner: 0, spitter: 0, largeSpitter: 0, zombieDog: 0/);
+  assert.match(source, /helmet: 0, helmetRunner: 0, armored: 0, armoredRunner: 0/);
   // spawnZombie 指定种类直通（跳过 brute roll 与池抽取）
   assert.match(source, /forcedKind\?: ZombieKind/);
   assert.match(source, /forcedKind \?\? \(brute \? "brute" : "normal"\)/);
@@ -1218,4 +1220,74 @@ test("level mode: clear-highway level with drivable armored vehicle and toll-sta
   assert.match(source, /const LEVEL8_TOLL_SQUAD_SIZE = 2/);
   assert.match(source, /makeLevelNpc\([^\n]+true, false, "m16", \{ followPlayer: true, targetable: true/);
   assert.match(source, /高速上的最后一辆车驶入收费站/);
+});
+
+test("expands the global arsenal, zombie roster, reload latch and physical explosive projectiles", async () => {
+  const source = await readFile(new URL("../app/DeadRoadGame.tsx", import.meta.url), "utf8");
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+
+  assert.match(source, /const SHOTGUN_DAMAGE_FACTOR = \.75/);
+  assert.match(source, /spec\.pellets \? baseDamage \* SHOTGUN_DAMAGE_FACTOR : baseDamage/);
+  assert.match(source, /flint66:[\s\S]*?penetration: 15/);
+  assert.match(source, /const penetrationDamageFactor = Math\.max\(\.1, 1 - index \* \.2\)/);
+
+  assert.match(source, /juggernaut: \{ unlockDay: 18/);
+  assert.match(source, /armored: \{ unlockDay: 6, weight: [^}]+hp: 100[^}]+damageReduction: \.99/);
+  assert.match(source, /armoredRunner: \{ unlockDay: 9, weight: [^}]+hp: 100[^}]+speedFactor: 3[^}]+damageReduction: \.99/);
+  assert.match(source, /zombieDog: \{ unlockDay: 4, weight: [^}]+hp: 60[^}]+speedFactor: 4/);
+  assert.match(source, /largeSpitter: \{ unlockDay: [0-9]+, weight: [^}]+hp: 200/);
+  assert.match(source, /const spitCount = z\.kind === "largeSpitter" \? 3 : 1/);
+  assert.match(source, /damage: 20/);
+  assert.match(source, /armored: \{ name: "护甲僵尸"/);
+  assert.match(source, /armoredRunner: \{ name: "奔跑护甲僵尸"/);
+  assert.match(source, /zombieDog: \{ name: "僵尸狗"/);
+  assert.match(source, /dogShiftX \+ dogFacing \* \(31 \+ dogLunge \* 7\)/);
+  assert.match(source, /facingTargetX >= zombie\.x \? 1 : -1/);
+  assert.match(source, /if \(region\.region === "head"\) hitLocalX \*= dogFacing/);
+  assert.match(source, /const woundX = wound\.region === "head" \? facing \* wound\.x : wound\.x/);
+  assert.match(source, /largeSpitter: \{ name: "大型喷吐僵尸"/);
+  assert.match(source, /zombieDog: "感染后的军犬/);
+  assert.match(source, /armored: "与仓库中遇到的护甲感染者相同/);
+  assert.match(source, /armoredRunner: "奔跑僵尸与护甲感染者的结合体/);
+  assert.match(source, /largeSpitter: "体型膨胀的远程感染者/);
+
+  assert.match(source, /m4:[\s\S]*?name: "M4"[\s\S]*?price: 7800/);
+  assert.match(source, /m107:[\s\S]*?name: "Barrett M107"[\s\S]*?price: 14500[\s\S]*?damage: 200[\s\S]*?magazine: 10[\s\S]*?penetration: 5/);
+  assert.match(source, /mg42:[\s\S]*?name: "MG42"[\s\S]*?price: 26000[\s\S]*?damage: 40[\s\S]*?magazine: 100[\s\S]*?penetration: 2/);
+  assert.match(source, /m107: \{ weightKg: [^,]+, stopping: 1 \}/);
+  assert.match(source, /mg42: \{ weightKg: [^,]+, stopping: \.5 \}/);
+  assert.match(source, /m4: \{ stance: "rifle"/);
+  assert.match(source, /m107: \{ stance: "rifle"/);
+  assert.match(source, /mg42: \{ stance: "rifle"/);
+
+  assert.match(source, /emptyReloadLatch: boolean/);
+  assert.match(source, /if \(p\.emptyReloadLatch\) return;/);
+  assert.match(source, /p\.emptyReloadLatch = true;\s*reloadRef\.current\(now\)/);
+  assert.match(source, /onPointerUp[\s\S]*emptyReloadLatch = false/);
+  assert.match(css, /\.select-grid \.weapon-card small \{[^}]*white-space: normal/);
+
+  assert.match(source, /type ExplosiveProjectile =/);
+  assert.match(source, /explosiveProjectiles: ExplosiveProjectile\[\]/);
+  assert.match(source, /g\.explosiveProjectiles\.push\(/);
+  assert.match(source, /function drawExplosiveProjectile\(/);
+  assert.doesNotMatch(source, /weapon\.explosionRadius\)[\s\S]{0,1300}g\.tracers\.push/);
+  assert.match(source, /function detonateExplosiveProjectile\(/);
+  assert.match(source, /drawBlastEffect[\s\S]*central smoke column/i);
+  assert.match(source, /drawLevel8ArmoredVehicle[\s\S]*M-ATV-inspired four-wheel MRAP silhouette/i);
+  assert.match(source, /const wheelCenters = \[-108, 104\]/);
+  assert.match(source, /TAK-4-style independent suspension/i);
+  assert.match(source, /ballistic-glass trapezoids/i);
+  assert.match(source, /V-hull keel/i);
+  assert.match(source, /const LEVEL8_HMG_MOUNT_X = -18/);
+  assert.match(source, /const LEVEL8_HMG_MOUNT_Y = -211/);
+  assert.match(source, /const LEVEL8_HMG_MUZZLE_X = 163/);
+  assert.match(source, /ctx\.translate\(LEVEL8_HMG_MOUNT_X, LEVEL8_HMG_MOUNT_Y\)/);
+  assert.match(source, /const mountX = level\.truckX \+ LEVEL8_HMG_MOUNT_X/);
+  assert.match(source, /const mountY = level\.truckY \+ LEVEL8_HMG_MOUNT_Y/);
+  assert.match(source, /const muzzleX = mountX \+ Math\.cos\(aimAngle\) \* LEVEL8_HMG_MUZZLE_X/);
+  assert.match(source, /hitZombieRegion\(muzzleX, muzzleY, endX, endY/);
+  assert.match(source, /g\.tracers\.push\(\{ x1: muzzleX, y1: muzzleY/);
+  assert.match(source, /mouseRef\.current\.y - \(level\.truckY \+ LEVEL8_HMG_MOUNT_Y\)/);
+  assert.match(source, /mouseRef\.current\.x \+ g\.cameraX - \(level\.truckX \+ LEVEL8_HMG_MOUNT_X\)/);
+  assert.doesNotMatch(source, /const wheelCenters = \[-120, -78, 78, 120\]/);
 });
