@@ -381,7 +381,7 @@ test("tracks seen zombies in localStorage and pages through the codex book", asy
   const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
 
   // Screen 与入口：主菜单书本按钮 + 暂停面板入口
-  assert.match(source, /"menu" \| "playing" \| "shop" \| "loadout" \| "gameover" \| "codex"/);
+  assert.match(source, /type Screen = "menu" \| "exploration" \| "playing" \| "shop" \| "loadout" \| "gameover" \| "codex"/);
   assert.match(source, /codex-book-button/);
   assert.match(source, /openCodex\("menu"\)/);
   assert.match(source, /openCodex\("pause"\)/);
@@ -400,15 +400,15 @@ test("tracks seen zombies in localStorage and pages through the codex book", asy
     assert.match(source, new RegExp(`  ${kind}: "`));
   }
   // 页面内容：首次出现天数 / HP / 速度 / 特性 + 大图预览（复用建模渲染，图鉴专用大画布）
-  assert.match(source, /第 \{ZOMBIE_KIND_INFO\[codexSeenList\[codexPage\]\]\.unlockDay\} 天/);
-  assert.match(source, /<ZombieKindPreview kind=\{codexSeenList\[codexPage\]\} width=\{220\} height=\{300\} className="codex-preview" \/>/);
+  assert.match(source, /第 \{ZOMBIE_KIND_INFO\[activeCodexList\[codexPage\]\]\.unlockDay\} 天/);
+  assert.match(source, /<ZombieKindPreview kind=\{activeCodexList\[codexPage\]\} width=\{220\} height=\{300\} className="codex-preview" \/>/);
   // 翻页：左右按钮 + 方向键，页码指示"3 / 12"式
-  assert.match(source, /\{codexPage \+ 1\} \/ \{codexSeenList\.length\}/);
+  assert.match(source, /\{codexPage \+ 1\} \/ \{activeCodexList\.length\}/);
   assert.match(source, /flipCodex\(key === "arrowleft" \? -1 : 1\)/);
-  assert.match(source, /disabled=\{codexPage >= codexSeenList\.length - 1\}/);
+  assert.match(source, /disabled=\{codexPage >= activeCodexList\.length - 1\}/);
   // ESC 返回来源界面（菜单/暂停）
   assert.match(source, /screenRef\.current === "codex"/);
-  assert.match(source, /changeScreen\(codexReturn === "pause" \? "playing" : "menu"\)/);
+  assert.match(source, /codexReturn === "exploration" \? "exploration" : "menu"/);
   // 空图鉴占位
   assert.match(source, /档案空白/);
   // CSS：书本入口与摊开书本面板，自身适配舞台不溢出
@@ -432,7 +432,7 @@ test("advertises a coming-soon campaign mode with its own screen and placeholder
   assert.match(html, /三条路，通向同一个天亮/);
   assert.doesNotMatch(source, /然后再多活一天/);
   // 独立 screen 类型与占位数据模型（预留关卡选择结构）
-  assert.match(source, /"menu" \| "playing" \| "shop" \| "loadout" \| "gameover" \| "codex" \| "levels"/);
+  assert.match(source, /type Screen = "menu" \| "exploration" \| "playing" \| "shop" \| "loadout" \| "gameover" \| "codex" \| "levels"/);
   assert.match(source, /type LevelDef = \{/);
   assert.match(source, /const LEVEL_DEFS: LevelDef\[\] = \[/);
   assert.match(source, /unlockedByDay: number/);
@@ -1290,4 +1290,37 @@ test("expands the global arsenal, zombie roster, reload latch and physical explo
   assert.match(source, /mouseRef\.current\.y - \(level\.truckY \+ LEVEL8_HMG_MOUNT_Y\)/);
   assert.match(source, /mouseRef\.current\.x \+ g\.cameraX - \(level\.truckX \+ LEVEL8_HMG_MOUNT_X\)/);
   assert.doesNotMatch(source, /const wheelCenters = \[-120, -78, 78, 120\]/);
+});
+
+test("adds a farm exploration hub with sequential missions and split zombie codex", async () => {
+  const source = await readFile(new URL("../app/DeadRoadGame.tsx", import.meta.url), "utf8");
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+
+  assert.match(source, /type MajorMode = "classic" \| "exploration"/);
+  assert.match(source, /type Screen = [^;]+"exploration"/);
+  assert.match(source, /经典模式/);
+  assert.match(source, /探索模式/);
+  assert.match(source, /screen === "menu" \|\| screen === "exploration"/);
+  assert.match(source, /const EXPLORATION_TASKS:[\s\S]*Array\.from\(\{ length: 10 \}/);
+  assert.match(source, /function isExplorationTaskUnlocked\(/);
+  assert.match(source, /return order === 1 \|\| cleared\.includes\(order - 1\)/);
+  assert.match(source, /className="exploration-panel overlay-panel"/);
+  assert.match(source, /任务一/);
+  assert.match(source, /任务十/);
+  assert.match(source, /抽奖/);
+  assert.match(source, /商店/);
+  assert.match(source, /队伍/);
+  assert.match(source, /章节/);
+  assert.match(source, /const \[explorationCoins\] = useState\(0\)/);
+  assert.match(source, /const \[explorationExperience\] = useState\(0\)/);
+  assert.match(source, /常规僵尸/);
+  assert.match(source, /特殊僵尸/);
+  assert.match(source, /特殊僵尸档案将在后续探索中开放/);
+  assert.match(source, /setCodexCategory\("regular"\)/);
+  assert.match(css, /\.exploration-panel \{/);
+  assert.match(css, /\.exploration-task-map \{/);
+  assert.match(css, /\.exploration-task-node\.locked/);
+  assert.match(css, /\.exploration-wallet/);
+  assert.match(css, /\.codex-category-tabs/);
+  assert.match(css, /@media \(max-width: 480px\)[\s\S]*\.volume-control \{ display: none; \}/);
 });

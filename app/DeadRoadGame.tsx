@@ -23,9 +23,11 @@ const MAX_GROUND_PROPS = 60;
 const BLOOD_STAIN_MS = 10000;
 const MAX_BLOOD_STAINS = 60;
 
-type Screen = "menu" | "playing" | "shop" | "loadout" | "gameover" | "codex" | "levels" | "levelComplete";
+type MajorMode = "classic" | "exploration";
+type Screen = "menu" | "exploration" | "playing" | "shop" | "loadout" | "gameover" | "codex" | "levels" | "levelComplete";
 type GameMode = "survival" | "range" | "level";
 type ShopTab = "weapons" | "armor" | "supplies" | "items" | "partners" | "zombies";
+type CodexCategory = "regular" | "special";
 type WeaponKey =
   | "glock17" | "m1911" | "pkm" | "fruitknife" | "combatknife" | "crowbar"
   | "hammer" | "fireaxe" | "baseballbat" | "sawedoff"
@@ -696,6 +698,36 @@ const LEVEL7_ID = "level-seize-warehouse";
 const LEVEL7_TITLE = "夺取仓库";
 const LEVEL8_ID = "level-clear-highway";
 const LEVEL8_TITLE = "清理高速";
+
+type ExplorationTask = { order: number; label: string; x: number; y: number };
+const EXPLORATION_TASK_NAMES = ["任务一", "任务二", "任务三", "任务四", "任务五", "任务六", "任务七", "任务八", "任务九", "任务十"];
+const EXPLORATION_TASK_POSITIONS = [
+  [22, 76], [33, 64], [44, 75], [54, 57], [65, 68],
+  [75, 50], [67, 33], [55, 41], [43, 25], [31, 35],
+] as const;
+/** 探索模式农田地图的十个任务节点；任务内容后续接入，当前只建立顺序解锁入口。 */
+const EXPLORATION_TASKS: ExplorationTask[] = Array.from({ length: 10 }, (_, index) => ({
+  order: index + 1,
+  label: EXPLORATION_TASK_NAMES[index],
+  x: EXPLORATION_TASK_POSITIONS[index][0],
+  y: EXPLORATION_TASK_POSITIONS[index][1],
+}));
+const EXPLORATION_CLEARED_KEY = "dead-road-exploration-cleared";
+
+function readExplorationClearedTasks(): number[] {
+  try {
+    if (typeof window === "undefined") return [];
+    const parsed = JSON.parse(window.localStorage.getItem(EXPLORATION_CLEARED_KEY) ?? "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((order): order is number => Number.isInteger(order) && order >= 1 && order <= EXPLORATION_TASKS.length);
+  } catch {
+    return [];
+  }
+}
+
+function isExplorationTaskUnlocked(order: number, cleared: number[]) {
+  return order === 1 || cleared.includes(order - 1);
+}
 
 /** 关卡列表：01—08 均为可玩的连续战役，按上一关通关记录逐关解锁。 */
 const LEVEL_DEFS: LevelDef[] = [
@@ -8090,6 +8122,16 @@ export function DeadRoadGame() {
   const [canvasW, setCanvasW] = useState(DEFAULT_WORLD_W);
   const worldWRef = useRef(DEFAULT_WORLD_W);
   const [screen, setScreen] = useState<Screen>("menu");
+  const [majorMode, setMajorMode] = useState<MajorMode>("classic");
+  const [explorationCoins] = useState(0);
+  const [explorationExperience] = useState(0);
+  const [explorationNotice, setExplorationNotice] = useState<string | null>(null);
+  const [explorationClearedTasks, setExplorationClearedTasks] = useState<number[]>([]);
+  useEffect(() => {
+    let active = true;
+    queueMicrotask(() => { if (active) setExplorationClearedTasks(readExplorationClearedTasks()); });
+    return () => { active = false; };
+  }, []);
   const [shopTab, setShopTab] = useState<ShopTab>("weapons");
   // 靶场"僵尸生成"页签：各品种配置数量（0~30），纯 UI state，不进游戏快照
   const [spawnCounts, setSpawnCounts] = useState<Record<ZombieKind, number>>({
@@ -8112,7 +8154,8 @@ export function DeadRoadGame() {
     return () => { active = false; };
   }, []);
   const [codexPage, setCodexPage] = useState(0);
-  const [codexReturn, setCodexReturn] = useState<"menu" | "pause">("menu");
+  const [codexCategory, setCodexCategory] = useState<CodexCategory>("regular");
+  const [codexReturn, setCodexReturn] = useState<"menu" | "pause" | "exploration">("menu");
   // 已通关关卡（localStorage 持久化，独立键 dead-road-levels-cleared；queueMicrotask 延迟到水合后读取，避免 SSR 不一致）
   const [clearedLevels, setClearedLevels] = useState<string[]>([]);
   useEffect(() => {
@@ -8177,22 +8220,31 @@ export function DeadRoadGame() {
     setScreen(next);
   }, []);
 
+  const switchMajorMode = useCallback((next: MajorMode) => {
+    sound.uiClick();
+    setMajorMode(next);
+    setExplorationNotice(null);
+    changeScreen(next === "classic" ? "menu" : "exploration");
+  }, [changeScreen]);
+
   // 僵尸图鉴：只列出"见过"的种类（生存模式生成上场即登记），一页一种翻页浏览；ESC 返回来源界面
   const codexSeenList = ZOMBIE_CONFIG_KINDS.filter((kind) => seenKinds.includes(kind));
-  const openCodex = useCallback((from: "menu" | "pause") => {
+  const activeCodexList = codexCategory === "regular" ? codexSeenList : [];
+  const openCodex = useCallback((from: "menu" | "pause" | "exploration") => {
     sound.uiClick();
     setCodexReturn(from);
+    setCodexCategory("regular");
     setCodexPage(0);
     changeScreen("codex");
   }, [changeScreen]);
   const closeCodex = useCallback(() => {
     sound.uiClick();
-    changeScreen(codexReturn === "pause" ? "playing" : "menu");
+    changeScreen(codexReturn === "pause" ? "playing" : codexReturn === "exploration" ? "exploration" : "menu");
   }, [changeScreen, codexReturn]);
   const flipCodex = useCallback((delta: number) => {
     sound.uiClick();
-    setCodexPage((current) => Math.max(0, Math.min(Math.max(0, codexSeenList.length - 1), current + delta)));
-  }, [codexSeenList.length]);
+    setCodexPage((current) => Math.max(0, Math.min(Math.max(0, activeCodexList.length - 1), current + delta)));
+  }, [activeCodexList.length]);
 
   // 关卡模式：占位页（内容制作中），ESC/按钮返回主菜单；后续在此接入关卡选择与玩法
   const openLevels = useCallback(() => {
@@ -12155,12 +12207,20 @@ export function DeadRoadGame() {
     <main className={`game-shell ${panelMode ? "panel-mode" : ""}`}>
       <div className="noise" aria-hidden="true" />
       <header className="masthead">
-        <a className="brand" href="#" onClick={(e) => { e.preventDefault(); sound.uiClick(); changeScreen("menu"); }} aria-label="返回主菜单">
-          <span className="brand-mark">DR</span>
-          <span>死路求生</span>
-        </a>
+        <div className="masthead-left">
+          <a className="brand" href="#" onClick={(e) => { e.preventDefault(); sound.uiClick(); changeScreen(majorMode === "classic" ? "menu" : "exploration"); }} aria-label="返回主菜单">
+            <span className="brand-mark">DR</span>
+            <span>死路求生</span>
+          </a>
+          {(screen === "menu" || screen === "exploration") && (
+            <div className="major-mode-switch" role="tablist" aria-label="大模式切换">
+              <button type="button" className={majorMode === "classic" ? "active" : ""} role="tab" aria-selected={majorMode === "classic"} onClick={() => switchMajorMode("classic")}>经典模式</button>
+              <button type="button" className={majorMode === "exploration" ? "active" : ""} role="tab" aria-selected={majorMode === "exploration"} onClick={() => switchMajorMode("exploration")}>探索模式</button>
+            </div>
+          )}
+        </div>
         <div className="masthead-side">
-          <span className="edition">公路生存行动 / 试玩版 01</span>
+          <span className="edition">{majorMode === "classic" ? "经典模式 / 公路生存行动" : "探索模式 / 农田前哨"}</span>
           <label className="volume-control" title={`主音量 ${volume}%`}>
             <input
               type="range"
@@ -12223,7 +12283,7 @@ export function DeadRoadGame() {
 
         {screen === "menu" && (
           <div className="menu-panel overlay-panel">
-            <p className="eyebrow">最后的撤离公路 · 17 号封锁区</p>
+            <p className="eyebrow">经典模式 · 最后的撤离公路 · 17 号封锁区</p>
             <h1>别停下<br /><em>天亮前杀出去</em></h1>
             <p className="menu-copy">尸潮一天比一天凶猛，在生存模式里守住公路、多活一天；在靶场把每一把枪练到顺手；或沿封锁公路逐关推进，杀出 17 号区——三条路，通向同一个天亮</p>
             <div className="menu-actions">
@@ -12243,15 +12303,95 @@ export function DeadRoadGame() {
           </div>
         )}
 
+        {screen === "exploration" && (
+          <div className="exploration-panel overlay-panel">
+            <div className="exploration-scenery" aria-hidden="true">
+              <span className="exploration-sun" />
+              <span className="exploration-tree-line" />
+              <span className="exploration-barn"><i /><b /></span>
+              <span className="exploration-silo"><i /></span>
+              <span className="exploration-windmill"><i /><b /></span>
+              <span className="exploration-crops exploration-crops-a" />
+              <span className="exploration-crops exploration-crops-b" />
+            </div>
+
+            <div className="exploration-heading">
+              <p className="eyebrow">探索模式 · 第一片区域</p>
+              <h2>遗落农田</h2>
+              <small>沿农田小路推进任务 · 通关上一任务后解锁下一任务</small>
+            </div>
+
+            <div className="exploration-wallet" aria-label="探索模式资源">
+              <span><i>◉</i><small>金币</small><strong>{explorationCoins}</strong></span>
+              <span><i>✦</i><small>经验点数</small><strong>{explorationExperience}</strong></span>
+            </div>
+
+            <nav className="exploration-rail exploration-rail-left" aria-label="探索模式左侧功能">
+              <button type="button" onClick={() => { sound.uiClick(); setExplorationNotice("探索模式商店将在后续更新中开放。"); }}><b>▣</b><span>商店</span><small>购买探索物资</small></button>
+              <button type="button" onClick={() => { sound.uiClick(); setExplorationNotice("队伍编成与成员详情将在后续更新中开放。"); }}><b>♟</b><span>队伍</span><small>查看出战成员</small></button>
+            </nav>
+
+            <nav className="exploration-rail exploration-rail-right" aria-label="探索模式右侧功能">
+              <button type="button" onClick={() => { sound.uiClick(); setExplorationNotice("抽奖系统将在后续更新中开放。"); }}><b>✧</b><span>抽奖</span><small>获取探索奖励</small></button>
+              <button type="button" onClick={() => openCodex("exploration")}><b>▤</b><span>僵尸图鉴</span><small>已发现 {seenKinds.length} / {ZOMBIE_CONFIG_KINDS.length}</small></button>
+            </nav>
+
+            <div className="exploration-task-map" aria-label="探索任务地图">
+              <svg className="exploration-route" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                <polyline points={EXPLORATION_TASKS.map((task) => `${task.x},${task.y}`).join(" ")} />
+              </svg>
+              {EXPLORATION_TASKS.map((task) => {
+                const unlocked = isExplorationTaskUnlocked(task.order, explorationClearedTasks);
+                const cleared = explorationClearedTasks.includes(task.order);
+                return (
+                  <button
+                    key={task.order}
+                    type="button"
+                    className={`exploration-task-node ${unlocked ? "unlocked" : "locked"} ${cleared ? "cleared" : ""}`}
+                    style={{ "--task-x": `${task.x}%`, "--task-y": `${task.y}%` } as React.CSSProperties}
+                    disabled={!unlocked}
+                    aria-label={`${task.label}${unlocked ? cleared ? "，已通关，可重新进入" : "，可进入" : "，通关上一任务后解锁"}`}
+                    onClick={() => { sound.uiClick(); setExplorationNotice(`${task.label}的详细内容将在后续更新中开放。`); }}
+                  >
+                    <span>{String(task.order).padStart(2, "0")}</span>
+                    <strong>{task.label}</strong>
+                    <small>{cleared ? "✓ 已通关" : unlocked ? "进入任务 →" : "🔒 未解锁"}</small>
+                  </button>
+                );
+              })}
+            </div>
+
+            <button type="button" className="exploration-chapter-button" onClick={() => { sound.uiClick(); setExplorationNotice("章节选择将在后续更新中开放；当前为第一章「遗落农田」。"); }}>
+              <small>当前章节</small><strong>第一章 · 遗落农田</strong><b>章节 ▤</b>
+            </button>
+
+            {explorationNotice && (
+              <div className="exploration-notice" role="status">
+                <span>{explorationNotice}</span>
+                <button type="button" onClick={() => { sound.uiClick(); setExplorationNotice(null); }} aria-label="关闭提示">×</button>
+              </div>
+            )}
+          </div>
+        )}
+
         {screen === "codex" && (
           <div className="codex-panel overlay-panel">
             <div className="codex-book">
-              <p className="eyebrow">战地档案 · 已发现 {codexSeenList.length} / {ZOMBIE_CONFIG_KINDS.length}</p>
+              <p className="eyebrow">战地档案 · {codexCategory === "regular" ? `已发现 ${codexSeenList.length} / ${ZOMBIE_CONFIG_KINDS.length}` : "特殊档案等待建立"}</p>
               <h2 className="codex-title">僵尸图鉴</h2>
-              {codexSeenList.length === 0 ? (
+              <div className="codex-category-tabs" role="tablist" aria-label="僵尸图鉴种类">
+                <button type="button" className={codexCategory === "regular" ? "active" : ""} role="tab" aria-selected={codexCategory === "regular"} onClick={() => { sound.uiClick(); setCodexCategory("regular"); setCodexPage(0); }}>常规僵尸 <b>{codexSeenList.length}/{ZOMBIE_CONFIG_KINDS.length}</b></button>
+                <button type="button" className={codexCategory === "special" ? "active" : ""} role="tab" aria-selected={codexCategory === "special"} onClick={() => { sound.uiClick(); setCodexCategory("special"); setCodexPage(0); }}>特殊僵尸 <b>0/?</b></button>
+              </div>
+              {codexCategory === "special" ? (
+                <div className="codex-empty codex-special-empty">
+                  <b>特殊僵尸档案将在后续探索中开放</b>
+                  <span>特殊僵尸的种类、能力与遭遇方式将在后续更新中补充。</span>
+                </div>
+              ) : activeCodexList.length === 0 ? (
                 <div className="codex-empty">
                   <b>档案空白</b>
-                  <span>只有生存模式中实际遭遇的僵尸才会录入图鉴——先上场打一天吧。</span>
+                  <span>实际遭遇僵尸后，常规档案才会解锁。</span>
                 </div>
               ) : (
                 <>
@@ -12259,24 +12399,24 @@ export function DeadRoadGame() {
                     <button className="codex-flip" onClick={() => flipCodex(-1)} disabled={codexPage === 0} aria-label="上一页">‹</button>
                     <div className="codex-page">
                       <div className="codex-figure">
-                        <ZombieKindPreview kind={codexSeenList[codexPage]} width={220} height={300} className="codex-preview" />
+                        <ZombieKindPreview kind={activeCodexList[codexPage]} width={220} height={300} className="codex-preview" />
                       </div>
                       <div className="codex-info">
-                        <strong>{ZOMBIE_KIND_INFO[codexSeenList[codexPage]].name}</strong>
-                        <p>{CODEX_DESCRIPTIONS[codexSeenList[codexPage]]}</p>
+                        <strong>{ZOMBIE_KIND_INFO[activeCodexList[codexPage]].name}</strong>
+                        <p>{CODEX_DESCRIPTIONS[activeCodexList[codexPage]]}</p>
                         <dl>
-                          <div><dt>首次出现</dt><dd>第 {ZOMBIE_KIND_INFO[codexSeenList[codexPage]].unlockDay} 天</dd></div>
-                          <div><dt>HP</dt><dd>{ZOMBIE_KIND_INFO[codexSeenList[codexPage]].hp} <small>第 1 天基数，随天数成长</small></dd></div>
-                          <div><dt>移动速度</dt><dd>{ZOMBIE_KIND_INFO[codexSeenList[codexPage]].speed}</dd></div>
-                          <div><dt>特性</dt><dd>{ZOMBIE_KIND_INFO[codexSeenList[codexPage]].trait}</dd></div>
+                          <div><dt>首次出现</dt><dd>第 {ZOMBIE_KIND_INFO[activeCodexList[codexPage]].unlockDay} 天</dd></div>
+                          <div><dt>HP</dt><dd>{ZOMBIE_KIND_INFO[activeCodexList[codexPage]].hp} <small>第 1 天基数，随天数成长</small></dd></div>
+                          <div><dt>移动速度</dt><dd>{ZOMBIE_KIND_INFO[activeCodexList[codexPage]].speed}</dd></div>
+                          <div><dt>特性</dt><dd>{ZOMBIE_KIND_INFO[activeCodexList[codexPage]].trait}</dd></div>
                         </dl>
                       </div>
                     </div>
-                    <button className="codex-flip" onClick={() => flipCodex(1)} disabled={codexPage >= codexSeenList.length - 1} aria-label="下一页">›</button>
+                    <button className="codex-flip" onClick={() => flipCodex(1)} disabled={codexPage >= activeCodexList.length - 1} aria-label="下一页">›</button>
                   </div>
                   <div className="codex-footer">
-                    <span className="codex-pageno">{codexPage + 1} / {codexSeenList.length}</span>
-                    <small>← → 或点击两侧翻页 · ESC 返回{codexReturn === "pause" ? "暂停" : "主菜单"}</small>
+                    <span className="codex-pageno">{codexPage + 1} / {activeCodexList.length}</span>
+                    <small>← → 或点击两侧翻页 · ESC 返回{codexReturn === "pause" ? "暂停" : codexReturn === "exploration" ? "探索模式" : "经典模式"}</small>
                   </div>
                 </>
               )}
