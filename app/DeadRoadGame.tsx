@@ -70,6 +70,8 @@ type ExplorationBattleState = {
   supportActiveUntil: ExplorationConsumableInventory;
   armySupportNextShotAt: number;
   armoredSupportNextShotAt: number;
+  armoredSupportAmmo: number;
+  armoredSupportReloadUntil: number;
   airstrikeEffects: ExplorationAirstrikeEffect[];
   failed: boolean;
   completed: boolean;
@@ -808,6 +810,8 @@ const EXPLORATION_DAILY_ACTIVITY_REWARD_VOUCHERS = 100;
 const EXPLORATION_SUPPORT_DURATION_MS = 10000;
 const EXPLORATION_SUPPORT_ARRIVAL_MS = 550;
 const EXPLORATION_CONSUMABLE_COOLDOWN_MS = 30000;
+// 支援车从巡逻线直接赶来，首个 200 发弹箱已有消耗，确保 10 秒支援窗口内能展示一次完整换箱动作。
+const EXPLORATION_ARMORED_SUPPORT_INITIAL_AMMO = 46;
 const EMPTY_EXPLORATION_CONSUMABLES = (): ExplorationConsumableInventory => ({ armySupport: 0, armoredSupport: 0, airSupport: 0 });
 const EXPLORATION_CONSUMABLES: Record<ExplorationConsumableKey, { name: string; price: number; description: string }> = {
   armySupport: { name: "军队支援", price: 500, description: "5 名持 M16 士兵参战 10 秒后撤离" },
@@ -1061,6 +1065,8 @@ function freshExplorationBattle(vehicleHp: number, taskOrder: number, rewardElig
     supportActiveUntil: EMPTY_EXPLORATION_CONSUMABLES(),
     armySupportNextShotAt: 0,
     armoredSupportNextShotAt: 0,
+    armoredSupportAmmo: EXPLORATION_ARMORED_SUPPORT_INITIAL_AMMO,
+    armoredSupportReloadUntil: 0,
     airstrikeEffects: [],
     failed: false,
     completed: false,
@@ -1078,8 +1084,8 @@ function ExplorationVehicleModel({ kind, compact = false }: { kind: ExplorationV
   );
 }
 
-/** 消耗品装甲车直接调用经典模式第八关的 M-ATV 绘制函数，确保车体与重机枪完全同型。 */
-function ExplorationArmoredSupportModel({ firing }: { firing: boolean }) {
+/** 消耗品装甲车直接调用经典模式第八关的 M-ATV 绘制函数，确保车体、重机枪与枪焰完全同型。 */
+function ExplorationArmoredSupportModel({ firingStartedAt, reloadUntil = 0 }: { firingStartedAt?: number; reloadUntil?: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const canvas = ref.current;
@@ -1088,18 +1094,74 @@ function ExplorationArmoredSupportModel({ firing }: { firing: boolean }) {
     let animationFrame = 0;
     const draw = (now: number) => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const lastShotAt = firingStartedAt === undefined || now < firingStartedAt
+        ? 0
+        : now - ((now - firingStartedAt) % LEVEL8_HMG_FIRE_MS);
       drawLevel8ArmoredVehicle(ctx, {
         truckX: 225,
         truckY: 304,
         vehicleAimAngle: -.06,
-        vehicleLastShot: firing ? now : 0,
+        vehicleLastShot: lastShotAt,
+        vehicleReloadUntil: reloadUntil,
       }, now);
-      animationFrame = window.requestAnimationFrame(draw);
+      if (firingStartedAt !== undefined || reloadUntil > now) animationFrame = window.requestAnimationFrame(draw);
     };
     draw(performance.now());
     return () => window.cancelAnimationFrame(animationFrame);
-  }, [firing]);
-  return <canvas ref={ref} width={480} height={350} aria-label="经典模式第八关同型重机枪装甲车" />;
+  }, [firingStartedAt, reloadUntil]);
+  return <canvas ref={ref} className="exploration-armored-model" width={480} height={350} aria-label="经典模式第八关同型重机枪装甲车" />;
+}
+
+function ExplorationFighterIcon() {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const ctx = ref.current?.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, 240, 130);
+    ctx.save(); ctx.translate(120, 67); drawFighterJetModel(ctx); ctx.restore();
+  }, []);
+  return <canvas ref={ref} className="exploration-fighter-icon" width={240} height={130} aria-label="战斗机图标" />;
+}
+
+function ExplorationAirstrikeEffectView({ effect }: { effect: ExplorationAirstrikeEffect }) {
+  const bombRef = useRef<HTMLCanvasElement>(null);
+  const blastRef = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    if (effect.impacted) return;
+    const ctx = bombRef.current?.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, 80, 120);
+    ctx.save(); ctx.translate(40, 61); ctx.scale(1.45, 1.45); drawAirstrikeBombModel(ctx); ctx.restore();
+  }, [effect.impacted]);
+  useEffect(() => {
+    if (!effect.impacted) return;
+    const canvas = blastRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return;
+    let animationFrame = 0;
+    const blast: BlastEffect = {
+      id: effect.id,
+      x: canvas.width / 2,
+      y: canvas.height - 72,
+      startedAt: effect.impactAt,
+      until: effect.impactAt + ITEMS.airstrike.blastDuration,
+      radius: ITEMS.airstrike.radius,
+      kind: "airstrike",
+    };
+    const draw = (now: number) => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawBlastEffect(ctx, blast, now);
+      if (now < blast.until) animationFrame = window.requestAnimationFrame(draw);
+    };
+    draw(performance.now());
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [effect]);
+  return (
+    <div className="battle-airstrike-effect" style={{ left: `${effect.x}%` }} aria-hidden="true">
+      {!effect.impacted && <canvas ref={bombRef} className="airstrike-falling-bomb" width={80} height={120} />}
+      {effect.impacted && <canvas ref={blastRef} className="battle-classic-blast" width={620} height={520} />}
+    </div>
+  );
 }
 
 const LOTTERY_RARITIES: Record<LotteryRarity, { label: string; chance: number; rank: number }> = {
@@ -2411,7 +2473,7 @@ function drawLevel8TollCorridor(ctx: CanvasRenderingContext2D, g: GameState) {
   drawText(ctx, "出口 / 管理中心", W - 260, 120, 20, "#d3c982", "center");
 }
 
-type Level8ArmoredVehicleDrawingState = Pick<LevelRunState, "truckX" | "truckY" | "vehicleAimAngle" | "vehicleLastShot">;
+type Level8ArmoredVehicleDrawingState = Pick<LevelRunState, "truckX" | "truckY" | "vehicleAimAngle" | "vehicleLastShot"> & { vehicleReloadUntil?: number };
 
 function drawLevel8ArmoredVehicle(ctx: CanvasRenderingContext2D, level: Level8ArmoredVehicleDrawingState, now: number, parkedX = level.truckX, parkedY = level.truckY) {
   const x = parkedX;
@@ -2513,7 +2575,17 @@ function drawLevel8ArmoredVehicle(ctx: CanvasRenderingContext2D, level: Level8Ar
   ctx.strokeStyle = "#2b332c"; ctx.lineWidth = 3; ctx.stroke();
   ctx.fillStyle = "#202722"; ctx.beginPath(); roundedRect(ctx, -17, -34, 30, 15, 3); ctx.fill();
   ctx.fillStyle = "#a7b4a9"; ctx.beginPath(); ctx.arc(-3, -27, 4, 0, Math.PI * 2); ctx.fill();
+  const reloadProgress = level.vehicleReloadUntil && level.vehicleReloadUntil > now
+    ? Math.max(0, Math.min(1, 1 - (level.vehicleReloadUntil - now) / LEVEL8_HMG_RELOAD_MS))
+    : 0;
+  const ammoBoxTravel = reloadProgress <= .5 ? reloadProgress * 2 : (1 - reloadProgress) * 2;
+  ctx.save();
+  ctx.translate(0, ammoBoxTravel * 34);
+  ctx.rotate((reloadProgress <= .5 ? reloadProgress : 1 - reloadProgress) * -.32);
+  ctx.globalAlpha = 1 - ammoBoxTravel * .35;
   ctx.fillStyle = "#475246"; ctx.beginPath(); roundedRect(ctx, -48, -17, 19, 34, 3); ctx.fill();
+  ctx.strokeStyle = "#202721"; ctx.lineWidth = 2; ctx.stroke();
+  ctx.restore();
   ctx.fillStyle = "#161b18"; ctx.fillRect(22, -8, LEVEL8_HMG_MUZZLE_X - 22, 15); ctx.fillRect(132, -12, LEVEL8_HMG_MUZZLE_X - 132, 23);
   ctx.strokeStyle = "#7a8378"; ctx.lineWidth = 1.5;
   for (let bx = 45; bx < 132; bx += 14) { ctx.beginPath(); ctx.moveTo(bx, -7); ctx.lineTo(bx, 6); ctx.stroke(); }
@@ -5640,6 +5712,37 @@ function puffHash(seed: number) {
   return s - Math.floor(s);
 }
 
+/** 经典空袭与探索空袭共用的航空炸弹实体。 */
+function drawAirstrikeBombModel(ctx: CanvasRenderingContext2D) {
+  const casing = ctx.createLinearGradient(-11, 0, 11, 0);
+  casing.addColorStop(0, "#151a1a"); casing.addColorStop(.45, "#59615d"); casing.addColorStop(.72, "#303735"); casing.addColorStop(1, "#111615");
+  ctx.fillStyle = casing;
+  ctx.beginPath(); ctx.ellipse(0, 0, 11, 28, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#171d1c"; ctx.fillRect(-7, -23, 14, 13);
+  ctx.fillStyle = "#8e3932";
+  ctx.beginPath(); ctx.moveTo(-10, -18); ctx.lineTo(-22, -34); ctx.lineTo(0, -27); ctx.lineTo(22, -34); ctx.lineTo(10, -18); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "#b6b7aa"; ctx.beginPath(); ctx.arc(0, 23, 3.2, 0, Math.PI * 2); ctx.fill();
+}
+
+/** 探索消耗品图标使用的现代双发战斗机俯视模型。 */
+function drawFighterJetModel(ctx: CanvasRenderingContext2D) {
+  ctx.save(); ctx.scale(1.05, 1.05);
+  const metal = ctx.createLinearGradient(-58, 0, 58, 0);
+  metal.addColorStop(0, "#313a3b"); metal.addColorStop(.42, "#879394"); metal.addColorStop(.58, "#687477"); metal.addColorStop(1, "#252d2e");
+  ctx.fillStyle = metal;
+  ctx.beginPath();
+  ctx.moveTo(0, -61); ctx.lineTo(10, -38); ctx.lineTo(17, -14); ctx.lineTo(72, 17); ctx.lineTo(67, 30); ctx.lineTo(18, 13);
+  ctx.lineTo(16, 47); ctx.lineTo(31, 57); ctx.lineTo(27, 64); ctx.lineTo(0, 51);
+  ctx.lineTo(-27, 64); ctx.lineTo(-31, 57); ctx.lineTo(-16, 47); ctx.lineTo(-18, 13); ctx.lineTo(-67, 30); ctx.lineTo(-72, 17);
+  ctx.lineTo(-17, -14); ctx.lineTo(-10, -38); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = "#161d1e"; ctx.lineWidth = 3; ctx.stroke();
+  ctx.fillStyle = "#14262c"; ctx.beginPath(); ctx.ellipse(0, -27, 8, 18, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "rgba(145,199,207,.38)"; ctx.beginPath(); ctx.ellipse(0, -31, 4, 11, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#1b2324"; ctx.fillRect(-13, 45, 8, 17); ctx.fillRect(5, 45, 8, 17);
+  ctx.fillStyle = "#d36a31"; ctx.beginPath(); ctx.ellipse(-9, 62, 5, 9, 0, 0, Math.PI * 2); ctx.fill(); ctx.beginPath(); ctx.ellipse(9, 62, 5, 9, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
 function drawBlastEffect(ctx: CanvasRenderingContext2D, blast: BlastEffect, now: number) {
   const duration = blast.until - blast.startedAt;
   const progress = Math.max(0, Math.min(1, (now - blast.startedAt) / duration));
@@ -7825,6 +7928,21 @@ function weaponMuzzleOffset(key: WeaponKey) {
   return WEAPON_GEOMETRY[key].muzzleX * playerWeaponScale(key) * CHARACTER_SCALE;
 }
 
+/** 生存模式、关卡人物与探索支援共用同一枪口火光几何。调用前须已平移/旋转到枪身坐标。 */
+function drawSurvivalMuzzleFlash(ctx: CanvasRenderingContext2D, key: WeaponKey) {
+  const muzzle = weaponMuzzleOffset(key) / CHARACTER_SCALE;
+  ctx.fillStyle = "#fff2a8";
+  ctx.beginPath();
+  ctx.moveTo(muzzle - 7, 0);
+  ctx.lineTo(muzzle + 17, -9);
+  ctx.lineTo(muzzle + 11, 0);
+  ctx.lineTo(muzzle + 19, 9);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = "#f28a35";
+  ctx.beginPath(); ctx.arc(muzzle + 2, 0, 5, 0, Math.PI * 2); ctx.fill();
+}
+
 function playerGunOrigin(player: Player) {
   // 站姿扛枪高度：普通枪械贴肩 -88；RPG-7 肩扛于右肩之上 -100 且前移避开筒尾；
   // 手枪双臂前伸射击式，枪位前移 +12；长枪贴腮瞄准 +8。
@@ -8644,8 +8762,8 @@ function drawSurvivalHumanHeadAndFace(ctx: CanvasRenderingContext2D, facing: num
   ctx.beginPath(); ctx.moveTo(facing * 3, -112.5); ctx.lineTo(facing * 6, -112.5); ctx.stroke();
 }
 
-/** 探索队伍详情与战斗复用生存模式的人体骨架、步态和真实武器模型。 */
-function ExplorationMemberPreview({ member, motion = "standing", reloadProgress = 0, battleScale = false }: { member: ExplorationMemberDefinition; motion?: "standing" | "moving" | "attacking" | "reloading" | "kicking" | "throwing"; reloadProgress?: number; battleScale?: boolean }) {
+/** 探索队伍详情与战斗复用生存模式的人体骨架、步态、枪焰和真实武器模型。 */
+function ExplorationMemberPreview({ member, motion = "standing", reloadProgress = 0, battleScale = false, automaticWeaponStartedAt }: { member: ExplorationMemberDefinition; motion?: "standing" | "moving" | "attacking" | "reloading" | "kicking" | "throwing"; reloadProgress?: number; battleScale?: boolean; automaticWeaponStartedAt?: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const canvas = ref.current;
@@ -8655,24 +8773,28 @@ function ExplorationMemberPreview({ member, motion = "standing", reloadProgress 
     const motionStartedAt = performance.now();
     const draw = (now: number) => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const automaticPhase = automaticWeaponStartedAt === undefined || now < automaticWeaponStartedAt ? null : explorationAutomaticWeaponPhase(member.weapon, automaticWeaponStartedAt, now);
+      const renderMotion = automaticPhase ? (automaticPhase.reloading ? "reloading" : "attacking") : motion;
+      const renderReloadProgress = automaticPhase?.reloadProgress ?? reloadProgress;
       const facing = 1;
       const scale = battleScale ? 2.8 : 1.9;
       const farmer = member.id === "farmer";
       const soldier = member.faction === "军队";
       const gaitCycle = (now / 230) % 1;
-      const moving = motion === "moving";
+      const moving = renderMotion === "moving";
       const kickProgress = Math.min(1, Math.max(0, (now - motionStartedAt) / KICK_ANIMATION_MS));
-      const attackPhase = motion === "attacking" ? (now % Math.max(360, WEAPONS[member.weapon].fireRate)) / Math.max(360, WEAPONS[member.weapon].fireRate) : motion === "throwing" ? .48 : 0;
+      const attackCycle = automaticPhase ? WEAPONS[member.weapon].fireRate : Math.max(360, WEAPONS[member.weapon].fireRate);
+      const attackPhase = renderMotion === "attacking" ? ((now - (automaticWeaponStartedAt ?? 0)) % attackCycle) / attackCycle : renderMotion === "throwing" ? .48 : 0;
       ctx.save();
       ctx.translate(canvas.width * .43, canvas.height * (battleScale ? .94 : .88) + (moving ? Math.sin(gaitCycle * Math.PI * 4) * 1.1 : 0));
       ctx.scale(scale, scale);
       ctx.fillStyle = "rgba(0,0,0,.38)";
       ctx.beginPath(); ctx.ellipse(0, 5, 28, 8, 0, 0, Math.PI * 2); ctx.fill();
-      const rearLeg = motion === "kicking" ? kickLegPose(kickProgress, facing) : moving ? gaitLegPose((gaitCycle + .5) % 1, facing, -5) : standingLegPose(facing, -5);
+      const rearLeg = renderMotion === "kicking" ? kickLegPose(kickProgress, facing) : moving ? gaitLegPose((gaitCycle + .5) % 1, facing, -5) : standingLegPose(facing, -5);
       const frontLeg = moving ? gaitLegPose(gaitCycle, facing, 5) : standingLegPose(facing, 5);
       drawLimb(ctx, rearLeg, 7.5, farmer ? "#5b513e" : soldier ? "#252d29" : "#313936", "#151917");
       drawLimb(ctx, frontLeg, 7.5, farmer ? "#665b44" : soldier ? "#2c3530" : "#39423e", "#171c19");
-      drawFoot(ctx, rearLeg[2], facing, 14, "#161a17", motion === "kicking" ? 1 : moving ? gaitFootPitch((gaitCycle + .5) % 1) : 0);
+      drawFoot(ctx, rearLeg[2], facing, 14, "#161a17", renderMotion === "kicking" ? 1 : moving ? gaitFootPitch((gaitCycle + .5) % 1) : 0);
       drawFoot(ctx, frontLeg[2], facing, 14, "#171b18", moving ? gaitFootPitch(gaitCycle) : 0);
       ctx.fillStyle = farmer ? "#777045" : soldier ? "#384537" : "#4e5b47";
       ctx.beginPath();
@@ -8682,8 +8804,8 @@ function ExplorationMemberPreview({ member, motion = "standing", reloadProgress 
       drawSurvivalHumanHeadAndFace(ctx, facing, farmer ? "farmerHat" : soldier ? "combatHelmet" : "cap");
 
       const melee = MELEE_WEAPONS.has(member.weapon);
-      const recoil = !melee && motion === "attacking" ? Math.sin(Math.min(1, attackPhase * 2) * Math.PI) : 0;
-      const meleeSwing = melee && motion === "attacking" ? Math.sin(attackPhase * Math.PI) : 0;
+      const recoil = !melee && renderMotion === "attacking" ? Math.sin(Math.min(1, attackPhase * 2) * Math.PI) : 0;
+      const meleeSwing = melee && renderMotion === "attacking" ? Math.sin(attackPhase * Math.PI) : 0;
       const weaponAngle = melee ? -.62 + meleeSwing * 1.1 : -.08 + recoil * WEAPON_RECOIL[member.weapon].rise;
       const gunX = (melee ? 12 : 13) - recoil * WEAPON_RECOIL[member.weapon].back;
       const gunY = melee ? -91 : -88;
@@ -8695,7 +8817,7 @@ function ExplorationMemberPreview({ member, motion = "standing", reloadProgress 
         gunX + (cosA * point[0] - sinA * point[1]) * gunScale,
         gunY + (sinA * point[0] + cosA * point[1]) * gunScale,
       ];
-      const reloadVisual = motion === "reloading" ? computeReloadVisual(member.weapon, reloadProgress, toLocal, facing) : null;
+      const reloadVisual = renderMotion === "reloading" ? computeReloadVisual(member.weapon, renderReloadProgress, toLocal, facing) : null;
       const rearShoulder: [number, number] = [-cosA * 10, -98 - sinA * 4];
       const leadShoulder: [number, number] = [cosA * 10, -98 + sinA * 4];
       const rightHand = toLocal(hold.grip);
@@ -8717,14 +8839,30 @@ function ExplorationMemberPreview({ member, motion = "standing", reloadProgress 
         drawReloadProps(ctx, member.weapon, reloadVisual);
         ctx.restore();
       }
+      if (!melee && renderMotion === "attacking" && attackPhase * attackCycle < 65) drawSurvivalMuzzleFlash(ctx, member.weapon);
       ctx.restore();
       ctx.restore();
-      if (motion !== "standing") animationFrame = window.requestAnimationFrame(draw);
+      if (renderMotion !== "standing" || automaticWeaponStartedAt !== undefined) animationFrame = window.requestAnimationFrame(draw);
     };
     draw(performance.now());
     return () => window.cancelAnimationFrame(animationFrame);
-  }, [battleScale, member, motion, reloadProgress]);
+  }, [automaticWeaponStartedAt, battleScale, member, motion, reloadProgress]);
   return <canvas ref={ref} className="team-member-preview" width={330} height={430} aria-label={`${member.name}与${WEAPONS[member.weapon].name}建模预览`} />;
+}
+
+/** 商店、上阵栏和战斗栏共用一套消耗品图标，不再用文字占位。 */
+function ExplorationConsumableIcon({ kind, compact = false }: { kind: ExplorationConsumableKey; compact?: boolean }) {
+  return (
+    <span className={`consumable-icon consumable-icon-${kind} ${compact ? "compact" : ""}`} aria-hidden="true">
+      {kind === "armySupport" && (
+        <span className="consumable-icon-squad">
+          {Array.from({ length: 5 }, (_, index) => <ExplorationMemberPreview key={index} member={EXPLORATION_SUPPORT_SOLDIER} />)}
+        </span>
+      )}
+      {kind === "armoredSupport" && <ExplorationArmoredSupportModel />}
+      {kind === "airSupport" && <ExplorationFighterIcon />}
+    </span>
+  );
 }
 
 function lineCircleHitT(x1: number, y1: number, x2: number, y2: number, cx: number, cy: number, radius: number) {
@@ -8836,6 +8974,16 @@ function emitArmorSpark(g: GameState, x: number, y: number, now: number, angle: 
 function distanceVolume(fromX: number, playerX: number) {
   const distance = Math.abs(fromX - playerX);
   return Math.max(0.15, Math.min(1, 1 - distance / 1350));
+}
+
+function dropLevel8AmmoBox(g: GameState, level: LevelRunState, now: number) {
+  g.groundProps.push({
+    id: Math.floor(now * 1000 + Math.random() * 999), kind: "mag",
+    x: level.truckX + LEVEL8_HMG_MOUNT_X - 42, y: level.truckY + LEVEL8_HMG_MOUNT_Y,
+    vx: -35, vy: -55, groundY: level.truckY + 4, rotation: -.2, angularVelocity: -3,
+    visibleAt: now + 260, removeAt: now + GROUND_PROP_MS, weapon: "m240l", settled: false,
+  });
+  if (g.groundProps.length > MAX_GROUND_PROPS) g.groundProps.splice(0, g.groundProps.length - MAX_GROUND_PROPS);
 }
 
 export function DeadRoadGame() {
@@ -9200,6 +9348,8 @@ export function DeadRoadGame() {
         supportActiveUntil: { ...battle.supportActiveUntil, [key]: now + EXPLORATION_SUPPORT_DURATION_MS },
         armySupportNextShotAt: key === "armySupport" ? now + EXPLORATION_SUPPORT_ARRIVAL_MS : battle.armySupportNextShotAt,
         armoredSupportNextShotAt: key === "armoredSupport" ? now + EXPLORATION_SUPPORT_ARRIVAL_MS : battle.armoredSupportNextShotAt,
+        armoredSupportAmmo: key === "armoredSupport" ? EXPLORATION_ARMORED_SUPPORT_INITIAL_AMMO : battle.armoredSupportAmmo,
+        armoredSupportReloadUntil: key === "armoredSupport" ? 0 : battle.armoredSupportReloadUntil,
       };
       const alive = battle.zombies.filter((zombie) => zombie.hp > 0);
       const density = alive.map((candidate) => ({
@@ -9212,7 +9362,7 @@ export function DeadRoadGame() {
       return {
         ...battle,
         supportCooldownUntil,
-        airstrikeEffects: targets.map((x, index) => ({ id: Math.floor(now) + index, x, impactAt: now + 550, until: now + 1800, impacted: false })),
+        airstrikeEffects: targets.map((x, index) => ({ id: Math.floor(now) + index, x, impactAt: now + 550, until: now + 550 + ITEMS.airstrike.blastDuration, impacted: false })),
       };
     });
     if (key === "airSupport") sound.airstrike();
@@ -9334,6 +9484,8 @@ export function DeadRoadGame() {
         let nextKickId = battle.nextKickId;
         let armySupportNextShotAt = battle.armySupportNextShotAt;
         let armoredSupportNextShotAt = battle.armoredSupportNextShotAt;
+        let armoredSupportAmmo = battle.armoredSupportAmmo;
+        let armoredSupportReloadUntil = battle.armoredSupportReloadUntil;
         const supportNow = performance.now();
         let airstrikeEffects = battle.airstrikeEffects.filter((effect) => effect.until > supportNow);
         const impactingAirstrikes = airstrikeEffects.filter((effect) => !effect.impacted && effect.impactAt <= supportNow);
@@ -9346,8 +9498,10 @@ export function DeadRoadGame() {
               wounds: [...zombie.wounds.slice(-6), { x: 0, y: -82, region: "body" as HitRegion, size: 8 + hitCount * 2 }],
             } : zombie;
           });
-          airstrikeEffects = airstrikeEffects.map((effect) => effect.impactAt <= supportNow ? { ...effect, impacted: true } : effect);
-          impactingAirstrikes.forEach(() => sound.explosion("rocket"));
+          airstrikeEffects = airstrikeEffects.map((effect) => effect.impactAt <= supportNow
+            ? { ...effect, impactAt: supportNow, until: supportNow + ITEMS.airstrike.blastDuration, impacted: true }
+            : effect);
+          impactingAirstrikes.forEach(() => sound.explosion("airstrike"));
         }
         if (battle.supportActiveUntil.armySupport > supportNow) {
           const armySupportStartedAt = battle.supportActiveUntil.armySupport - EXPLORATION_SUPPORT_DURATION_MS + EXPLORATION_SUPPORT_ARRIVAL_MS;
@@ -9367,12 +9521,25 @@ export function DeadRoadGame() {
         }
         if (battle.supportActiveUntil.armoredSupport > supportNow) {
           // 探索战斗是单一路线：每一发仍按第八关的 86ms 节拍，沿道路由左到右顺次贯穿最多 7 个目标。
+          if (armoredSupportReloadUntil > 0 && armoredSupportReloadUntil <= supportNow) {
+            armoredSupportAmmo = LEVEL8_HMG_MAGAZINE;
+            armoredSupportReloadUntil = 0;
+            armoredSupportNextShotAt = supportNow;
+          }
           if (!zombies.some((zombie) => zombie.hp > 0)) armoredSupportNextShotAt = supportNow + LEVEL8_HMG_FIRE_MS;
           while (zombies.some((zombie) => zombie.hp > 0) && armoredSupportNextShotAt <= supportNow) {
+            if (armoredSupportReloadUntil > supportNow) break;
+            if (armoredSupportAmmo <= 0) {
+              armoredSupportReloadUntil = armoredSupportNextShotAt + LEVEL8_HMG_RELOAD_MS;
+              armoredSupportNextShotAt = armoredSupportReloadUntil;
+              sound.reload(LEVEL8_HMG_RELOAD_MS);
+              break;
+            }
             zombies.filter((zombie) => zombie.hp > 0).sort((a, b) => a.x - b.x).slice(0, LEVEL8_HMG_PENETRATION).forEach((zombie) => {
               zombie.hp -= LEVEL8_HMG_DAMAGE;
               zombie.wounds = [...zombie.wounds.slice(-7), { x: 4, y: -82, region: "body", size: 4 }];
             });
+            armoredSupportAmmo -= 1;
             armoredSupportNextShotAt += LEVEL8_HMG_FIRE_MS;
             sound.gunshot("m240l", { fireRateMs: LEVEL8_HMG_FIRE_MS, volume: .42 });
           }
@@ -9512,7 +9679,7 @@ export function DeadRoadGame() {
         });
         units = units.filter((unit) => unit.hp > 0);
         vehicleHp = Math.max(0, vehicleHp);
-        return { ...battle, units, zombies, knives, pendingKicks, airstrikeEffects, armySupportNextShotAt, armoredSupportNextShotAt, nextKnifeId, nextKickId, kills: battle.kills + killedThisTick, vehicleHp, completed, failed: !completed && vehicleHp <= 0 };
+        return { ...battle, units, zombies, knives, pendingKicks, airstrikeEffects, armySupportNextShotAt, armoredSupportNextShotAt, armoredSupportAmmo, armoredSupportReloadUntil, nextKnifeId, nextKickId, kills: battle.kills + killedThisTick, vehicleHp, completed, failed: !completed && vehicleHp <= 0 };
       });
     }, 250);
     return () => window.clearInterval(combatTimer);
@@ -11489,6 +11656,7 @@ export function DeadRoadGame() {
       if (now < level.vehicleReloadUntil || now - level.vehicleLastShot < LEVEL8_HMG_FIRE_MS) return;
       if (level.vehicleAmmo <= 0) {
         level.vehicleReloadUntil = now + LEVEL8_HMG_RELOAD_MS;
+        dropLevel8AmmoBox(g, level, now);
         sound.reload(LEVEL8_HMG_RELOAD_MS);
         return;
       }
@@ -11517,6 +11685,13 @@ export function DeadRoadGame() {
         if (blocked) break;
       }
       g.tracers.push({ x1: muzzleX, y1: muzzleY, x2: tracerX, y2: tracerY, until: now + 95, color: "#f6d267" });
+      g.groundProps.push({
+        id: Math.floor(now * 1000 + Math.random() * 999), kind: "casing",
+        x: mountX - 24, y: mountY - 4, vx: -70 - Math.random() * 45, vy: -125 - Math.random() * 70,
+        groundY: level.truckY + 4, rotation: Math.random() * Math.PI, angularVelocity: -12 - Math.random() * 10,
+        visibleAt: now, removeAt: now + GROUND_PROP_MS, weapon: "m240l", settled: false,
+      });
+      if (g.groundProps.length > MAX_GROUND_PROPS) g.groundProps.splice(0, g.groundProps.length - MAX_GROUND_PROPS);
       g.screenShakeUntil = now + 95;
       sound.gunshot("m240l", { fireRateMs: LEVEL8_HMG_FIRE_MS });
       return;
@@ -11692,6 +11867,7 @@ export function DeadRoadGame() {
     if (isLevel8Driving(g) && g.level) {
       if (g.level.vehicleAmmo >= LEVEL8_HMG_MAGAZINE || now < g.level.vehicleReloadUntil) return;
       g.level.vehicleReloadUntil = now + LEVEL8_HMG_RELOAD_MS;
+      dropLevel8AmmoBox(g, g.level, now);
       sound.reload(LEVEL8_HMG_RELOAD_MS);
       return;
     }
@@ -12592,21 +12768,11 @@ export function DeadRoadGame() {
     }
     ctx.restore();
     if (!MELEE_WEAPONS.has(p.weapon) && now - p.lastMuzzleFlash < 65) {
-      const muzzle = weaponMuzzleOffset(p.weapon) / CHARACTER_SCALE;
       ctx.save();
       ctx.translate(gunRelX, gunRelY);
       // 枪口火光随后坐力上跳的枪管方向（与枪体同一位姿）
       ctx.rotate(weaponRenderAngle);
-      ctx.fillStyle = "#fff2a8";
-      ctx.beginPath();
-      ctx.moveTo(muzzle - 7, 0);
-      ctx.lineTo(muzzle + 17, -9);
-      ctx.lineTo(muzzle + 11, 0);
-      ctx.lineTo(muzzle + 19, 9);
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillStyle = "#f28a35";
-      ctx.beginPath(); ctx.arc(muzzle + 2, 0, 5, 0, Math.PI * 2); ctx.fill();
+      drawSurvivalMuzzleFlash(ctx, p.weapon);
       ctx.restore();
     }
     ctx.restore();
@@ -12707,7 +12873,7 @@ export function DeadRoadGame() {
         ctx.beginPath(); ctx.moveTo(-95, 0); ctx.lineTo(95, 0); ctx.moveTo(0, -95); ctx.lineTo(0, 95); ctx.stroke();
         if (!item.triggered) {
           const bombY = -35 - Math.min(220, remaining * .14);
-          ctx.fillStyle = "#272e2d"; ctx.beginPath(); ctx.ellipse(0, bombY, 11, 28, 0, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = "#a43f36"; ctx.beginPath(); ctx.moveTo(-10, bombY - 18); ctx.lineTo(-22, bombY - 33); ctx.lineTo(0, bombY - 26); ctx.lineTo(22, bombY - 33); ctx.lineTo(10, bombY - 18); ctx.closePath(); ctx.fill();
+          ctx.save(); ctx.translate(0, bombY); drawAirstrikeBombModel(ctx); ctx.restore();
         }
       } else {
         if (!item.triggered) drawThrowableModel(ctx, item.key, now);
@@ -13527,6 +13693,11 @@ export function DeadRoadGame() {
   const armySupportPhase = explorationAutomaticWeaponPhase("m16", armySupportStartedAt, explorationSupportClock);
   const armoredSupportActive = explorationBattle.supportActiveUntil.armoredSupport > explorationSupportClock;
   const armoredSupportRemaining = explorationBattle.supportActiveUntil.armoredSupport - explorationSupportClock;
+  const armoredSupportStartedAt = explorationBattle.supportActiveUntil.armoredSupport - EXPLORATION_SUPPORT_DURATION_MS + EXPLORATION_SUPPORT_ARRIVAL_MS;
+  const armoredSupportReady = armoredSupportActive && explorationSupportClock >= armoredSupportStartedAt;
+  const armoredSupportReloading = explorationBattle.armoredSupportReloadUntil > explorationSupportClock;
+  const explorationBattleHasLivingZombies = explorationBattle.zombies.some((zombie) => zombie.hp > 0);
+  const armoredSupportFiring = armoredSupportReady && !armoredSupportReloading && explorationBattle.armoredSupportAmmo > 0 && explorationBattleHasLivingZombies;
   const selectedExplorationMember = EXPLORATION_MEMBERS.find((member) => member.id === selectedExplorationMemberId) ?? EXPLORATION_MEMBERS[0];
   const starterPackMember = EXPLORATION_MEMBERS.find((member) => member.id === "combatSoldier") ?? EXPLORATION_MEMBERS[0];
   const selectedExplorationMemberLevel = explorationMemberLevels[selectedExplorationMember.id] ?? 1;
@@ -13989,7 +14160,7 @@ export function DeadRoadGame() {
                 {(Object.keys(EXPLORATION_CONSUMABLES) as ExplorationConsumableKey[]).map((key) => {
                   const item = EXPLORATION_CONSUMABLES[key];
                   return <article key={key} className={`consumable-product product-${key}`}>
-                    <div className="consumable-product-icon"><i /><b /><em /></div>
+                    <div className="consumable-product-icon"><ExplorationConsumableIcon kind={key} /></div>
                     <h3>{item.name}</h3><p>{item.description}</p>
                     <span>原价 <s>{item.price} 金币</s></span><strong>库存 {explorationConsumableInventory[key]}</strong>
                     <button type="button" onClick={() => purchaseExplorationConsumable(key)}>免费购买</button>
@@ -14119,11 +14290,11 @@ export function DeadRoadGame() {
                   {Array.from({ length: 3 }, (_, index) => {
                     const key = deployedExplorationConsumables[index];
                     if (!key) return <div key={index} className="team-consumable-slot"><b>+</b><strong>消耗品栏位 {index + 1}</strong><small>尚未配置</small></div>;
-                    return <button type="button" key={key} className={`team-consumable-slot equipped product-${key}`} onClick={() => toggleExplorationConsumableDeployment(key)}><b>×</b><strong>{EXPLORATION_CONSUMABLES[key].name}</strong><small>库存 {explorationConsumableInventory[key]} · 点击卸下</small></button>;
+                    return <button type="button" key={key} className={`team-consumable-slot equipped product-${key}`} onClick={() => toggleExplorationConsumableDeployment(key)}><b>×</b><ExplorationConsumableIcon kind={key} /><strong>{EXPLORATION_CONSUMABLES[key].name}</strong><small>库存 {explorationConsumableInventory[key]} · 点击卸下</small></button>;
                   })}
                 </div>
                 <div className="team-consumable-inventory">
-                  {(Object.keys(EXPLORATION_CONSUMABLES) as ExplorationConsumableKey[]).filter((key) => explorationConsumableInventory[key] > 0).map((key) => <button type="button" key={key} disabled={deployedExplorationConsumables.includes(key)} onClick={() => toggleExplorationConsumableDeployment(key)}><strong>{EXPLORATION_CONSUMABLES[key].name}</strong><small>库存 {explorationConsumableInventory[key]}</small><b>{deployedExplorationConsumables.includes(key) ? "已上阵" : "上阵"}</b></button>)}
+                  {(Object.keys(EXPLORATION_CONSUMABLES) as ExplorationConsumableKey[]).filter((key) => explorationConsumableInventory[key] > 0).map((key) => <button type="button" key={key} disabled={deployedExplorationConsumables.includes(key)} onClick={() => toggleExplorationConsumableDeployment(key)}><ExplorationConsumableIcon kind={key} compact /><strong>{EXPLORATION_CONSUMABLES[key].name}</strong><small>库存 {explorationConsumableInventory[key]}</small><b>{deployedExplorationConsumables.includes(key) ? "已上阵" : "上阵"}</b></button>)}
                   {(Object.keys(EXPLORATION_CONSUMABLES) as ExplorationConsumableKey[]).every((key) => explorationConsumableInventory[key] === 0) && <p>暂无消耗品，请前往商店向下滑动购买。</p>}
                 </div>
               </section>
@@ -14150,31 +14321,31 @@ export function DeadRoadGame() {
             <div className="battle-consumable-bar" aria-label="战斗消耗品">
               {deployedExplorationConsumables.map((key) => {
                 const cooldown = Math.max(0, Math.ceil((explorationBattle.supportCooldownUntil[key] - explorationSupportClock) / 1000));
-                return <button type="button" key={key} onClick={() => activateExplorationConsumable(key)} disabled={explorationBattle.failed || explorationBattle.completed || explorationConsumableInventory[key] <= 0 || cooldown > 0}><strong>{EXPLORATION_CONSUMABLES[key].name}</strong><small>剩余 {explorationConsumableInventory[key]}</small><b>{cooldown > 0 ? `${cooldown}s` : "使用"}</b></button>;
+                return <button type="button" key={key} onClick={() => activateExplorationConsumable(key)} disabled={explorationBattle.failed || explorationBattle.completed || explorationConsumableInventory[key] <= 0 || cooldown > 0}><ExplorationConsumableIcon kind={key} compact /><strong>{EXPLORATION_CONSUMABLES[key].name}</strong><small>剩余 {explorationConsumableInventory[key]}</small><b>{cooldown > 0 ? `${cooldown}s` : "使用"}</b></button>;
               })}
             </div>
 
-            <div className={`battlefield ${explorationBattle.airstrikeEffects.some((effect) => effect.impacted) ? "airstrike-shaking" : ""}`} aria-label="探索模式自动战斗区域">
+            <div className={`battlefield ${explorationBattle.airstrikeEffects.some((effect) => effect.impacted && explorationSupportClock < effect.impactAt + ITEMS.airstrike.shakeMs) ? "airstrike-shaking" : ""}`} aria-label="探索模式自动战斗区域">
               <div className="battle-vehicle-position"><ExplorationVehicleModel kind={currentExplorationVehicleKind} compact /></div>
               {armySupportActive && (
                 <div className={`army-support-squad ${armySupportRemaining < 700 ? "leaving" : ""}`} aria-label="5名M16士兵支援">
                   {Array.from({ length: 5 }, (_, index) => (
                     <span className="support-soldier-model" key={index}>
-                      <ExplorationMemberPreview member={EXPLORATION_SUPPORT_SOLDIER} battleScale motion={!armySupportReady || explorationBattle.zombies.length === 0 ? "standing" : armySupportPhase.reloading ? "reloading" : "attacking"} reloadProgress={armySupportPhase.reloadProgress} />
-                      {armySupportReady && explorationBattle.zombies.length > 0 && !armySupportPhase.reloading && <><i key={`flash-${armySupportPhase.shotSerial}`} className="battle-muzzle-flash" /><i key={`case-${armySupportPhase.shotSerial}`} className="battle-ejected-casing" /></>}
-                      {armySupportPhase.reloading && <i key={`mag-${Math.floor(armySupportPhase.shotSerial / WEAPONS.m16.magazine)}`} className="battle-dropped-magazine" />}
+                      <ExplorationMemberPreview member={EXPLORATION_SUPPORT_SOLDIER} battleScale motion="standing" automaticWeaponStartedAt={armySupportReady && explorationBattleHasLivingZombies ? armySupportStartedAt : undefined} />
+                      {armySupportReady && explorationBattleHasLivingZombies && !armySupportPhase.reloading && <><i key={`case-${armySupportPhase.shotSerial}`} className="battle-ejected-casing" /><i key={`tracer-${armySupportPhase.shotSerial}`} className={`support-bullet-tracer tracer-${index}`} /></>}
+                      {armySupportReady && explorationBattleHasLivingZombies && armySupportPhase.reloading && <i key={`mag-${Math.floor(armySupportPhase.shotSerial / WEAPONS.m16.magazine)}`} className="battle-dropped-magazine" />}
                     </span>
                   ))}
                 </div>
               )}
-              {armoredSupportActive && <div className={`armored-support-vehicle ${armoredSupportRemaining < 700 ? "leaving" : ""}`} aria-label="重机枪装甲车支援"><ExplorationArmoredSupportModel firing={explorationBattle.zombies.length > 0} /></div>}
-              {explorationBattle.airstrikeEffects.map((effect) => <div key={effect.id} className={`battle-airstrike-blast ${effect.impacted ? "impact" : "incoming"}`} style={{ left: `${effect.x}%` }} aria-hidden="true"><i /><b /><em /></div>)}
+              {armoredSupportActive && <div className={`armored-support-vehicle ${armoredSupportRemaining < 700 ? "leaving" : ""}`} aria-label="重机枪装甲车支援"><ExplorationArmoredSupportModel firingStartedAt={armoredSupportFiring ? armoredSupportStartedAt : undefined} reloadUntil={explorationBattle.armoredSupportReloadUntil} />{armoredSupportFiring && <><i key={`armored-tracer-${Math.floor(explorationSupportClock / LEVEL8_HMG_FIRE_MS)}`} className="armored-support-tracer" /><i key={`armored-case-${Math.floor(explorationSupportClock / LEVEL8_HMG_FIRE_MS)}`} className="armored-ejected-casing" /></>}{armoredSupportReloading && <i className="armored-dropped-ammo-box" />}</div>}
+              {explorationBattle.airstrikeEffects.map((effect) => <ExplorationAirstrikeEffectView key={effect.id} effect={effect} />)}
               {explorationBattle.units.map((unit) => {
                 const member = EXPLORATION_MEMBERS.find((candidate) => candidate.id === unit.memberId) ?? EXPLORATION_MEMBERS[0];
                 return (
                   <div key={unit.id} className={`battle-unit battle-unit-shared-model ${explorationBattle.zombies.length === 0 ? "guarding" : "advancing"}`} style={{ left: `${unit.x}%` }} aria-label={`${unit.label}，HP ${Math.ceil(unit.hp)}`}>
                     <ExplorationMemberPreview member={member} battleScale motion={unit.action === "walk" ? "moving" : unit.action === "attack" ? "attacking" : unit.action === "reload" ? "reloading" : unit.action === "kick" ? "kicking" : unit.action === "throw" ? "throwing" : "standing"} reloadProgress={unit.action === "reload" ? 1 - unit.reloadRemaining / Math.max(.001, WEAPONS[member.weapon].reload / 1000) : 0} />
-                    {unit.action === "attack" && !MELEE_WEAPONS.has(member.weapon) && <><span className="battle-muzzle-flash" /><span className="battle-ejected-casing" /></>}
+                    {unit.action === "attack" && !MELEE_WEAPONS.has(member.weapon) && <span className="battle-ejected-casing" />}
                     {unit.action === "reload" && WEAPON_HOLD[member.weapon].reloadKind === "mag" && <span className="battle-dropped-magazine" />}
                     <i className="battle-entity-hp"><b style={{ width: `${unit.hp / unit.maxHp * 100}%` }} /></i>
                   </div>

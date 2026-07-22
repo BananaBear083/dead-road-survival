@@ -502,11 +502,18 @@ button { -webkit-tap-highlight-color: transparent; }
 .consumable-shop-heading h2 { margin: 3px 0; font-size: 36px; }
 .consumable-shop-grid { position: absolute; z-index: 3; left: 7%; right: 7%; top: 29%; bottom: 8%; display: grid; grid-template-columns: repeat(3,1fr); gap: 18px; }
 .consumable-product { display: grid; grid-template-rows: 115px auto 1fr auto auto auto; gap: 7px; padding: 18px; color: #e8e9dd; background: rgba(12,17,13,.94); border: 1px solid #68766a; box-shadow: 8px 10px 0 rgba(0,0,0,.38); }
-.consumable-product-icon { position: relative; background: radial-gradient(circle,#697667,transparent 65%); }
-.consumable-product-icon::before { content:""; position:absolute; left:50%; top:50%; width:74px; height:42px; background:#56624f; border:5px solid #202720; transform:translate(-50%,-50%); }
-.product-armySupport .consumable-product-icon::after { content:"×5 M16"; position:absolute; inset:0; display:grid; place-items:center; color:#f0ce55; font-weight:1000; }
-.product-armoredSupport .consumable-product-icon::after { content:"HMG"; position:absolute; inset:0; display:grid; place-items:center; color:#f0ce55; font-weight:1000; }
-.product-airSupport .consumable-product-icon::after { content:"✈  ×2"; position:absolute; inset:0; display:grid; place-items:center; color:#f0ce55; font-size:25px; font-weight:1000; }
+.consumable-product-icon { position: relative; overflow:hidden; background: radial-gradient(circle,#697667,transparent 65%); }
+.consumable-icon { position:relative; width:100%; height:100%; display:grid; place-items:center; overflow:hidden; }
+.consumable-icon-squad { height:100%; display:flex; align-items:flex-end; justify-content:center; }
+.consumable-icon-squad .team-member-preview { width:48px; height:88px; max-height:none; object-fit:contain; }
+.consumable-icon-squad .team-member-preview + .team-member-preview { margin-left:-23px; }
+.consumable-icon-armoredSupport .exploration-armored-model { width:190px; height:138px; object-fit:contain; filter:drop-shadow(3px 5px 3px rgba(0,0,0,.55)); }
+.exploration-fighter-icon { width:174px; height:94px; object-fit:contain; filter:drop-shadow(4px 6px 3px rgba(0,0,0,.58)); }
+.consumable-icon.compact { width:54px; height:42px; flex:0 0 54px; }
+.consumable-icon.compact .consumable-icon-squad .team-member-preview { width:18px; height:35px; }
+.consumable-icon.compact .consumable-icon-squad .team-member-preview + .team-member-preview { margin-left:-9px; }
+.consumable-icon.compact .exploration-armored-model { width:58px; height:42px; }
+.consumable-icon.compact .exploration-fighter-icon { width:52px; height:32px; }
 .consumable-product h3 { margin:0; font-size:20px; }.consumable-product p { margin:0; color:#9ba49a; font-size:10px; line-height:1.5; }.consumable-product span,.consumable-product strong { font-size:10px; }.consumable-product strong { color:#f1cf58; }
 .consumable-product button { padding:11px; color:#11160f; background:var(--signal); border:0; border-bottom:5px solid #705b18; cursor:pointer; font-weight:1000; }
 
@@ -628,13 +635,14 @@ button { -webkit-tap-highlight-color: transparent; }
 .team-member-preview { display: block; width: min(100%, 330px); height: auto; max-height: 100%; object-fit: contain; filter: drop-shadow(8px 10px 3px rgba(0,0,0,.52)); }
 .team-consumables-section { height: 100%; padding: 18px; background: rgba(12,17,13,.92); border: 1px solid #465047; border-top: 5px solid var(--signal); }
 .team-consumable-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 18px; }
-.team-consumable-slot { min-height: 140px; display: grid; place-items: center; align-content: center; gap: 7px; color: #788179; background: #202722; border: 1px dashed #59635a; }
+.team-consumable-slot { min-height: 140px; display: grid; grid-template-rows:auto minmax(66px,1fr) auto auto; place-items: center; align-content: center; gap: 5px; color: #788179; background: #202722; border: 1px dashed #59635a; }
 .team-consumable-slot b { font-size: 29px; font-weight: 400; }
 .team-consumable-slot strong { color: #b6bcb3; font-size: 10px; }
 .team-consumable-slot small { font-size: 8px; }
 .team-consumable-slot.equipped { color:#e9e7d8; background:#1d2a20; border:2px solid #d8b84c; cursor:pointer; }
 .team-consumable-inventory { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:18px; }
-.team-consumable-inventory button { display:grid; gap:5px; padding:14px; color:#e7e8dc; text-align:left; background:#151c17; border:1px solid #4e5a50; cursor:pointer; }
+.team-consumable-inventory button { display:grid; grid-template-columns:58px 1fr auto; align-items:center; gap:3px 8px; padding:10px; color:#e7e8dc; text-align:left; background:#151c17; border:1px solid #4e5a50; cursor:pointer; }
+.team-consumable-inventory .consumable-icon { grid-row:1 / 3; }
 .team-consumable-inventory button:disabled { opacity:.6; cursor:default; }
 .team-consumable-inventory small { color:#8e988e; }
 .team-consumable-inventory b { color:var(--signal); }
@@ -686,7 +694,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .battle-top-hud strong { grid-row: 2; color: #f0eee0; font-family: monospace; font-size: 18px; }
 .battle-top-hud span { grid-column: 2; grid-row: 1 / 3; align-self: center; color: #9fa89d; font-size: 9px; }
 .battle-consumable-bar { position:absolute; z-index:13; right:2%; top:14px; display:flex; gap:6px; }
-.battle-consumable-bar button { min-width:100px; display:grid; gap:2px; padding:7px 9px; color:#e8e8dc; background:rgba(12,17,14,.94); border:1px solid #8a7b42; cursor:pointer; }.battle-consumable-bar button:disabled{opacity:.48;cursor:not-allowed}.battle-consumable-bar strong{font-size:9px}.battle-consumable-bar small{color:#99a198;font-size:8px}.battle-consumable-bar b{color:var(--signal);font-size:9px}
+.battle-consumable-bar button { min-width:142px; display:grid; grid-template-columns:54px 1fr; grid-template-rows:repeat(3,auto); align-items:center; gap:1px 7px; padding:5px 8px; color:#e8e8dc; text-align:left; background:rgba(12,17,14,.94); border:1px solid #8a7b42; cursor:pointer; }.battle-consumable-bar button:disabled{opacity:.48;cursor:not-allowed}.battle-consumable-bar .consumable-icon{grid-row:1 / 4}.battle-consumable-bar strong{font-size:9px}.battle-consumable-bar small{color:#99a198;font-size:8px}.battle-consumable-bar b{color:var(--signal);font-size:9px}
 .battle-courage { border-color: #c9aa41 !important; }
 .battle-courage strong { color: #ffdd64; font-size: 27px; }
 .battle-vehicle-hp { min-width: 200px !important; }
@@ -698,21 +706,25 @@ button { -webkit-tap-highlight-color: transparent; }
 .support-soldier-model { position:relative; width:108px; height:168px; display:block; }
 .support-soldier-model + .support-soldier-model { margin-left:-25px; }
 .army-support-squad .team-member-preview { width:108px; height:168px; max-height:none; object-fit:contain; filter:drop-shadow(3px 4px 2px rgba(0,0,0,.55)); }
+.support-bullet-tracer { position:absolute; z-index:-1; left:76%; top:41%; width:56vw; height:3px; background:linear-gradient(90deg,#f6f1b2,#86a58c 55%,rgba(134,165,140,0)); transform-origin:left center; animation:support-tracer-flight .11s steps(2) both; }
+.support-bullet-tracer.tracer-1 { transform:rotate(-.6deg); }.support-bullet-tracer.tracer-2 { transform:rotate(.7deg); }.support-bullet-tracer.tracer-3 { transform:rotate(-1deg); }.support-bullet-tracer.tracer-4 { transform:rotate(.4deg); }
 .armored-support-vehicle { position:absolute; z-index:6; left:3%; bottom:0; width:264px; height:193px; pointer-events:none; animation:armored-support-arrive .55s cubic-bezier(.2,.75,.25,1) both; }
 .armored-support-vehicle.leaving { animation:armored-support-leave .65s ease-in both; }
 .armored-support-vehicle canvas { display:block; width:264px; height:193px; object-fit:contain; filter:drop-shadow(5px 7px 4px rgba(0,0,0,.58)); }
+.armored-support-tracer { position:absolute; z-index:-1; left:80%; top:30%; width:72vw; height:4px; background:linear-gradient(90deg,#fff1a1,#f6d267 52%,rgba(246,210,103,0)); transform:rotate(-1.8deg); transform-origin:left center; animation:support-tracer-flight .095s steps(2) both; }
+.armored-ejected-casing { position:absolute; z-index:8; left:43%; top:22%; width:8px; height:3px; border-radius:2px; background:#c9a950; box-shadow:0 0 0 1px #685728; animation:armored-casing-drop .7s ease-out both; }
+.armored-dropped-ammo-box { position:absolute; z-index:7; left:36%; top:27%; width:17px; height:29px; background:linear-gradient(90deg,#2d372f,#586451 48%,#242c26); border:2px solid #171d18; box-shadow:3px 5px 3px rgba(0,0,0,.4); animation:armored-ammo-box-drop 1.15s cubic-bezier(.22,.68,.35,1) both; }
+@keyframes support-tracer-flight { 0% { opacity:1; clip-path:inset(0 92% 0 0); } 55% { opacity:.92; clip-path:inset(0 0 0 0); } 100% { opacity:0; clip-path:inset(0 0 0 82%); } }
+@keyframes armored-casing-drop { to { opacity:.35; transform:translate(-42px,92px) rotate(-620deg); } }
+@keyframes armored-ammo-box-drop { 45% { opacity:1; transform:translate(-15px,44px) rotate(-24deg); } 100% { opacity:.58; transform:translate(-28px,128px) rotate(-52deg); } }
 @keyframes armored-support-arrive { from { opacity:0; transform:translateX(-300px); } to { opacity:1; transform:translateX(0); } }
 @keyframes armored-support-leave { from { opacity:1; transform:translateX(0); } to { opacity:0; transform:translateX(-330px); } }
 @keyframes army-support-arrive { from { opacity:0; transform:translateX(-140px); } to { opacity:1; transform:translateX(0); } }
 @keyframes army-support-leave { from { opacity:1; transform:translateX(0); } to { opacity:0; transform:translateX(-180px); } }
-.battle-airstrike-blast { position:absolute; z-index:10; bottom:4%; width:130px; height:210px; transform:translateX(-50%); }
-.battle-airstrike-blast.incoming::before { content:""; position:absolute; left:58px; top:-95px; width:14px; height:52px; background:linear-gradient(90deg,#282c2c,#8b8e83 45%,#222727); border-radius:45% 45% 24% 24%; box-shadow:0 -16px 0 -5px #303535; animation:airstrike-bomb-fall .55s linear both; }
-.battle-airstrike-blast.incoming::after { content:""; position:absolute; left:50%; bottom:0; width:38px; height:10px; border:2px solid rgba(255,211,89,.75); border-radius:50%; transform:translateX(-50%); animation:airstrike-target-pulse .3s ease-in-out infinite alternate; }
-.battle-airstrike-blast.impact { background:radial-gradient(ellipse at 50% 90%,rgba(255,195,62,.9),rgba(225,67,26,.62) 24%,transparent 58%); animation:airstrike-column 1.25s ease-out forwards; }
-.battle-airstrike-blast.impact::before { content:""; position:absolute; left:25%; right:25%; bottom:18%; height:72%; background:linear-gradient(0deg,#e96b26,#e9be56 30%,#4b4b42 70%,transparent); filter:blur(8px); }
-@keyframes airstrike-bomb-fall { from { transform:translateY(0); } to { transform:translateY(245px); } }
-@keyframes airstrike-target-pulse { to { width:64px; height:18px; opacity:.45; } }
-@keyframes airstrike-column { from { opacity:0; transform:translateX(-50%) scale(.3); } 20% { opacity:1; } to { opacity:0; transform:translateX(-50%) scale(1.35); } }
+.battle-airstrike-effect { position:absolute; z-index:10; top:-18%; bottom:2%; width:1px; pointer-events:none; }
+.airstrike-falling-bomb { position:absolute; left:50%; top:-125px; width:60px; height:90px; transform:translateX(-50%); filter:drop-shadow(0 10px 8px rgba(0,0,0,.6)); animation:exploration-bomb-drop .55s cubic-bezier(.5,.05,.9,.55) both; }
+.battle-classic-blast { position:absolute; left:50%; bottom:-65px; width:520px; height:436px; transform:translateX(-50%); pointer-events:none; }
+@keyframes exploration-bomb-drop { from { top:-125px; transform:translateX(-50%) scale(.7); } to { top:calc(100% - 74px); transform:translateX(-50%) scale(1.12); } }
 .airstrike-shaking { animation:battle-airstrike-shake .08s linear infinite alternate}@keyframes battle-airstrike-shake{to{transform:translate(5px,-3px)}}
 .battle-vehicle-position { position: absolute; z-index: 2; left: .5%; bottom: 5%; width: 390px; height: 220px; }
 .battle-unit, .battle-enemy { position: absolute; z-index: 5; bottom: 9%; width: 45px; height: 104px; filter: drop-shadow(4px 5px 2px rgba(0,0,0,.55)); transform: translateX(-50%); transition: left .24s linear; }
