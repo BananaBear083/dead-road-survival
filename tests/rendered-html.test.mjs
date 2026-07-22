@@ -1641,9 +1641,9 @@ test("adds manual reward claims, member growth and reusable exploration support 
   assert.match(source, /function explorationMemberStatsAtLevel/);
   assert.match(source, /hp: stats\.hp,[\s\S]*damage: stats\.damage/);
 
-  assert.match(source, /armySupport: \{ name: "军队支援", price: 500/);
-  assert.match(source, /armoredSupport: \{ name: "装甲车支援", price: 700/);
-  assert.match(source, /airSupport: \{ name: "空中支援", price: 1000/);
+  assert.match(source, /armySupport: \{ name: "军队支援", price: 3000/);
+  assert.match(source, /armoredSupport: \{ name: "装甲车支援", price: 3000/);
+  assert.match(source, /airSupport: \{ name: "空中支援", price: 2000/);
   assert.match(source, /EXPLORATION_CONSUMABLE_COOLDOWN_MS = 30000/);
   assert.match(source, /EXPLORATION_SUPPORT_DURATION_MS = 10000/);
   assert.match(source, /EXPLORATION_SUPPORT_ARRIVAL_MS = 550/);
@@ -1725,6 +1725,12 @@ test("supports paid supplies, repeat summons and a stable two-dimensional explor
   assert.match(source, /type ExplorationBattleUnit = \{[^}]*y: number/);
   assert.match(source, /explorationPlaneDistance/);
   assert.match(source, /style=\{\{ left: `\$\{zombie\.x\}%`, bottom: `\$\{zombie\.y\}%`/);
+  assert.match(source, /type ExplorationBattleState = \{[\s\S]*zombiesAlerted: boolean/);
+  assert.match(source, /zombiesAlerted: false/);
+  assert.match(source, /const zombieWasHit = zombies\.some/);
+  assert.match(source, /const zombiesAlerted = battle\.zombiesAlerted \|\| zombieWasHit/);
+  assert.match(source, /if \(!zombiesAlerted\) \{ zombie\.action = "guard"; return; \}/);
+  assert.match(source, /return \{ \.\.\.battle,[^}]*zombiesAlerted,/);
   assert.doesNotMatch(source, /target\.missingLimbs = \[/);
   assert.match(source, /battle-squad-bar[\s\S]*ExplorationMemberPreview member=\{member\}/);
   assert.match(css, /\.battle-consumable-bar[^}]*top:\s*96px/);

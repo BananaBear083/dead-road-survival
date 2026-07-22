@@ -58,6 +58,7 @@ type ExplorationBattleState = {
   courage: number;
   elapsed: number;
   vehicleHp: number;
+  zombiesAlerted: boolean;
   units: ExplorationBattleUnit[];
   zombies: ExplorationBattleZombie[];
   knives: ExplorationBattleKnife[];
@@ -837,9 +838,9 @@ const EXPLORATION_CONSUMABLE_COOLDOWN_MS = 30000;
 const EXPLORATION_ARMORED_SUPPORT_INITIAL_AMMO = 46;
 const EMPTY_EXPLORATION_CONSUMABLES = (): ExplorationConsumableInventory => ({ armySupport: 0, armoredSupport: 0, airSupport: 0 });
 const EXPLORATION_CONSUMABLES: Record<ExplorationConsumableKey, { name: string; price: number; description: string }> = {
-  armySupport: { name: "军队支援", price: 500, description: "5 名持 M16 士兵参战 10 秒后撤离" },
-  armoredSupport: { name: "装甲车支援", price: 700, description: "第八关同型重机枪装甲车扫射 10 秒" },
-  airSupport: { name: "空中支援", price: 1000, description: "向僵尸最密集的两处投下大威力航空炸弹" },
+  armySupport: { name: "军队支援", price: 3000, description: "5 名持 M16 士兵参战 10 秒后撤离" },
+  armoredSupport: { name: "装甲车支援", price: 3000, description: "第八关同型重机枪装甲车扫射 10 秒" },
+  airSupport: { name: "空中支援", price: 2000, description: "向僵尸最密集的两处投下大威力航空炸弹" },
 };
 
 function explorationBattleTaskConfig(taskOrder: number) {
@@ -1125,7 +1126,7 @@ function freshExplorationBattle(vehicleHp: number, taskOrder: number, rewardElig
       cooldown: index * .25,
       damage: 8,
       speed: 2.4 * (spec?.speedFactor ?? 1),
-      action: "walk",
+      action: "guard",
       wounds: [],
       missingLimbs: [],
       legDamage: 0,
@@ -1138,6 +1139,7 @@ function freshExplorationBattle(vehicleHp: number, taskOrder: number, rewardElig
     courage: 0,
     elapsed: 0,
     vehicleHp,
+    zombiesAlerted: false,
     units: [],
     zombies,
     knives: [],
@@ -9559,7 +9561,7 @@ export function DeadRoadGame() {
             cooldown: .35 * index,
             damage: 8 + tier * 2,
             speed: 2.4 + Math.min(2.2, tier * .16),
-            action: "walk",
+            action: "guard",
             wounds: [],
             missingLimbs: [],
             legDamage: 0,
@@ -9598,6 +9600,7 @@ export function DeadRoadGame() {
           knockedDownRemaining: Math.max(0, zombie.knockedDownRemaining - .25),
           action: "guard",
         }));
+        const zombieHpBeforeCombat = new Map(zombies.map((zombie) => [zombie.id, zombie.hp]));
         let knives = battle.knives.map((knife) => ({ ...knife, life: knife.life - .25 })).filter((knife) => knife.life > 0);
         let nextKnifeId = battle.nextKnifeId;
         let pendingKicks = battle.pendingKicks;
@@ -9757,6 +9760,8 @@ export function DeadRoadGame() {
             }
           }
         });
+        const zombieWasHit = zombies.some((zombie) => zombie.hp < (zombieHpBeforeCombat.get(zombie.id) ?? zombie.hp));
+        const zombiesAlerted = battle.zombiesAlerted || zombieWasHit;
         const hadZombies = zombies.length > 0;
         const killedThisTick = zombies.filter((zombie) => zombie.hp <= 0).length;
         zombies = zombies.filter((zombie) => zombie.hp > 0);
@@ -9764,6 +9769,7 @@ export function DeadRoadGame() {
 
         let vehicleHp = battle.vehicleHp;
         zombies.forEach((zombie) => {
+          if (!zombiesAlerted) { zombie.action = "guard"; return; }
           if (zombie.knockedDownRemaining > 0) { zombie.action = "guard"; return; }
           const livingUnits = units.filter((unit) => unit.hp > 0);
           const nearestUnit = livingUnits.reduce<ExplorationBattleUnit | null>((nearest, unit) => (
@@ -9796,7 +9802,7 @@ export function DeadRoadGame() {
         });
         units = units.filter((unit) => unit.hp > 0);
         vehicleHp = Math.max(0, vehicleHp);
-        return { ...battle, units, zombies, knives, pendingKicks, airstrikeEffects, armySupportNextShotAt, armoredSupportNextShotAt, armoredSupportAmmo, armoredSupportReloadUntil, nextKnifeId, nextKickId, kills: battle.kills + killedThisTick, vehicleHp, completed, failed: !completed && vehicleHp <= 0 };
+        return { ...battle, zombiesAlerted, units, zombies, knives, pendingKicks, airstrikeEffects, armySupportNextShotAt, armoredSupportNextShotAt, armoredSupportAmmo, armoredSupportReloadUntil, nextKnifeId, nextKickId, kills: battle.kills + killedThisTick, vehicleHp, completed, failed: !completed && vehicleHp <= 0 };
       });
     }, 250);
     return () => window.clearInterval(combatTimer);
@@ -14565,6 +14571,7 @@ export function DeadRoadGame() {
                 );
               })}
               {explorationBattle.knives.map((knife) => <ExplorationThrownKnife key={knife.id} fromX={knife.fromX} fromY={knife.fromY} toX={knife.toX} toY={knife.toY} />)}
+              {explorationBattle.zombies.length > 0 && !explorationBattle.zombiesAlerted && <p className="battle-guard-message">僵尸尚未警觉 · 攻击任意目标后将发起进攻</p>}
               {explorationBattle.zombies.length === 0 && !explorationBattle.failed && <p className="battle-guard-message">没有敌人时，队员将在原地警戒</p>}
             </div>
 
