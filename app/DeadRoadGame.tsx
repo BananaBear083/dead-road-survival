@@ -15090,25 +15090,29 @@ export function DeadRoadGame() {
         {screen === "explorationBattle" && (
           <div className="exploration-battle-panel overlay-panel">
             <div className="battle-farm-scenery" aria-hidden="true">
+              <span className="battle-sky-cloud cloud-a" />
+              <span className="battle-sky-cloud cloud-b" />
+              <span className="battle-sky-cloud cloud-c" />
               <span className="battle-farm-hills" />
               <span className="battle-farm-barn"><i /><b /></span>
               <span className="battle-farm-silo"><i /></span>
               <span className="battle-farm-fence"><i /><i /><i /><i /></span>
             </div>
             <div className="battle-road" aria-hidden="true"><i /><i /><i /></div>
-            <button type="button" className="battle-exit" onClick={closeExplorationSubscreen}>撤离战斗</button>
-            <div className="battle-observer-label">任务{EXPLORATION_TASK_NAMES[explorationBattle.taskOrder - 1]?.replace("任务", "")} · 农场道路 · 第三人称自动作战</div>
-            <div className="battle-top-hud">
-              <div className="battle-courage"><small>勇气值</small><strong>{explorationBattle.courage}</strong><span>每秒 +1</span></div>
-              <div className="battle-wave"><small>尸潮强度</small><strong>第 {explorationBattleWave} 阶段</strong><span>{explorationBattle.elapsed}s</span></div>
-              <div className="battle-vehicle-hp"><small>车辆 HP</small><strong>{Math.ceil(explorationBattle.vehicleHp)} / {currentExplorationVehicleMaxHp}</strong><i><b style={{ width: `${explorationBattle.vehicleHp / currentExplorationVehicleMaxHp * 100}%` }} /></i></div>
+            <div className="battle-command-bar">
+              <button type="button" className="battle-exit" onClick={closeExplorationSubscreen}>撤离战斗</button>
+              <div className="battle-consumable-bar" aria-label="战斗消耗品">
+                {deployedExplorationConsumables.map((key) => {
+                  const cooldown = Math.max(0, Math.ceil((explorationBattle.supportCooldownUntil[key] - explorationSupportClock) / 1000));
+                  return <button type="button" key={key} onClick={() => activateExplorationConsumable(key)} disabled={explorationBattle.failed || explorationBattle.completed || explorationConsumableInventory[key] <= 0 || cooldown > 0}><ExplorationConsumableIcon kind={key} compact /><strong>{EXPLORATION_CONSUMABLES[key].name}</strong><small>剩余 {explorationConsumableInventory[key]}</small><b>{cooldown > 0 ? `${cooldown}s` : "使用"}</b></button>;
+                })}
+              </div>
+              <div className="battle-top-hud">
+                <div className="battle-courage"><small>勇气值</small><strong>{explorationBattle.courage}</strong><span>每秒 +1</span></div>
+                <div className="battle-vehicle-hp"><small>车辆 HP</small><strong>{Math.ceil(explorationBattle.vehicleHp)} / {currentExplorationVehicleMaxHp}</strong><i><b style={{ width: `${explorationBattle.vehicleHp / currentExplorationVehicleMaxHp * 100}%` }} /></i></div>
+              </div>
             </div>
-            <div className="battle-consumable-bar" aria-label="战斗消耗品">
-              {deployedExplorationConsumables.map((key) => {
-                const cooldown = Math.max(0, Math.ceil((explorationBattle.supportCooldownUntil[key] - explorationSupportClock) / 1000));
-                return <button type="button" key={key} onClick={() => activateExplorationConsumable(key)} disabled={explorationBattle.failed || explorationBattle.completed || explorationConsumableInventory[key] <= 0 || cooldown > 0}><ExplorationConsumableIcon kind={key} compact /><strong>{EXPLORATION_CONSUMABLES[key].name}</strong><small>剩余 {explorationConsumableInventory[key]}</small><b>{cooldown > 0 ? `${cooldown}s` : "使用"}</b></button>;
-              })}
-            </div>
+            <div className="battle-observer-label">任务{EXPLORATION_TASK_NAMES[explorationBattle.taskOrder - 1]?.replace("任务", "")} · 第 {explorationBattleWave} 阶段 · {explorationBattle.elapsed}s · 农场道路 · 第三人称自动作战</div>
 
             <div className={`battlefield ${explorationBattle.airstrikeEffects.some((effect) => effect.impacted && explorationSupportClock < effect.impactAt + ITEMS.airstrike.shakeMs) ? "airstrike-shaking" : ""}`} aria-label="探索模式自动战斗区域">
               <div className="battle-vehicle-position"><ExplorationVehicleModel kind={currentExplorationVehicleKind} compact /></div>

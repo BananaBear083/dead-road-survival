@@ -1765,6 +1765,13 @@ test("adds manual reward claims, member growth and reusable exploration support 
   assert.match(source, /battle-classic-blast/);
   assert.match(css, /\.consumable-shop-page[^}]*top: 200%/);
   assert.match(css, /\.battle-consumable-bar/);
+  assert.match(source, /className="battle-command-bar"/);
+  assert.match(source, /battle-command-bar[\s\S]*battle-exit[\s\S]*battle-consumable-bar[\s\S]*battle-courage[\s\S]*battle-vehicle-hp/);
+  assert.match(source, /battle-sky-cloud cloud-a/);
+  assert.match(source, /battle-sky-cloud cloud-b/);
+  assert.match(css, /\.battle-command-bar[^}]*display:flex/);
+  assert.match(css, /\.battle-farm-scenery[^}]*linear-gradient\(180deg,#70b9e8 0%,#bde4f7 72%,#e8f4f5 100%\)/);
+  assert.doesNotMatch(css, /\.battle-farm-scenery[^}]*repeating-linear-gradient/);
 });
 
 test("shares consumable icons, classic gunfire and classic airstrike explosions across exploration UI", async () => {
@@ -1837,9 +1844,10 @@ test("supports paid supplies, repeat summons and a stable two-dimensional explor
   assert.match(source, /return \{ \.\.\.battle,[^}]*zombiesAlerted,/);
   assert.doesNotMatch(source, /target\.missingLimbs = \[/);
   assert.match(source, /battle-squad-bar[\s\S]*ExplorationMemberPreview member=\{member\}/);
-  assert.match(css, /\.battle-consumable-bar[^}]*top:\s*12px/);
-  assert.match(css, /\.battle-consumable-bar[^}]*left:\s*50%/);
-  assert.match(css, /\.battle-top-hud[^}]*top:\s*78px/);
+  assert.match(css, /\.battle-command-bar[^}]*top:\s*12px/);
+  assert.match(css, /\.battle-command-bar[^}]*left:\s*18px[^}]*right:\s*18px/);
+  assert.match(css, /\.battle-top-hud[^}]*position:static/);
+  assert.match(css, /\.battle-consumable-bar[^}]*position:static/);
   assert.match(css, /--battle-entity-width:\s*108px/);
   assert.match(css, /\.battle-squad-bar \.team-member-preview/);
 });
