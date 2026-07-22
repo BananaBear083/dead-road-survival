@@ -26,12 +26,25 @@ const BLOOD_STAIN_MS = 10000;
 const MAX_BLOOD_STAINS = 60;
 
 type MajorMode = "classic" | "exploration";
-type Screen = "menu" | "exploration" | "playing" | "shop" | "loadout" | "gameover" | "codex" | "levels" | "levelComplete" | "lottery";
+type Screen = "menu" | "exploration" | "playing" | "shop" | "loadout" | "gameover" | "codex" | "levels" | "levelComplete" | "lottery" | "explorationShop" | "vehicleGarage" | "explorationBattle";
 type GameMode = "survival" | "range" | "level";
 type ShopTab = "weapons" | "armor" | "supplies" | "items" | "partners" | "zombies";
 type CodexCategory = "regular" | "special";
 type LotteryRarity = "common" | "rare" | "epic" | "legendary";
 type LotteryPhase = "idle" | "firing" | "flash" | "reveal";
+type ExplorationVehicleKind = "van" | "truck" | "bus";
+type ExplorationBattleUnit = { id: string; label: string; hp: number; maxHp: number; x: number; cooldown: number };
+type ExplorationBattleZombie = { id: number; hp: number; maxHp: number; x: number; cooldown: number; damage: number; speed: number };
+type ExplorationBattleState = {
+  courage: number;
+  elapsed: number;
+  vehicleHp: number;
+  units: ExplorationBattleUnit[];
+  zombies: ExplorationBattleZombie[];
+  deployed: string[];
+  nextZombieId: number;
+  failed: boolean;
+};
 type WeaponKey =
   | "glock17" | "m1911" | "pkm" | "fruitknife" | "combatknife" | "crowbar"
   | "hammer" | "fireaxe" | "baseballbat" | "sawedoff"
@@ -726,6 +739,44 @@ const EXPLORATION_TASKS: ExplorationTask[] = Array.from({ length: 10 }, (_, inde
   y: EXPLORATION_TASK_POSITIONS[index][1],
 }));
 const EXPLORATION_CLEARED_KEY = "dead-road-exploration-cleared";
+const EXPLORATION_VOUCHER_EXCHANGE_COST = 100;
+const EXPLORATION_DEPLOY_COST = 5;
+const EXPLORATION_MAX_VEHICLE_LEVEL = 10;
+const EXPLORATION_SQUAD = ["队员一", "队员二", "队员三", "队员四"] as const;
+
+function explorationVehicleKind(level: number): ExplorationVehicleKind {
+  if (level >= 10) return "bus";
+  if (level >= 5) return "truck";
+  return "van";
+}
+
+function explorationVehicleMaxHp(level: number) { return 200 + (level - 1) * 20; }
+
+function explorationVehicleUpgradeCost(level: number) { return 2000 + (level - 1) * 1000; }
+
+function freshExplorationBattle(vehicleHp: number): ExplorationBattleState {
+  return {
+    courage: 0,
+    elapsed: 0,
+    vehicleHp,
+    units: [],
+    zombies: [],
+    deployed: [],
+    nextZombieId: 1,
+    failed: false,
+  };
+}
+
+function ExplorationVehicleModel({ kind, compact = false }: { kind: ExplorationVehicleKind; compact?: boolean }) {
+  return (
+    <div className={`exploration-vehicle vehicle-${kind} ${compact ? "vehicle-compact" : ""}`} aria-label={kind === "van" ? "白色面包车" : kind === "truck" ? "卡车" : "大巴车"}>
+      <span className="vehicle-body"><i className="vehicle-window vehicle-window-a" /><i className="vehicle-window vehicle-window-b" /><b className="vehicle-door" /><em className="vehicle-dirt" /><strong className="vehicle-blood" /></span>
+      <span className="vehicle-wheel vehicle-wheel-a" />
+      <span className="vehicle-wheel vehicle-wheel-b" />
+      <span className="vehicle-bumper" />
+    </div>
+  );
+}
 
 const LOTTERY_RARITIES: Record<LotteryRarity, { label: string; chance: number; rank: number }> = {
   common: { label: "普通", chance: 50, rank: 0 },
@@ -8163,16 +8214,22 @@ export function DeadRoadGame() {
   const reloadRef = useRef<(now: number) => void>(() => {});
   const rafRef = useRef(0);
   const lastFrameRef = useRef(0);
+  const lotteryFireTimerRef = useRef<number | null>(null);
+  const lotteryPointerRef = useRef({ x: 0, y: 0 });
   // 动态世界宽度：画布位图宽度（世界单位）跟随舞台实际宽高比；worldWRef 供各回调免闭包读取
   const [canvasW, setCanvasW] = useState(DEFAULT_WORLD_W);
   const worldWRef = useRef(DEFAULT_WORLD_W);
   const [screen, setScreen] = useState<Screen>("menu");
   const [majorMode, setMajorMode] = useState<MajorMode>("classic");
-  const [explorationCoins] = useState(0);
+  const [explorationCoins, setExplorationCoins] = useState(0);
   const [explorationExperience] = useState(0);
+  const [explorationVouchers, setExplorationVouchers] = useState(0);
   const [explorationNotice, setExplorationNotice] = useState<string | null>(null);
+  const [explorationExchangeNotice, setExplorationExchangeNotice] = useState<string | null>(null);
   const [explorationClearedTasks, setExplorationClearedTasks] = useState<number[]>([]);
-  const [recruitTickets] = useState(0);
+  const [recruitTickets, setRecruitTickets] = useState(0);
+  const [explorationVehicleLevel, setExplorationVehicleLevel] = useState(1);
+  const [explorationBattle, setExplorationBattle] = useState<ExplorationBattleState>(() => freshExplorationBattle(200));
   const [lotteryPhase, setLotteryPhase] = useState<LotteryPhase>("idle");
   const [lotteryDead, setLotteryDead] = useState<number[]>([]);
   const [lotteryLastHit, setLotteryLastHit] = useState<number | null>(null);
@@ -8281,6 +8338,135 @@ export function DeadRoadGame() {
     changeScreen(next === "classic" ? "menu" : "exploration");
   }, [changeScreen]);
 
+  const closeExplorationSubscreen = useCallback(() => {
+    sound.uiClick();
+    changeScreen("exploration");
+  }, [changeScreen]);
+
+  const exchangeRecruitTicket = useCallback(() => {
+    if (explorationVouchers < EXPLORATION_VOUCHER_EXCHANGE_COST) {
+      setExplorationExchangeNotice(`点券不足，还需要 ${EXPLORATION_VOUCHER_EXCHANGE_COST - explorationVouchers} 点券。`);
+      return;
+    }
+    sound.purchase();
+    setExplorationVouchers((vouchers) => vouchers - EXPLORATION_VOUCHER_EXCHANGE_COST);
+    setRecruitTickets((tickets) => tickets + 1);
+    setExplorationExchangeNotice("兑换成功：获得 1 张招募券。");
+  }, [explorationVouchers]);
+
+  const upgradeExplorationVehicle = useCallback(() => {
+    if (explorationVehicleLevel >= EXPLORATION_MAX_VEHICLE_LEVEL) return;
+    const cost = explorationVehicleUpgradeCost(explorationVehicleLevel);
+    if (explorationCoins < cost) return;
+    sound.purchase();
+    setExplorationCoins((coins) => coins - cost);
+    setExplorationVehicleLevel((level) => Math.min(EXPLORATION_MAX_VEHICLE_LEVEL, level + 1));
+  }, [explorationCoins, explorationVehicleLevel]);
+
+  const startExplorationBattle = useCallback(() => {
+    sound.uiClick();
+    setExplorationBattle(freshExplorationBattle(explorationVehicleMaxHp(explorationVehicleLevel)));
+    changeScreen("explorationBattle");
+  }, [changeScreen, explorationVehicleLevel]);
+
+  const deployExplorationUnit = useCallback((squadIndex: number) => {
+    const id = `squad-${squadIndex}`;
+    setExplorationBattle((battle) => {
+      if (battle.failed || battle.courage < EXPLORATION_DEPLOY_COST || battle.deployed.includes(id)) return battle;
+      sound.uiClick();
+      return {
+        ...battle,
+        courage: battle.courage - EXPLORATION_DEPLOY_COST,
+        deployed: [...battle.deployed, id],
+        units: [...battle.units, { id, label: EXPLORATION_SQUAD[squadIndex], hp: 100, maxHp: 100, x: 17, cooldown: 0 }],
+      };
+    });
+  }, []);
+
+  useEffect(() => {
+    if (screen !== "explorationBattle" || explorationBattle.failed) return;
+    const courageTimer = window.setInterval(() => {
+      setExplorationBattle((battle) => battle.failed ? battle : { ...battle, courage: battle.courage + 1, elapsed: battle.elapsed + 1 });
+    }, 1000);
+    return () => window.clearInterval(courageTimer);
+  }, [explorationBattle.failed, screen]);
+
+  useEffect(() => {
+    if (screen !== "explorationBattle" || explorationBattle.failed) return;
+    const spawnTimer = window.setInterval(() => {
+      setExplorationBattle((battle) => {
+        if (battle.failed) return battle;
+        const tier = Math.floor(battle.elapsed / 15);
+        const count = Math.min(4, 1 + Math.floor(battle.elapsed / 20));
+        const spawned = Array.from({ length: count }, (_, index): ExplorationBattleZombie => ({
+          id: battle.nextZombieId + index,
+          hp: 55 + tier * 18,
+          maxHp: 55 + tier * 18,
+          x: 94 + index * 2,
+          cooldown: .35 * index,
+          damage: 8 + tier * 2,
+          speed: 2.4 + Math.min(2.2, tier * .16),
+        }));
+        return { ...battle, zombies: [...battle.zombies, ...spawned], nextZombieId: battle.nextZombieId + count };
+      });
+    }, 2500);
+    return () => window.clearInterval(spawnTimer);
+  }, [explorationBattle.failed, screen]);
+
+  useEffect(() => {
+    if (screen !== "explorationBattle" || explorationBattle.failed) return;
+    const combatTimer = window.setInterval(() => {
+      setExplorationBattle((battle) => {
+        if (battle.failed) return battle;
+        let units = battle.units.map((unit) => ({ ...unit, cooldown: Math.max(0, unit.cooldown - .25) }));
+        let zombies = battle.zombies.map((zombie) => ({ ...zombie, cooldown: Math.max(0, zombie.cooldown - .25) }));
+
+        units.forEach((unit) => {
+          const livingZombies = zombies.filter((zombie) => zombie.hp > 0);
+          const nearestZombie = livingZombies.reduce<ExplorationBattleZombie | null>((nearest, zombie) => (
+            nearest === null || Math.abs(zombie.x - unit.x) < Math.abs(nearest.x - unit.x) ? zombie : nearest
+          ), null);
+          if (!nearestZombie) return; // 没有敌人时，队员将在原地警戒。
+          const distance = nearestZombie.x - unit.x;
+          if (Math.abs(distance) > 6) {
+            unit.x += Math.sign(distance) * 1.15;
+          } else if (unit.cooldown <= 0) {
+            const target = zombies.find((zombie) => zombie.id === nearestZombie.id);
+            if (target) target.hp -= 24;
+            unit.cooldown = .75;
+          }
+        });
+        zombies = zombies.filter((zombie) => zombie.hp > 0);
+
+        let vehicleHp = battle.vehicleHp;
+        zombies.forEach((zombie) => {
+          const livingUnits = units.filter((unit) => unit.hp > 0);
+          const nearestUnit = livingUnits.reduce<ExplorationBattleUnit | null>((nearest, unit) => (
+            nearest === null || Math.abs(unit.x - zombie.x) < Math.abs(nearest.x - zombie.x) ? unit : nearest
+          ), null);
+          if (nearestUnit) {
+            const distance = nearestUnit.x - zombie.x;
+            if (Math.abs(distance) > 4.5) zombie.x += Math.sign(distance) * zombie.speed * .25;
+            else if (zombie.cooldown <= 0) {
+              const target = units.find((unit) => unit.id === nearestUnit.id);
+              if (target) target.hp -= zombie.damage;
+              zombie.cooldown = 1;
+            }
+          } else if (zombie.x > 9) {
+            zombie.x -= zombie.speed * .25;
+          } else if (zombie.cooldown <= 0) {
+            vehicleHp -= zombie.damage;
+            zombie.cooldown = 1;
+          }
+        });
+        units = units.filter((unit) => unit.hp > 0);
+        vehicleHp = Math.max(0, vehicleHp);
+        return { ...battle, units, zombies, vehicleHp, failed: vehicleHp <= 0 };
+      });
+    }, 250);
+    return () => window.clearInterval(combatTimer);
+  }, [explorationBattle.failed, screen]);
+
   const resetLotteryBattle = useCallback(() => {
     setLotteryDead([]);
     setLotteryLastHit(null);
@@ -8312,6 +8498,7 @@ export function DeadRoadGame() {
 
   const updateLotteryAim = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     if (lotteryPhase !== "firing") return;
+    lotteryPointerRef.current = { x: event.clientX, y: event.clientY };
     const rect = event.currentTarget.getBoundingClientRect();
     const pointerX = Math.max(0, Math.min(rect.width, event.clientX - rect.left));
     const pointerY = Math.max(0, Math.min(rect.height, event.clientY - rect.top));
@@ -8326,17 +8513,43 @@ export function DeadRoadGame() {
     });
   }, [lotteryPhase]);
 
-  const fireLottery = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    if (lotteryPhase !== "firing" || event.button !== 0) return;
-    updateLotteryAim(event);
+  const shootLotteryAtPointer = useCallback((clientX: number, clientY: number) => {
+    if (lotteryPhase !== "firing") return;
     sound.gunshot("mg42", { fireRateMs: WEAPONS.mg42.fireRate, volume: .72 });
     setLotteryShotSerial((serial) => serial + 1);
-    const zombieTarget = (event.target as HTMLElement).closest("[data-lottery-zombie]");
+    const zombieTarget = document.elementFromPoint(clientX, clientY)?.closest("[data-lottery-zombie]");
     const zombieIndex = Number(zombieTarget?.getAttribute("data-lottery-zombie"));
     if (!Number.isInteger(zombieIndex) || zombieIndex < 0 || zombieIndex >= LOTTERY_ZOMBIES.length) return;
     setLotteryLastHit(zombieIndex);
     setLotteryDead((dead) => dead.includes(zombieIndex) ? dead : [...dead, zombieIndex]);
-  }, [lotteryPhase, updateLotteryAim]);
+  }, [lotteryPhase]);
+
+  const stopLotteryFire = useCallback(() => {
+    if (lotteryFireTimerRef.current === null) return;
+    window.clearInterval(lotteryFireTimerRef.current);
+    lotteryFireTimerRef.current = null;
+  }, []);
+
+  const fireLottery = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (lotteryPhase !== "firing" || event.button !== 0) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    updateLotteryAim(event);
+    stopLotteryFire();
+    shootLotteryAtPointer(event.clientX, event.clientY);
+    lotteryFireTimerRef.current = window.setInterval(() => {
+      shootLotteryAtPointer(lotteryPointerRef.current.x, lotteryPointerRef.current.y);
+    }, WEAPONS.mg42.fireRate);
+  }, [lotteryPhase, shootLotteryAtPointer, stopLotteryFire, updateLotteryAim]);
+
+  useEffect(() => {
+    if (lotteryPhase !== "firing") stopLotteryFire();
+    return stopLotteryFire;
+  }, [lotteryPhase, stopLotteryFire]);
+
+  useEffect(() => {
+    window.addEventListener("blur", stopLotteryFire);
+    return () => window.removeEventListener("blur", stopLotteryFire);
+  }, [stopLotteryFire]);
 
   useEffect(() => {
     if (screen !== "lottery" || lotteryPhase !== "firing" || lotteryDead.length !== LOTTERY_ZOMBIES.length) return;
@@ -10729,6 +10942,9 @@ export function DeadRoadGame() {
           // 抽奖战斗演出期间锁定退出；待机/结果页可返回探索主界面
           event.preventDefault();
           if (!event.repeat) closeLottery();
+        } else if (screenRef.current === "explorationShop" || screenRef.current === "vehicleGarage" || screenRef.current === "explorationBattle") {
+          event.preventDefault();
+          if (!event.repeat) closeExplorationSubscreen();
         } else if (screenRef.current === "loadout" && loadoutOpenRef.current !== null) {
           // 二级选择界面：ESC 返回装备整备主视图（不回主菜单）
           event.preventDefault();
@@ -10784,7 +11000,7 @@ export function DeadRoadGame() {
       window.removeEventListener("keydown", keyDown);
       window.removeEventListener("keyup", keyUp);
     };
-  }, [advanceLevelDialog, callAirstrike, closeCodex, closeLevels, closeLottery, cycleWeapon, dropWeapon, flipCodex, kick, openRangeShop, reload, resumeRange, saveProgressAndMenu, selectItem, toggleMute, togglePause]);
+  }, [advanceLevelDialog, callAirstrike, closeCodex, closeExplorationSubscreen, closeLevels, closeLottery, cycleWeapon, dropWeapon, flipCodex, kick, openRangeShop, reload, resumeRange, saveProgressAndMenu, selectItem, toggleMute, togglePause]);
 
   const pointerPosition = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
     // 以位图实际尺寸（动态 worldW × H）按比例换算：CSS 等比缩放下鼠标映射恒正确
@@ -12172,6 +12388,10 @@ export function DeadRoadGame() {
 
   const rangeFree = snapshot.mode === "range";
   const lotteryHighlight = highestLotteryRarity(lotteryRewards);
+  const currentExplorationVehicleKind = explorationVehicleKind(explorationVehicleLevel);
+  const currentExplorationVehicleMaxHp = explorationVehicleMaxHp(explorationVehicleLevel);
+  const currentExplorationVehicleUpgradeCost = explorationVehicleUpgradeCost(explorationVehicleLevel);
+  const explorationBattleWave = 1 + Math.floor(explorationBattle.elapsed / 20);
   const lotteryCinematic = screen === "lottery" && (lotteryPhase === "firing" || lotteryPhase === "flash");
   const lotteryOverlayActive = screen === "lottery" && lotteryPhase !== "idle";
   const spawnTotal = ZOMBIE_CONFIG_KINDS.reduce((sum, kind) => sum + spawnCounts[kind], 0);
@@ -12454,13 +12674,14 @@ export function DeadRoadGame() {
             </div>
 
             <div className="exploration-wallet" aria-label="探索模式资源">
-              <span><i>◉</i><small>金币</small><strong>{explorationCoins}</strong></span>
-              <span><i>✦</i><small>经验点数</small><strong>{explorationExperience}</strong></span>
-              <span><i>券</i><small>点券</small><strong>{recruitTickets}</strong></span>
+              <span className="exploration-wallet-coins"><i>◉</i><small>金币</small><strong>{explorationCoins}</strong></span>
+              <span className="exploration-wallet-exp"><i>✦</i><small>经验点数</small><strong>{explorationExperience}</strong></span>
+              <span className="exploration-wallet-vouchers"><i className="exploration-banknote"><b>DR</b></i><small>点券</small><strong>{explorationVouchers}</strong></span>
             </div>
 
             <nav className="exploration-rail exploration-rail-left" aria-label="探索模式左侧功能">
-              <button type="button" onClick={() => { sound.uiClick(); setExplorationNotice("探索模式商店将在后续更新中开放。"); }}><b>▣</b><span>商店</span><small>购买探索物资</small></button>
+              <button type="button" onClick={() => { sound.uiClick(); setExplorationExchangeNotice(null); changeScreen("explorationShop"); }}><b>▣</b><span>商店</span><small>兑换招募券</small></button>
+              <button type="button" onClick={() => { sound.uiClick(); changeScreen("vehicleGarage"); }}><b>▰</b><span>车辆改装</span><small>升级出战车辆</small></button>
               <button type="button" onClick={() => { sound.uiClick(); setExplorationNotice("队伍编成与成员详情将在后续更新中开放。"); }}><b>♟</b><span>队伍</span><small>查看出战成员</small></button>
             </nav>
 
@@ -12484,7 +12705,7 @@ export function DeadRoadGame() {
                     style={{ "--task-x": `${task.x}%`, "--task-y": `${task.y}%` } as React.CSSProperties}
                     disabled={!unlocked}
                     aria-label={`${task.label}${unlocked ? cleared ? "，已通关，可重新进入" : "，可进入" : "，通关上一任务后解锁"}`}
-                    onClick={() => { sound.uiClick(); setExplorationNotice(`${task.label}的详细内容将在后续更新中开放。`); }}
+                    onClick={startExplorationBattle}
                   >
                     <span>{String(task.order).padStart(2, "0")}</span>
                     <strong>{task.label}</strong>
@@ -12507,6 +12728,124 @@ export function DeadRoadGame() {
           </div>
         )}
 
+        {screen === "explorationShop" && (
+          <div className="exploration-shop-panel overlay-panel">
+            <div className="exploration-shop-scenery" aria-hidden="true">
+              <span className="shop-awning" />
+              <span className="shop-shelf shop-shelf-a"><i /><i /><i /></span>
+              <span className="shop-shelf shop-shelf-b"><i /><i /><i /></span>
+              <span className="shop-counter"><i /></span>
+              <span className="shop-lamp" />
+            </div>
+            <button type="button" className="exploration-subscreen-back" onClick={closeExplorationSubscreen}>← 返回农田</button>
+            <div className="exploration-subscreen-title">
+              <p className="eyebrow">探索模式 · 补给商店</p>
+              <h2>旧路商铺</h2>
+              <small>使用点券兑换火线招募所需的招募券</small>
+            </div>
+            <div className="exploration-shop-wallets">
+              <span><i className="exploration-banknote"><b>DR</b></i><small>持有点券</small><strong>{explorationVouchers}</strong></span>
+              <span><i>券</i><small>招募券</small><strong>{recruitTickets}</strong></span>
+            </div>
+            <article className="exploration-exchange-card">
+              <div className="exchange-give"><i className="exploration-banknote exchange-note"><b>DR</b></i><strong>100 点券</strong></div>
+              <b className="exchange-arrow">→</b>
+              <div className="exchange-receive"><i>券</i><strong>1 张招募券</strong></div>
+              <p>兑换后的招募券可用于「火线招募」。</p>
+              <button type="button" className={explorationVouchers < EXPLORATION_VOUCHER_EXCHANGE_COST ? "insufficient" : ""} onClick={exchangeRecruitTicket}>兑换</button>
+              {explorationExchangeNotice && <small className="exchange-notice" role="status">{explorationExchangeNotice}</small>}
+            </article>
+          </div>
+        )}
+
+        {screen === "vehicleGarage" && (
+          <div className="vehicle-garage-panel overlay-panel">
+            <div className="garage-scenery" aria-hidden="true"><span className="garage-door" /><span className="garage-lamp garage-lamp-a" /><span className="garage-lamp garage-lamp-b" /><span className="garage-tools" /></div>
+            <button type="button" className="exploration-subscreen-back" onClick={closeExplorationSubscreen}>← 返回农田</button>
+            <div className="exploration-subscreen-title garage-title">
+              <p className="eyebrow">探索模式 · 车辆改装</p>
+              <h2>车队工棚</h2>
+              <small>升级强化车辆耐久；5 级更换为卡车，10 级更换为大巴车</small>
+            </div>
+            <div className="garage-vehicle-stage">
+              <ExplorationVehicleModel kind={currentExplorationVehicleKind} />
+              <span className="garage-ground-shadow" />
+            </div>
+            <aside className="garage-spec-card">
+              <p>当前出战车辆</p>
+              <h3>{currentExplorationVehicleKind === "van" ? "白色旧面包车" : currentExplorationVehicleKind === "truck" ? "物资卡车" : "幸存者大巴车"}</h3>
+              <div className="garage-level"><span>LV.</span><strong>{explorationVehicleLevel}</strong><small>/ {EXPLORATION_MAX_VEHICLE_LEVEL}</small></div>
+              <dl>
+                <div><dt>车辆 HP</dt><dd>{currentExplorationVehicleMaxHp}</dd></div>
+                <div><dt>每级成长</dt><dd>+20 HP</dd></div>
+                <div><dt>下次外观</dt><dd>{explorationVehicleLevel < 5 ? "5 级 · 卡车" : explorationVehicleLevel < 10 ? "10 级 · 大巴车" : "已解锁全部外观"}</dd></div>
+              </dl>
+              <button type="button" className="garage-upgrade" onClick={upgradeExplorationVehicle} disabled={explorationVehicleLevel >= EXPLORATION_MAX_VEHICLE_LEVEL || explorationCoins < currentExplorationVehicleUpgradeCost}>
+                {explorationVehicleLevel >= EXPLORATION_MAX_VEHICLE_LEVEL ? "已满级" : `升级 · ${currentExplorationVehicleUpgradeCost} 金币`}
+              </button>
+              {explorationVehicleLevel < EXPLORATION_MAX_VEHICLE_LEVEL && explorationCoins < currentExplorationVehicleUpgradeCost && <small>金币不足 · 当前 {explorationCoins}</small>}
+              <button type="button" className="garage-test-battle" onClick={startExplorationBattle}>进入战斗测试 →</button>
+            </aside>
+            <div className="garage-milestones" aria-label="车辆外观里程碑">
+              <span className={explorationVehicleLevel >= 1 ? "active" : ""}><b>LV.1</b>白色面包车</span>
+              <span className={explorationVehicleLevel >= 5 ? "active" : ""}><b>LV.5</b>卡车</span>
+              <span className={explorationVehicleLevel >= 10 ? "active" : ""}><b>LV.10</b>大巴车</span>
+            </div>
+          </div>
+        )}
+
+        {screen === "explorationBattle" && (
+          <div className="exploration-battle-panel overlay-panel">
+            <div className="battle-skyline" aria-hidden="true"><span /><span /><span /></div>
+            <div className="battle-road" aria-hidden="true"><i /><i /><i /></div>
+            <button type="button" className="battle-exit" onClick={closeExplorationSubscreen}>撤离战斗</button>
+            <div className="battle-observer-label">第三人称旁观模式 · 自动作战</div>
+            <div className="battle-top-hud">
+              <div className="battle-courage"><small>勇气值</small><strong>{explorationBattle.courage}</strong><span>每秒 +1</span></div>
+              <div className="battle-wave"><small>尸潮强度</small><strong>第 {explorationBattleWave} 阶段</strong><span>{explorationBattle.elapsed}s</span></div>
+              <div className="battle-vehicle-hp"><small>车辆 HP</small><strong>{Math.ceil(explorationBattle.vehicleHp)} / {currentExplorationVehicleMaxHp}</strong><i><b style={{ width: `${explorationBattle.vehicleHp / currentExplorationVehicleMaxHp * 100}%` }} /></i></div>
+            </div>
+
+            <div className="battlefield" aria-label="探索模式自动战斗区域">
+              <div className="battle-vehicle-position"><ExplorationVehicleModel kind={currentExplorationVehicleKind} compact /></div>
+              {explorationBattle.units.map((unit) => (
+                <div key={unit.id} className={`battle-unit ${explorationBattle.zombies.length === 0 ? "guarding" : "advancing"}`} style={{ left: `${unit.x}%` }} aria-label={`${unit.label}，HP ${Math.ceil(unit.hp)}`}>
+                  <span className="battle-character-head" /><span className="battle-character-body"><i /></span><span className="battle-character-gun" />
+                  <i className="battle-entity-hp"><b style={{ width: `${unit.hp / unit.maxHp * 100}%` }} /></i>
+                </div>
+              ))}
+              {explorationBattle.zombies.map((zombie) => (
+                <div key={zombie.id} className="battle-enemy" style={{ left: `${zombie.x}%`, "--enemy-scale": 1 + Math.min(.4, explorationBattleWave * .035) } as React.CSSProperties} aria-label={`进攻僵尸，HP ${Math.ceil(zombie.hp)}`}>
+                  <span className="battle-zombie-head" /><span className="battle-zombie-body" /><i className="battle-zombie-arm" /><b className="battle-zombie-leg" />
+                  <i className="battle-entity-hp"><b style={{ width: `${zombie.hp / zombie.maxHp * 100}%` }} /></i>
+                </div>
+              ))}
+              {explorationBattle.zombies.length === 0 && !explorationBattle.failed && <p className="battle-guard-message">没有敌人时，队员将在原地警戒</p>}
+            </div>
+
+            <div className="battle-squad-bar" aria-label="出战队伍">
+              <div className="battle-squad-heading"><small>出战队伍</small><strong>消耗勇气部署</strong></div>
+              {EXPLORATION_SQUAD.map((label, index) => {
+                const id = `squad-${index}`;
+                const deployed = explorationBattle.deployed.includes(id);
+                const alive = explorationBattle.units.some((unit) => unit.id === id);
+                return (
+                  <button key={id} type="button" onClick={() => deployExplorationUnit(index)} disabled={explorationBattle.failed || deployed || explorationBattle.courage < EXPLORATION_DEPLOY_COST}>
+                    <i>♟</i><span>{label}</span><strong>{deployed ? alive ? "已出战" : "已阵亡" : `${EXPLORATION_DEPLOY_COST} 勇气`}</strong>
+                  </button>
+                );
+              })}
+            </div>
+
+            {explorationBattle.failed && (
+              <div className="battle-failure" role="dialog" aria-modal="true">
+                <p>防线崩溃</p><h2>任务失败 · 车辆已被击毁</h2><span>升级车辆或调整队员部署时机后再次尝试。</span>
+                <div><button type="button" onClick={startExplorationBattle}>重新开始</button><button type="button" onClick={closeExplorationSubscreen}>返回农田</button></div>
+              </div>
+            )}
+          </div>
+        )}
+
         {screen === "lottery" && (
           <div
             className={`lottery-panel overlay-panel lottery-${lotteryPhase} ${lotteryHighlight ? `lottery-${lotteryHighlight}` : ""}`}
@@ -12518,6 +12857,9 @@ export function DeadRoadGame() {
             } as React.CSSProperties}
             onPointerMove={updateLotteryAim}
             onPointerDown={fireLottery}
+            onPointerUp={(event) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); stopLotteryFire(); }}
+            onPointerCancel={stopLotteryFire}
+            onPointerLeave={stopLotteryFire}
           >
             <div className="lottery-sky" aria-hidden="true">
               <span className="lottery-cloud lottery-cloud-a" />
@@ -12582,7 +12924,7 @@ export function DeadRoadGame() {
 
             {(lotteryPhase === "firing" || lotteryPhase === "flash") && (
               <div className="lottery-combat-status">
-                <span>鼠标瞄准 · 左键射击 · MG42</span>
+                <span>鼠标瞄准 · 按住左键全自动射击 · MG42</span>
                 <strong>清除公路尸群</strong>
                 <small>{Math.min(lotteryKilled, LOTTERY_ZOMBIES.length)} / {LOTTERY_ZOMBIES.length}</small>
               </div>

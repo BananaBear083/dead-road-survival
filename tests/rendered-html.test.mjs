@@ -1311,9 +1311,10 @@ test("adds a farm exploration hub with sequential missions and split zombie code
   assert.match(source, /商店/);
   assert.match(source, /队伍/);
   assert.match(source, /章节/);
-  assert.match(source, /const \[explorationCoins\] = useState\(0\)/);
+  assert.match(source, /const \[explorationCoins, setExplorationCoins\] = useState\(0\)/);
   assert.match(source, /const \[explorationExperience\] = useState\(0\)/);
-  assert.match(source, /<small>点券<\/small><strong>\{recruitTickets\}<\/strong>/);
+  assert.match(source, /const \[explorationVouchers, setExplorationVouchers\] = useState\(0\)/);
+  assert.match(source, /<small>点券<\/small><strong>\{explorationVouchers\}<\/strong>/);
   assert.match(source, /常规僵尸/);
   assert.match(source, /特殊僵尸/);
   assert.match(source, /特殊僵尸档案将在后续探索中开放/);
@@ -1337,11 +1338,11 @@ test("adds a ticket-free player-aimed lottery road battle with weighted rarity r
   assert.match(source, /function rollLotteryRarity\(/);
   assert.match(source, /cumulativeChance \+= LOTTERY_RARITIES\[rarity\]\.chance \/ 100/);
   assert.match(source, /if \(roll < cumulativeChance\) return rarity/);
-  assert.match(source, /const \[recruitTickets\] = useState\(0\)/);
+  assert.match(source, /const \[recruitTickets, setRecruitTickets\] = useState\(0\)/);
   assert.match(source, /startLotteryDraw\(1\)/);
   assert.match(source, /startLotteryDraw\(10\)/);
   assert.match(source, /测试版免券/);
-  assert.match(source, /鼠标瞄准 · 左键射击 · MG42/);
+  assert.match(source, /鼠标瞄准 · 按住左键全自动射击 · MG42/);
   assert.match(source, /className=\{`lottery-zombie/);
   assert.match(source, /data-lottery-zombie=\{index\}/);
   assert.match(source, /const \[lotteryDead, setLotteryDead\] = useState<number\[\]>\(\[\]\)/);
@@ -1350,6 +1351,10 @@ test("adds a ticket-free player-aimed lottery road battle with weighted rarity r
   assert.match(source, /closest\("\[data-lottery-zombie\]"\)/);
   assert.match(source, /const originX = rect\.width \* \.5;[\s\S]*const originY = rect\.height \* \.82;/);
   assert.match(source, /sound\.gunshot\("mg42"/);
+  assert.match(source, /lotteryFireTimerRef\.current = window\.setInterval/);
+  assert.match(source, /window\.clearInterval\(lotteryFireTimerRef\.current\)/);
+  assert.match(source, /onPointerCancel=\{stopLotteryFire\}/);
+  assert.match(source, /window\.addEventListener\("blur", stopLotteryFire\)/);
   assert.match(source, /lotteryDead\.length !== LOTTERY_ZOMBIES\.length/);
   assert.match(source, /setLotteryPhase\("flash"\)/);
   assert.match(source, /setLotteryPhase\("reveal"\)/);
@@ -1377,4 +1382,48 @@ test("adds a ticket-free player-aimed lottery road battle with weighted rarity r
   assert.match(css, /\.lottery-rare/);
   assert.match(css, /\.lottery-epic/);
   assert.match(css, /\.lottery-legendary/);
+});
+
+test("adds the exploration exchange shop, vehicle upgrades and courage auto-battle", async () => {
+  const source = await readFile(new URL("../app/DeadRoadGame.tsx", import.meta.url), "utf8");
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+
+  assert.match(source, /type Screen = [^;]+"explorationShop"[^;]+"vehicleGarage"[^;]+"explorationBattle"/);
+  assert.match(source, /const EXPLORATION_VOUCHER_EXCHANGE_COST = 100/);
+  assert.match(source, /setExplorationVouchers\(\(vouchers\) => vouchers - EXPLORATION_VOUCHER_EXCHANGE_COST\)/);
+  assert.match(source, /setRecruitTickets\(\(tickets\) => tickets \+ 1\)/);
+  assert.match(source, /100 点券/);
+  assert.match(source, /1 张招募券/);
+  assert.match(source, /className="exploration-shop-panel/);
+
+  assert.match(source, /function explorationVehicleKind\(level: number\)/);
+  assert.match(source, /if \(level >= 10\) return "bus"/);
+  assert.match(source, /if \(level >= 5\) return "truck"/);
+  assert.match(source, /function explorationVehicleMaxHp\(level: number\) \{ return 200 \+ \(level - 1\) \* 20; \}/);
+  assert.match(source, /function explorationVehicleUpgradeCost\(level: number\) \{ return 2000 \+ \(level - 1\) \* 1000; \}/);
+  assert.match(source, /const \[explorationVehicleLevel, setExplorationVehicleLevel\] = useState\(1\)/);
+  assert.match(source, /车辆改装/);
+  assert.match(source, /className="vehicle-garage-panel/);
+  assert.match(source, /className=\{`exploration-vehicle vehicle-\$\{kind\}/);
+
+  assert.match(source, /const EXPLORATION_DEPLOY_COST = 5/);
+  assert.match(source, /window\.setInterval\([\s\S]*courage: battle\.courage \+ 1[\s\S]*1000/);
+  assert.match(source, /nearestUnit/);
+  assert.match(source, /nearestZombie/);
+  assert.match(source, /vehicleHp/);
+  assert.match(source, /任务失败 · 车辆已被击毁/);
+  assert.match(source, /没有敌人时，队员将在原地警戒/);
+  assert.match(source, /className="exploration-battle-panel/);
+
+  assert.match(css, /\.exploration-wallet-exp i/);
+  assert.match(css, /\.exploration-wallet-exp strong/);
+  assert.match(css, /\.exploration-banknote/);
+  assert.match(css, /\.exploration-shop-panel/);
+  assert.match(css, /\.vehicle-garage-panel/);
+  assert.match(css, /\.exploration-vehicle\.vehicle-van/);
+  assert.match(css, /\.exploration-vehicle\.vehicle-truck/);
+  assert.match(css, /\.exploration-vehicle\.vehicle-bus/);
+  assert.match(css, /\.exploration-battle-panel/);
+  assert.match(css, /\.battle-courage/);
+  assert.match(css, /\.battle-squad-bar/);
 });
