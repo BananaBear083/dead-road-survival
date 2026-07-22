@@ -1561,3 +1561,49 @@ test("adds escalating member upgrades, repeatable lottery rewards, shared hurt a
   assert.doesNotMatch(source, /--enemy-scale/);
   assert.doesNotMatch(css, /--enemy-scale/);
 });
+
+test("adds midnight-reset daily missions and permanent exploration achievements", async () => {
+  const source = await readFile(new URL("../app/DeadRoadGame.tsx", import.meta.url), "utf8");
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  const dailyBlock = source.slice(source.indexOf("const EXPLORATION_DAILY_TASKS"), source.indexOf("const EXPLORATION_ACHIEVEMENTS"));
+  const achievementBlock = source.slice(source.indexOf("const EXPLORATION_ACHIEVEMENTS"), source.indexOf("const EXPLORATION_DAILY_TASK_IDS"));
+
+  assert.equal((dailyBlock.match(/\{ id:/g) ?? []).length, 5);
+  assert.match(dailyBlock, /complete-mainline[\s\S]*rewardCoins: 200, activity: 50/);
+  assert.match(dailyBlock, /recruit-once[\s\S]*rewardExperience: 100, activity: 60/);
+  assert.match(dailyBlock, /buy-consumable[\s\S]*rewardCoins: 400, activity: 100/);
+  assert.match(dailyBlock, /earn-coins[\s\S]*target: 3000, rewardCoins: 500, activity: 70/);
+  assert.match(dailyBlock, /earn-experience[\s\S]*target: 200, rewardExperience: 100, activity: 80/);
+  assert.match(source, /EXPLORATION_DAILY_ACTIVITY_REWARD_TARGET = 300/);
+  assert.match(source, /EXPLORATION_DAILY_ACTIVITY_REWARD_VOUCHERS = 100/);
+  assert.match(source, /new Date\(now\.getFullYear\(\), now\.getMonth\(\), now\.getDate\(\) \+ 1\)/);
+  assert.match(source, /activityRewardClaimed: true/);
+  assert.match(source, /dailyProgress: explorationDailyProgress/);
+
+  assert.equal((achievementBlock.match(/\{ id:/g) ?? []).length, 16);
+  assert.match(achievementBlock, /farm-clear[\s\S]*target: 10, rewardVouchers: 1000/);
+  assert.match(achievementBlock, /zombie-kills-50[\s\S]*rewardVouchers: 200/);
+  assert.match(achievementBlock, /zombie-kills-500[\s\S]*rewardVouchers: 1000/);
+  assert.match(achievementBlock, /lottery-1[\s\S]*rewardVouchers: 200/);
+  assert.match(achievementBlock, /lottery-50[\s\S]*rewardVouchers: 500/);
+  assert.match(achievementBlock, /spend-500[\s\S]*rewardVouchers: 100/);
+  assert.match(achievementBlock, /spend-4000[\s\S]*rewardVouchers: 1000/);
+  assert.match(source, /recordExplorationDailyMetric\("mainlineCompletions"\)/);
+  assert.match(source, /recordExplorationDailyMetric\("recruitDraws", count\)/);
+  assert.match(source, /lotteryDraws: progress\.lotteryDraws \+ count/);
+  assert.match(source, /vouchersSpent: progress\.vouchersSpent \+ amount/);
+  assert.match(source, /zombieKills: progress\.zombieKills \+ newlyKilled\.length/);
+
+  assert.match(source, /changeScreen\("explorationTasks"\)/);
+  assert.match(source, /role="tab" aria-selected=\{explorationTaskSystemTab === "daily"\}/);
+  assert.match(source, /role="tab" aria-selected=\{explorationTaskSystemTab === "achievements"\}/);
+  assert.match(source, /本日活跃度/);
+  assert.match(source, /已完成/);
+  assert.match(source, /已达成/);
+  assert.match(css, /\.exploration-tasks-panel/);
+  assert.match(css, /\.daily-activity-card/);
+  assert.match(css, /\.achievement-list/);
+
+  assert.match(source, /ctx\.ellipse\(0, -123, 18, 3\.5/);
+  assert.match(source, /ctx\.ellipse\(0, -126, 10\.5, 6\.5/);
+});

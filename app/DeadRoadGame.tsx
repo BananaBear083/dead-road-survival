@@ -31,13 +31,14 @@ const KICK_KNOCKBACK_WORLD_X = 82;
 const KICK_KNOCKBACK_WORLD_Y = 52;
 
 type MajorMode = "classic" | "exploration";
-type Screen = "menu" | "exploration" | "playing" | "shop" | "loadout" | "gameover" | "codex" | "levels" | "levelComplete" | "lottery" | "explorationShop" | "vehicleGarage" | "explorationTeam" | "explorationBattle";
+type Screen = "menu" | "exploration" | "playing" | "shop" | "loadout" | "gameover" | "codex" | "levels" | "levelComplete" | "lottery" | "explorationShop" | "vehicleGarage" | "explorationTeam" | "explorationTasks" | "explorationBattle";
 type GameMode = "survival" | "range" | "level";
 type ShopTab = "weapons" | "armor" | "supplies" | "items" | "partners" | "zombies";
 type CodexCategory = "regular" | "special";
 type LotteryRarity = "common" | "rare" | "epic" | "legendary";
 type LotteryPhase = "idle" | "firing" | "flash" | "reveal";
 type ExplorationTeamTab = "personnel" | "consumables";
+type ExplorationTaskSystemTab = "daily" | "achievements";
 type ExplorationMemberRarity = "common" | "rare" | "epic" | "legendary";
 type ExplorationMemberSpeed = "慢" | "中等" | "快";
 type ExplorationVehicleKind = "van" | "truck" | "bus";
@@ -61,6 +62,7 @@ type ExplorationBattleState = {
   nextZombieId: number;
   nextKnifeId: number;
   nextKickId: number;
+  kills: number;
   failed: boolean;
   completed: boolean;
 };
@@ -791,6 +793,71 @@ const EXPLORATION_MAX_VEHICLE_LEVEL = 15;
 const EXPLORATION_TASK1_COINS = 1536;
 const EXPLORATION_TASK1_EXPERIENCE = 157;
 const EXPLORATION_TEAM_SIZE = 6;
+const EXPLORATION_DAILY_ACTIVITY_REWARD_TARGET = 300;
+const EXPLORATION_DAILY_ACTIVITY_REWARD_VOUCHERS = 100;
+type ExplorationDailyMetric = "mainlineCompletions" | "recruitDraws" | "consumablesPurchased" | "coinsEarned" | "experienceEarned";
+type ExplorationDailyProgress = {
+  dateKey: string;
+  mainlineCompletions: number;
+  recruitDraws: number;
+  consumablesPurchased: number;
+  coinsEarned: number;
+  experienceEarned: number;
+  activity: number;
+  completedTaskIds: string[];
+  activityRewardClaimed: boolean;
+};
+type ExplorationAchievementProgress = {
+  zombieKills: number;
+  lotteryDraws: number;
+  vouchersSpent: number;
+  claimedAchievementIds: string[];
+};
+type ExplorationDailyTaskDefinition = {
+  id: string;
+  title: string;
+  description: string;
+  metric: ExplorationDailyMetric;
+  target: number;
+  rewardCoins?: number;
+  rewardExperience?: number;
+  activity: number;
+};
+type ExplorationAchievementDefinition = {
+  id: string;
+  title: string;
+  description: string;
+  metric: "chapterOne" | "zombieKills" | "lotteryDraws" | "vouchersSpent";
+  target: number;
+  rewardVouchers: number;
+};
+const EXPLORATION_DAILY_TASKS: ExplorationDailyTaskDefinition[] = [
+  { id: "complete-mainline", title: "完成一个主线关卡", description: "完成任意主线关卡，重复通关同样有效。", metric: "mainlineCompletions", target: 1, rewardCoins: 200, activity: 50 },
+  { id: "recruit-once", title: "进行一次招募", description: "完成一次或以上火线招募。", metric: "recruitDraws", target: 1, rewardExperience: 100, activity: 60 },
+  { id: "buy-consumable", title: "购买一次消耗品", description: "从后续开放的渠道购买任意消耗品。", metric: "consumablesPurchased", target: 1, rewardCoins: 400, activity: 100 },
+  { id: "earn-coins", title: "获得 3000 金币", description: "本日通过任意探索玩法累计获得至少 3000 金币。", metric: "coinsEarned", target: 3000, rewardCoins: 500, activity: 70 },
+  { id: "earn-experience", title: "获得 200 经验点数", description: "本日通过任意探索玩法累计获得至少 200 经验点数。", metric: "experienceEarned", target: 200, rewardExperience: 100, activity: 80 },
+];
+const EXPLORATION_ACHIEVEMENTS: ExplorationAchievementDefinition[] = [
+  { id: "farm-clear", title: "农场清理", description: "通关第一章节全部 10 个主线关卡。", metric: "chapterOne", target: 10, rewardVouchers: 1000 },
+  { id: "zombie-kills-50", title: "僵尸清剿一", description: "累计消灭 50 只任意僵尸。", metric: "zombieKills", target: 50, rewardVouchers: 200 },
+  { id: "zombie-kills-100", title: "僵尸清剿二", description: "累计消灭 100 只任意僵尸。", metric: "zombieKills", target: 100, rewardVouchers: 400 },
+  { id: "zombie-kills-200", title: "僵尸清剿三", description: "累计消灭 200 只任意僵尸。", metric: "zombieKills", target: 200, rewardVouchers: 600 },
+  { id: "zombie-kills-300", title: "僵尸清剿四", description: "累计消灭 300 只任意僵尸。", metric: "zombieKills", target: 300, rewardVouchers: 800 },
+  { id: "zombie-kills-500", title: "僵尸清剿五", description: "累计消灭 500 只任意僵尸。", metric: "zombieKills", target: 500, rewardVouchers: 1000 },
+  { id: "lottery-1", title: "抽奖一", description: "累计完成 1 次招募。", metric: "lotteryDraws", target: 1, rewardVouchers: 200 },
+  { id: "lottery-5", title: "抽奖二", description: "累计完成 5 次招募。", metric: "lotteryDraws", target: 5, rewardVouchers: 500 },
+  { id: "lottery-10", title: "抽奖三", description: "累计完成 10 次招募。", metric: "lotteryDraws", target: 10, rewardVouchers: 500 },
+  { id: "lottery-20", title: "抽奖四", description: "累计完成 20 次招募。", metric: "lotteryDraws", target: 20, rewardVouchers: 500 },
+  { id: "lottery-50", title: "抽奖五", description: "累计完成 50 次招募。", metric: "lotteryDraws", target: 50, rewardVouchers: 500 },
+  { id: "spend-500", title: "挥金如土一", description: "累计消耗 500 点券。", metric: "vouchersSpent", target: 500, rewardVouchers: 100 },
+  { id: "spend-1000", title: "挥金如土二", description: "累计消耗 1000 点券。", metric: "vouchersSpent", target: 1000, rewardVouchers: 200 },
+  { id: "spend-2000", title: "挥金如土三", description: "累计消耗 2000 点券。", metric: "vouchersSpent", target: 2000, rewardVouchers: 500 },
+  { id: "spend-3000", title: "挥金如土四", description: "累计消耗 3000 点券。", metric: "vouchersSpent", target: 3000, rewardVouchers: 700 },
+  { id: "spend-4000", title: "挥金如土五", description: "累计消耗 4000 点券。", metric: "vouchersSpent", target: 4000, rewardVouchers: 1000 },
+];
+const EXPLORATION_DAILY_TASK_IDS = new Set(EXPLORATION_DAILY_TASKS.map((task) => task.id));
+const EXPLORATION_ACHIEVEMENT_IDS = new Set(EXPLORATION_ACHIEVEMENTS.map((achievement) => achievement.id));
 const EXPLORATION_RARITY_LABELS: Record<ExplorationMemberRarity, string> = {
   common: "普通",
   rare: "稀有",
@@ -864,6 +931,40 @@ function survivalKickDamage(day: number) { return 11 + day * .75; }
 
 function explorationKickKnockbackPercent() { return KICK_KNOCKBACK_WORLD_X / DEFAULT_WORLD_W * 100; }
 
+function explorationLocalDateKey(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function freshExplorationDailyProgress(dateKey = explorationLocalDateKey()): ExplorationDailyProgress {
+  return {
+    dateKey,
+    mainlineCompletions: 0,
+    recruitDraws: 0,
+    consumablesPurchased: 0,
+    coinsEarned: 0,
+    experienceEarned: 0,
+    activity: 0,
+    completedTaskIds: [],
+    activityRewardClaimed: false,
+  };
+}
+
+function freshExplorationAchievementProgress(): ExplorationAchievementProgress {
+  return { zombieKills: 0, lotteryDraws: 0, vouchersSpent: 0, claimedAchievementIds: [] };
+}
+
+function currentExplorationDailyProgress(progress: ExplorationDailyProgress) {
+  return progress.dateKey === explorationLocalDateKey() ? progress : freshExplorationDailyProgress();
+}
+
+function explorationAchievementValue(achievement: ExplorationAchievementDefinition, progress: ExplorationAchievementProgress, clearedTasks: number[]) {
+  if (achievement.metric === "chapterOne") return EXPLORATION_TASKS.filter((task) => clearedTasks.includes(task.order)).length;
+  return progress[achievement.metric];
+}
+
 function freshExplorationBattle(vehicleHp: number, taskOrder: number, rewardEligible = false): ExplorationBattleState {
   const zombies = taskOrder === 1 ? Array.from({ length: 3 }, (_, index): ExplorationBattleZombie => ({
     id: index + 1,
@@ -894,6 +995,7 @@ function freshExplorationBattle(vehicleHp: number, taskOrder: number, rewardElig
     nextZombieId: zombies.length + 1,
     nextKnifeId: 1,
     nextKickId: 1,
+    kills: 0,
     failed: false,
     completed: false,
   };
@@ -965,6 +1067,8 @@ type ExplorationProgress = {
   ownedMemberIds: string[];
   recruitedMemberIds: string[];
   starterPackPurchased: boolean;
+  dailyProgress: ExplorationDailyProgress;
+  achievementProgress: ExplorationAchievementProgress;
 };
 
 function readExplorationProgress(): ExplorationProgress {
@@ -979,6 +1083,8 @@ function readExplorationProgress(): ExplorationProgress {
     ownedMemberIds: ["civilian", "farmer"],
     recruitedMemberIds: [],
     starterPackPurchased: false,
+    dailyProgress: freshExplorationDailyProgress(),
+    achievementProgress: freshExplorationAchievementProgress(),
   };
   try {
     if (typeof window === "undefined") return fallback;
@@ -1000,6 +1106,30 @@ function readExplorationProgress(): ExplorationProgress {
     const recruitedMemberIds = Array.isArray(parsed.recruitedMemberIds)
       ? [...new Set(parsed.recruitedMemberIds.filter((id): id is string => typeof id === "string" && EXPLORATION_MEMBER_IDS.has(id) && !ownedMemberIdSet.has(id)))]
       : fallback.recruitedMemberIds;
+    const today = explorationLocalDateKey();
+    const rawDaily = parsed.dailyProgress && typeof parsed.dailyProgress === "object" ? parsed.dailyProgress : null;
+    const dailyProgress = rawDaily?.dateKey === today ? {
+      dateKey: today,
+      mainlineCompletions: nonNegative(rawDaily.mainlineCompletions),
+      recruitDraws: nonNegative(rawDaily.recruitDraws),
+      consumablesPurchased: nonNegative(rawDaily.consumablesPurchased),
+      coinsEarned: nonNegative(rawDaily.coinsEarned),
+      experienceEarned: nonNegative(rawDaily.experienceEarned),
+      activity: nonNegative(rawDaily.activity),
+      completedTaskIds: Array.isArray(rawDaily.completedTaskIds)
+        ? [...new Set(rawDaily.completedTaskIds.filter((id): id is string => typeof id === "string" && EXPLORATION_DAILY_TASK_IDS.has(id)))]
+        : [],
+      activityRewardClaimed: rawDaily.activityRewardClaimed === true,
+    } : freshExplorationDailyProgress(today);
+    const rawAchievements = parsed.achievementProgress && typeof parsed.achievementProgress === "object" ? parsed.achievementProgress : null;
+    const achievementProgress: ExplorationAchievementProgress = {
+      zombieKills: nonNegative(rawAchievements?.zombieKills),
+      lotteryDraws: nonNegative(rawAchievements?.lotteryDraws),
+      vouchersSpent: nonNegative(rawAchievements?.vouchersSpent),
+      claimedAchievementIds: Array.isArray(rawAchievements?.claimedAchievementIds)
+        ? [...new Set(rawAchievements.claimedAchievementIds.filter((id): id is string => typeof id === "string" && EXPLORATION_ACHIEVEMENT_IDS.has(id)))]
+        : [],
+    };
     return {
       coins: nonNegative(parsed.coins),
       experience: nonNegative(parsed.experience),
@@ -1011,6 +1141,8 @@ function readExplorationProgress(): ExplorationProgress {
       ownedMemberIds,
       recruitedMemberIds,
       starterPackPurchased: parsed.starterPackPurchased === true,
+      dailyProgress,
+      achievementProgress,
     };
   } catch {
     return fallback;
@@ -8356,11 +8488,12 @@ function drawSurvivalHumanHeadAndFace(ctx: CanvasRenderingContext2D, facing: num
     ctx.quadraticCurveTo(facing * 12, -118.7, facing * 2.5, -119.2); ctx.closePath(); ctx.fill();
   } else if (headwear === "farmerHat") {
     ctx.fillStyle = "#9d8136";
-    ctx.beginPath(); ctx.ellipse(0, -127, 18, 3.5, 0, 0, Math.PI * 2); ctx.fill();
+    // 草帽压低到额头位置，避免像悬浮在头顶；头部与五官仍复用生存模式人物细节。
+    ctx.beginPath(); ctx.ellipse(0, -123, 18, 3.5, 0, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = "#b79a49";
-    ctx.beginPath(); ctx.ellipse(0, -130, 10.5, 6.5, 0, Math.PI, 0); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(0, -126, 10.5, 6.5, 0, Math.PI, 0); ctx.fill();
     ctx.strokeStyle = "rgba(74,55,23,.55)"; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(-10, -128); ctx.lineTo(10, -128); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-10, -124); ctx.lineTo(10, -124); ctx.stroke();
   } else {
     ctx.fillStyle = "#4a563b";
     ctx.beginPath();
@@ -8593,6 +8726,9 @@ export function DeadRoadGame() {
   const lotteryFireTimerRef = useRef<number | null>(null);
   const lotteryPointerRef = useRef({ x: 0, y: 0 });
   const rewardedExplorationTasksRef = useRef(new Set<number>());
+  const reportedCompletedExplorationBattleRef = useRef(false);
+  const reportedExplorationBattleKillsRef = useRef(0);
+  const reportedLotteryKillsRef = useRef(0);
   const explorationProgressLoadedRef = useRef(false);
   // 动态世界宽度：画布位图宽度（世界单位）跟随舞台实际宽高比；worldWRef 供各回调免闭包读取
   const [canvasW, setCanvasW] = useState(DEFAULT_WORLD_W);
@@ -8608,6 +8744,9 @@ export function DeadRoadGame() {
   const [recruitTickets, setRecruitTickets] = useState(0);
   const [explorationVehicleLevel, setExplorationVehicleLevel] = useState(1);
   const [explorationTeamTab, setExplorationTeamTab] = useState<ExplorationTeamTab>("personnel");
+  const [explorationTaskSystemTab, setExplorationTaskSystemTab] = useState<ExplorationTaskSystemTab>("daily");
+  const [explorationDailyProgress, setExplorationDailyProgress] = useState<ExplorationDailyProgress>(freshExplorationDailyProgress);
+  const [explorationAchievementProgress, setExplorationAchievementProgress] = useState<ExplorationAchievementProgress>(freshExplorationAchievementProgress);
   const [selectedExplorationMemberId, setSelectedExplorationMemberId] = useState("civilian");
   const [deployedMemberIds, setDeployedMemberIds] = useState<string[]>(["civilian", "farmer"]);
   const [ownedMemberIds, setOwnedMemberIds] = useState<string[]>(["civilian", "farmer"]);
@@ -8624,6 +8763,12 @@ export function DeadRoadGame() {
   const [lotteryDrawCount, setLotteryDrawCount] = useState<1 | 10>(1);
   const lotteryDead = lotteryZombieDamage.flatMap((state, index) => state.hp <= 0 ? [index] : []);
   const lotteryKilled = lotteryDead.length;
+  useEffect(() => {
+    const delta = lotteryKilled - reportedLotteryKillsRef.current;
+    if (delta <= 0) return;
+    reportedLotteryKillsRef.current = lotteryKilled;
+    setExplorationAchievementProgress((progress) => ({ ...progress, zombieKills: progress.zombieKills + delta }));
+  }, [lotteryKilled]);
   useEffect(() => {
     let active = true;
     queueMicrotask(() => { if (active) setExplorationClearedTasks(readExplorationClearedTasks()); });
@@ -8644,6 +8789,8 @@ export function DeadRoadGame() {
       setOwnedMemberIds(progress.ownedMemberIds);
       setRecruitedMemberIds(progress.recruitedMemberIds);
       setStarterPackPurchased(progress.starterPackPurchased);
+      setExplorationDailyProgress(progress.dailyProgress);
+      setExplorationAchievementProgress(progress.achievementProgress);
       explorationProgressLoadedRef.current = true;
     });
     return () => { active = false; };
@@ -8661,8 +8808,10 @@ export function DeadRoadGame() {
       ownedMemberIds,
       recruitedMemberIds,
       starterPackPurchased,
+      dailyProgress: explorationDailyProgress,
+      achievementProgress: explorationAchievementProgress,
     } satisfies ExplorationProgress));
-  }, [deployedMemberIds, explorationCoins, explorationExperience, explorationMemberLevels, explorationVehicleLevel, explorationVouchers, ownedMemberIds, recruitTickets, recruitedMemberIds, starterPackPurchased]);
+  }, [deployedMemberIds, explorationAchievementProgress, explorationCoins, explorationDailyProgress, explorationExperience, explorationMemberLevels, explorationVehicleLevel, explorationVouchers, ownedMemberIds, recruitTickets, recruitedMemberIds, starterPackPurchased]);
   const [shopTab, setShopTab] = useState<ShopTab>("weapons");
   // 靶场"僵尸生成"页签：各品种配置数量（0~30），纯 UI state，不进游戏快照
   const [spawnCounts, setSpawnCounts] = useState<Record<ZombieKind, number>>({
@@ -8763,6 +8912,99 @@ export function DeadRoadGame() {
     changeScreen("exploration");
   }, [changeScreen]);
 
+  const recordExplorationDailyMetric = useCallback((metric: ExplorationDailyMetric, amount = 1) => {
+    if (amount <= 0) return;
+    setExplorationDailyProgress((stored) => {
+      const progress = currentExplorationDailyProgress(stored);
+      return { ...progress, [metric]: progress[metric] + amount };
+    });
+  }, []);
+
+  const recordExplorationDailyEarnings = useCallback((coins = 0, experience = 0) => {
+    if (coins <= 0 && experience <= 0) return;
+    setExplorationDailyProgress((stored) => {
+      const progress = currentExplorationDailyProgress(stored);
+      return {
+        ...progress,
+        coinsEarned: progress.coinsEarned + Math.max(0, coins),
+        experienceEarned: progress.experienceEarned + Math.max(0, experience),
+      };
+    });
+  }, []);
+
+  const recordExplorationVoucherSpend = useCallback((amount: number) => {
+    if (amount <= 0) return;
+    setExplorationAchievementProgress((progress) => ({ ...progress, vouchersSpent: progress.vouchersSpent + amount }));
+  }, []);
+
+  useEffect(() => {
+    const now = new Date();
+    const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime();
+    const timer = window.setTimeout(() => setExplorationDailyProgress(freshExplorationDailyProgress()), Math.max(50, nextMidnight - now.getTime() + 50));
+    return () => window.clearTimeout(timer);
+  }, [explorationDailyProgress.dateKey]);
+
+  useEffect(() => {
+    if (!explorationProgressLoadedRef.current) return;
+    const progress = currentExplorationDailyProgress(explorationDailyProgress);
+    if (progress !== explorationDailyProgress) return;
+    const newlyCompleted = EXPLORATION_DAILY_TASKS.filter((task) => (
+      progress[task.metric] >= task.target && !progress.completedTaskIds.includes(task.id)
+    ));
+    if (newlyCompleted.length === 0) return;
+    const rewardCoins = newlyCompleted.reduce((sum, task) => sum + (task.rewardCoins ?? 0), 0);
+    const rewardExperience = newlyCompleted.reduce((sum, task) => sum + (task.rewardExperience ?? 0), 0);
+    const earnedActivity = newlyCompleted.reduce((sum, task) => sum + task.activity, 0);
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      setExplorationDailyProgress((current) => ({
+        ...current,
+        coinsEarned: current.coinsEarned + rewardCoins,
+        experienceEarned: current.experienceEarned + rewardExperience,
+        activity: current.activity + earnedActivity,
+        completedTaskIds: [...current.completedTaskIds, ...newlyCompleted.map((task) => task.id)],
+      }));
+      if (rewardCoins > 0) setExplorationCoins((coins) => coins + rewardCoins);
+      if (rewardExperience > 0) setExplorationExperience((experience) => experience + rewardExperience);
+      sound.purchase();
+    });
+    return () => { active = false; };
+  }, [explorationDailyProgress]);
+
+  useEffect(() => {
+    if (!explorationProgressLoadedRef.current || explorationDailyProgress.activityRewardClaimed || explorationDailyProgress.activity < EXPLORATION_DAILY_ACTIVITY_REWARD_TARGET) return;
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      setExplorationDailyProgress((progress) => ({ ...progress, activityRewardClaimed: true }));
+      setExplorationVouchers((vouchers) => vouchers + EXPLORATION_DAILY_ACTIVITY_REWARD_VOUCHERS);
+      sound.purchase();
+    });
+    return () => { active = false; };
+  }, [explorationDailyProgress.activity, explorationDailyProgress.activityRewardClaimed]);
+
+  useEffect(() => {
+    if (!explorationProgressLoadedRef.current) return;
+    const newlyCompleted = EXPLORATION_ACHIEVEMENTS.filter((achievement) => (
+      explorationAchievementValue(achievement, explorationAchievementProgress, explorationClearedTasks) >= achievement.target
+      && !explorationAchievementProgress.claimedAchievementIds.includes(achievement.id)
+    ));
+    if (newlyCompleted.length === 0) return;
+    const rewardVouchers = newlyCompleted.reduce((sum, achievement) => sum + achievement.rewardVouchers, 0);
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      setExplorationAchievementProgress((progress) => ({
+        ...progress,
+        claimedAchievementIds: [...progress.claimedAchievementIds, ...newlyCompleted.map((achievement) => achievement.id)],
+      }));
+      setExplorationVouchers((vouchers) => vouchers + rewardVouchers);
+      sound.purchase();
+    });
+    return () => { active = false; };
+  }, [explorationAchievementProgress, explorationClearedTasks]);
+
   const exchangeRecruitTicket = useCallback(() => {
     if (explorationVouchers < EXPLORATION_VOUCHER_EXCHANGE_COST) {
       setExplorationExchangeNotice(`点券不足，还需要 ${EXPLORATION_VOUCHER_EXCHANGE_COST - explorationVouchers} 点券。`);
@@ -8770,9 +9012,10 @@ export function DeadRoadGame() {
     }
     sound.purchase();
     setExplorationVouchers((vouchers) => vouchers - EXPLORATION_VOUCHER_EXCHANGE_COST);
+    recordExplorationVoucherSpend(EXPLORATION_VOUCHER_EXCHANGE_COST);
     setRecruitTickets((tickets) => tickets + 1);
     setExplorationExchangeNotice("兑换成功：获得 1 张招募券。");
-  }, [explorationVouchers]);
+  }, [explorationVouchers, recordExplorationVoucherSpend]);
 
   const upgradeExplorationVehicle = useCallback(() => {
     if (explorationVehicleLevel >= EXPLORATION_MAX_VEHICLE_LEVEL) return;
@@ -8818,18 +9061,22 @@ export function DeadRoadGame() {
     }
     sound.purchase();
     setExplorationVouchers((vouchers) => vouchers - EXPLORATION_STARTER_PACK_COST);
+    recordExplorationVoucherSpend(EXPLORATION_STARTER_PACK_COST);
     setExplorationExperience((experience) => experience + EXPLORATION_STARTER_PACK_EXPERIENCE);
     setExplorationCoins((coins) => coins + EXPLORATION_STARTER_PACK_COINS);
+    recordExplorationDailyEarnings(EXPLORATION_STARTER_PACK_COINS, EXPLORATION_STARTER_PACK_EXPERIENCE);
     setOwnedMemberIds((owned) => owned.includes("combatSoldier") ? owned : [...owned, "combatSoldier"]);
     setRecruitedMemberIds((recruited) => recruited.filter((id) => id !== "combatSoldier"));
     setExplorationMemberLevels((levels) => ({ ...levels, combatSoldier: levels.combatSoldier ?? 1 }));
     setSelectedExplorationMemberId("combatSoldier");
     setStarterPackPurchased(true);
     setExplorationExchangeNotice("新手大礼包购买成功：获得 1000 经验点数、3000 金币和传奇人员「格斗士兵」。");
-  }, [explorationVouchers, starterPackPurchased]);
+  }, [explorationVouchers, recordExplorationDailyEarnings, recordExplorationVoucherSpend, starterPackPurchased]);
 
   const startExplorationBattle = useCallback((taskOrder: number) => {
     sound.uiClick();
+    reportedCompletedExplorationBattleRef.current = false;
+    reportedExplorationBattleKillsRef.current = 0;
     setExplorationBattle(freshExplorationBattle(
       explorationVehicleMaxHp(explorationVehicleLevel),
       taskOrder,
@@ -9031,6 +9278,7 @@ export function DeadRoadGame() {
           }
         });
         const hadZombies = zombies.length > 0;
+        const killedThisTick = zombies.filter((zombie) => zombie.hp <= 0).length;
         zombies = zombies.filter((zombie) => zombie.hp > 0);
         const completed = battle.taskOrder === 1 && hadZombies && zombies.length === 0;
 
@@ -9068,7 +9316,7 @@ export function DeadRoadGame() {
         });
         units = units.filter((unit) => unit.hp > 0);
         vehicleHp = Math.max(0, vehicleHp);
-        return { ...battle, units, zombies, knives, pendingKicks, nextKnifeId, nextKickId, vehicleHp, completed, failed: !completed && vehicleHp <= 0 };
+        return { ...battle, units, zombies, knives, pendingKicks, nextKnifeId, nextKickId, kills: battle.kills + killedThisTick, vehicleHp, completed, failed: !completed && vehicleHp <= 0 };
       });
     }, 250);
     return () => window.clearInterval(combatTimer);
@@ -9101,6 +9349,19 @@ export function DeadRoadGame() {
   }, [explorationBattle.completed, explorationBattle.failed, explorationBattle.pendingKicks, screen]);
 
   useEffect(() => {
+    const delta = explorationBattle.kills - reportedExplorationBattleKillsRef.current;
+    if (delta <= 0) return;
+    reportedExplorationBattleKillsRef.current = explorationBattle.kills;
+    setExplorationAchievementProgress((progress) => ({ ...progress, zombieKills: progress.zombieKills + delta }));
+  }, [explorationBattle.kills]);
+
+  useEffect(() => {
+    if (screen !== "explorationBattle" || !explorationBattle.completed || reportedCompletedExplorationBattleRef.current) return;
+    reportedCompletedExplorationBattleRef.current = true;
+    recordExplorationDailyMetric("mainlineCompletions");
+  }, [explorationBattle.completed, recordExplorationDailyMetric, screen]);
+
+  useEffect(() => {
     const taskOrder = explorationBattle.taskOrder;
     if (screen !== "explorationBattle" || !explorationBattle.completed || !explorationBattle.rewardEligible || taskOrder !== 1) return;
     if (explorationClearedTasks.includes(taskOrder) || rewardedExplorationTasksRef.current.has(taskOrder)) return;
@@ -9110,10 +9371,12 @@ export function DeadRoadGame() {
     window.localStorage.setItem(EXPLORATION_CLEARED_KEY, JSON.stringify(nextCleared));
     setExplorationCoins((coins) => coins + EXPLORATION_TASK1_COINS);
     setExplorationExperience((experience) => experience + EXPLORATION_TASK1_EXPERIENCE);
+    recordExplorationDailyEarnings(EXPLORATION_TASK1_COINS, EXPLORATION_TASK1_EXPERIENCE);
     sound.purchase();
-  }, [explorationBattle.completed, explorationBattle.rewardEligible, explorationBattle.taskOrder, explorationClearedTasks, screen]);
+  }, [explorationBattle.completed, explorationBattle.rewardEligible, explorationBattle.taskOrder, explorationClearedTasks, recordExplorationDailyEarnings, screen]);
 
   const resetLotteryBattle = useCallback(() => {
+    reportedLotteryKillsRef.current = 0;
     setLotteryZombieDamage(freshLotteryZombieDamage());
     setLotteryLastHit(null);
     setLotteryShotSerial(0);
@@ -9138,12 +9401,14 @@ export function DeadRoadGame() {
     if (recruitTickets < count) return;
     sound.uiClick();
     setRecruitTickets((tickets) => tickets - count);
+    recordExplorationDailyMetric("recruitDraws", count);
+    setExplorationAchievementProgress((progress) => ({ ...progress, lotteryDraws: progress.lotteryDraws + count }));
     setLotteryDrawCount(count);
     // 每一抽独立结算且不去重：单抽之间与十连内部都允许重复获得同一奖励品质/内容。
     setLotteryRewards(Array.from({ length: count }, () => rollLotteryRarity()));
     resetLotteryBattle();
     setLotteryPhase("firing");
-  }, [recruitTickets, resetLotteryBattle]);
+  }, [recruitTickets, recordExplorationDailyMetric, resetLotteryBattle]);
 
   const updateLotteryAim = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     if (lotteryPhase !== "firing") return;
@@ -12912,6 +13177,9 @@ export function DeadRoadGame() {
 
           const before = g.zombies.length;
           const newlyKilled = g.zombies.filter((z) => z.hp <= 0);
+          if (newlyKilled.length > 0) {
+            setExplorationAchievementProgress((progress) => ({ ...progress, zombieKills: progress.zombieKills + newlyKilled.length }));
+          }
           for (const z of newlyKilled) {
             const deathPose = zombieRenderPose(z, now, p.x);
             // 击杀奖励：当日击杀预算按僵尸总数均摊（僵尸随天数变多、单价相应下降），大块头按体型小幅加成；
@@ -13365,6 +13633,7 @@ export function DeadRoadGame() {
             <nav className="exploration-rail exploration-rail-right" aria-label="探索模式右侧功能">
               <button type="button" onClick={openLottery}><b>✧</b><span>抽奖</span><small>获取探索奖励</small></button>
               <button type="button" onClick={() => openCodex("exploration")}><b>▤</b><span>僵尸图鉴</span><small>已发现 {seenKinds.length} / {ZOMBIE_CONFIG_KINDS.length}</small></button>
+              <button type="button" onClick={() => { sound.uiClick(); setExplorationTaskSystemTab("daily"); changeScreen("explorationTasks"); }}><b>✓</b><span>任务</span><small>日常与成就</small></button>
             </nav>
 
             <div className="exploration-task-map" aria-label="探索任务地图">
@@ -13400,6 +13669,64 @@ export function DeadRoadGame() {
               <div className="exploration-notice" role="status">
                 <span>{explorationNotice}</span>
                 <button type="button" onClick={() => { sound.uiClick(); setExplorationNotice(null); }} aria-label="关闭提示">×</button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {screen === "explorationTasks" && (
+          <div className="exploration-tasks-panel overlay-panel">
+            <div className="task-system-scenery" aria-hidden="true"><span /><span /><span /></div>
+            <button type="button" className="exploration-subscreen-back" onClick={closeExplorationSubscreen}>← 返回农田</button>
+            <div className="exploration-subscreen-title task-system-title">
+              <p className="eyebrow">探索模式 · 行动记录</p>
+              <h2>任务中心</h2>
+              <small>每日行动在本地时间 0 点重置 · 成就永久累计</small>
+            </div>
+            <div className="task-system-tabs" role="tablist" aria-label="任务分类">
+              <button type="button" role="tab" aria-selected={explorationTaskSystemTab === "daily"} className={explorationTaskSystemTab === "daily" ? "active" : ""} onClick={() => { sound.uiClick(); setExplorationTaskSystemTab("daily"); }}>日常任务</button>
+              <button type="button" role="tab" aria-selected={explorationTaskSystemTab === "achievements"} className={explorationTaskSystemTab === "achievements" ? "active" : ""} onClick={() => { sound.uiClick(); setExplorationTaskSystemTab("achievements"); }}>成就</button>
+            </div>
+            {explorationTaskSystemTab === "daily" ? (
+              <>
+                <section className={`daily-activity-card ${explorationDailyProgress.activityRewardClaimed ? "claimed" : ""}`} aria-label="本日活跃度">
+                  <small>本日活跃度</small>
+                  <strong>{Math.min(EXPLORATION_DAILY_ACTIVITY_REWARD_TARGET, explorationDailyProgress.activity)}<i> / {EXPLORATION_DAILY_ACTIVITY_REWARD_TARGET}</i></strong>
+                  <div><span style={{ width: `${Math.min(100, explorationDailyProgress.activity / EXPLORATION_DAILY_ACTIVITY_REWARD_TARGET * 100)}%` }} /></div>
+                  <p>{explorationDailyProgress.activityRewardClaimed ? "✓ 100 点券已发放" : "达到 300 活跃度奖励 100 点券"}</p>
+                </section>
+                <div className="task-system-list daily-task-list">
+                  {EXPLORATION_DAILY_TASKS.map((task, index) => {
+                    const progress = Math.min(task.target, explorationDailyProgress[task.metric]);
+                    const completed = explorationDailyProgress.completedTaskIds.includes(task.id);
+                    return (
+                      <article key={task.id} className={`task-system-card ${completed ? "completed" : ""}`}>
+                        <b className="task-card-index">{String(index + 1).padStart(2, "0")}</b>
+                        <div className="task-card-copy"><strong>{task.title}</strong><small>{task.description}</small></div>
+                        <div className="task-card-progress"><span><i style={{ width: `${progress / task.target * 100}%` }} /></span><b>{progress} / {task.target}</b></div>
+                        <div className="task-card-reward"><small>任务奖励</small><strong>{task.rewardCoins ? `${task.rewardCoins} 金币` : `${task.rewardExperience} 经验点数`} · {task.activity} 活跃度</strong></div>
+                        <em>{completed ? "✓ 已完成" : "进行中"}</em>
+                      </article>
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
+              <div className="task-system-list achievement-list">
+                {EXPLORATION_ACHIEVEMENTS.map((achievement, index) => {
+                  const rawProgress = explorationAchievementValue(achievement, explorationAchievementProgress, explorationClearedTasks);
+                  const progress = Math.min(achievement.target, rawProgress);
+                  const completed = explorationAchievementProgress.claimedAchievementIds.includes(achievement.id);
+                  return (
+                    <article key={achievement.id} className={`task-system-card achievement-card ${completed ? "completed" : ""}`}>
+                      <b className="task-card-index">{String(index + 1).padStart(2, "0")}</b>
+                      <div className="task-card-copy"><strong>{achievement.title}</strong><small>{achievement.description}</small></div>
+                      <div className="task-card-progress"><span><i style={{ width: `${progress / achievement.target * 100}%` }} /></span><b>{progress} / {achievement.target}</b></div>
+                      <div className="task-card-reward"><small>成就奖励</small><strong>{achievement.rewardVouchers} 点券</strong></div>
+                      <em>{completed ? "◆ 已达成" : "累积中"}</em>
+                    </article>
+                  );
+                })}
               </div>
             )}
           </div>
