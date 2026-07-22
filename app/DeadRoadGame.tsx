@@ -784,9 +784,11 @@ const LEVEL8_TITLE = "清理高速";
 
 type ExplorationTask = { order: number; label: string; x: number; y: number };
 type ExplorationBattleTaskConfig = {
-  openingZombieCount: number;
+  openingZombieKinds: ZombieKind[];
   finite: boolean;
   reward: "resources" | "police" | "none";
+  rewardCoins: number;
+  rewardExperience: number;
   completionEyebrow: string;
   completionSummary: string;
 };
@@ -812,12 +814,19 @@ const EXPLORATION_STARTER_PACK_COINS = 3000;
 const EXPLORATION_MAX_VEHICLE_LEVEL = 15;
 const EXPLORATION_TASK1_COINS = 1536;
 const EXPLORATION_TASK1_EXPERIENCE = 157;
-const EXPLORATION_TASK2_ZOMBIE_COUNT = 5;
+const EXPLORATION_TASK2_NORMAL_ZOMBIE_COUNT = 5;
+const EXPLORATION_TASK2_RUNNER_ZOMBIE_COUNT = 2;
+const EXPLORATION_TASK2_COINS = 1641;
+const EXPLORATION_TASK2_EXPERIENCE = 154;
+const EXPLORATION_TASK2_OPENING_ZOMBIE_KINDS: ZombieKind[] = [
+  ...Array.from({ length: EXPLORATION_TASK2_NORMAL_ZOMBIE_COUNT }, () => "normal" as const),
+  ...Array.from({ length: EXPLORATION_TASK2_RUNNER_ZOMBIE_COUNT }, () => "runner" as const),
+];
 const EXPLORATION_BATTLE_TASK_CONFIGS: Record<number, ExplorationBattleTaskConfig> = {
-  1: { openingZombieCount: 3, finite: true, reward: "resources", completionEyebrow: "农场道路已肃清", completionSummary: "三只普通僵尸已全部消灭" },
-  2: { openingZombieCount: EXPLORATION_TASK2_ZOMBIE_COUNT, finite: true, reward: "police", completionEyebrow: "公路巡逻队已肃清", completionSummary: `${EXPLORATION_TASK2_ZOMBIE_COUNT} 只普通僵尸已全部消灭` },
+  1: { openingZombieKinds: ["normal", "normal", "normal"], finite: true, reward: "resources", rewardCoins: EXPLORATION_TASK1_COINS, rewardExperience: EXPLORATION_TASK1_EXPERIENCE, completionEyebrow: "农场道路已肃清", completionSummary: "三只普通僵尸已全部消灭" },
+  2: { openingZombieKinds: EXPLORATION_TASK2_OPENING_ZOMBIE_KINDS, finite: true, reward: "police", rewardCoins: EXPLORATION_TASK2_COINS, rewardExperience: EXPLORATION_TASK2_EXPERIENCE, completionEyebrow: "公路巡逻队已肃清", completionSummary: `${EXPLORATION_TASK2_NORMAL_ZOMBIE_COUNT} 只普通僵尸与 ${EXPLORATION_TASK2_RUNNER_ZOMBIE_COUNT} 只奔跑僵尸已全部消灭` },
 };
-const DEFAULT_EXPLORATION_BATTLE_TASK_CONFIG: ExplorationBattleTaskConfig = { openingZombieCount: 0, finite: false, reward: "none", completionEyebrow: "道路已肃清", completionSummary: "所有僵尸已全部消灭" };
+const DEFAULT_EXPLORATION_BATTLE_TASK_CONFIG: ExplorationBattleTaskConfig = { openingZombieKinds: [], finite: false, reward: "none", rewardCoins: 0, rewardExperience: 0, completionEyebrow: "道路已肃清", completionSummary: "所有僵尸已全部消灭" };
 const EXPLORATION_TEAM_SIZE = 6;
 const EXPLORATION_DAILY_ACTIVITY_REWARD_TARGET = 300;
 const EXPLORATION_DAILY_ACTIVITY_REWARD_VOUCHERS = 100;
@@ -1102,18 +1111,20 @@ function moveExplorationEntityToward(entity: { x: number; y: number }, target: {
 
 function freshExplorationBattle(vehicleHp: number, taskOrder: number, rewardEligible = false): ExplorationBattleState {
   const taskConfig = explorationBattleTaskConfig(taskOrder);
-  const zombies = Array.from({ length: taskConfig.openingZombieCount }, (_, index): ExplorationBattleZombie => {
+  const zombies = taskConfig.openingZombieKinds.map((kind, index): ExplorationBattleZombie => {
     const point = explorationBattleSpawnPoint(index + 1);
+    const hp = ZOMBIE_KIND_INFO[kind].hp;
+    const spec = kind === "normal" || kind === "brute" ? undefined : ZOMBIE_KIND_SPECS[kind];
     return {
       id: index + 1,
-      kind: "normal",
-      hp: ZOMBIE_KIND_INFO.normal.hp,
-      maxHp: ZOMBIE_KIND_INFO.normal.hp,
+      kind,
+      hp,
+      maxHp: hp,
       x: point.x,
       y: point.y,
       cooldown: index * .25,
       damage: 8,
-      speed: 2.4,
+      speed: 2.4 * (spec?.speedFactor ?? 1),
       action: "walk",
       wounds: [],
       missingLimbs: [],
@@ -9123,6 +9134,7 @@ export function DeadRoadGame() {
   const [starterPackPurchased, setStarterPackPurchased] = useState(false);
   const [explorationBattle, setExplorationBattle] = useState<ExplorationBattleState>(() => freshExplorationBattle(200, 1));
   const [explorationRecruitPhase, setExplorationRecruitPhase] = useState<ExplorationRecruitPhase>("approach");
+  const [explorationRecruitRewardEligible, setExplorationRecruitRewardEligible] = useState(false);
   const [explorationSupportClock, setExplorationSupportClock] = useState(0);
   const [lotteryPhase, setLotteryPhase] = useState<LotteryPhase>("idle");
   const [lotteryZombieDamage, setLotteryZombieDamage] = useState<ExplorationZombieDamageState[]>(freshLotteryZombieDamage);
@@ -9841,10 +9853,10 @@ export function DeadRoadGame() {
     queueMicrotask(() => {
       if (!active) return;
       setExplorationClearedTasks(nextCleared);
+      setExplorationCoins((coins) => coins + taskConfig.rewardCoins);
+      setExplorationExperience((experience) => experience + taskConfig.rewardExperience);
+      recordExplorationDailyEarnings(taskConfig.rewardCoins, taskConfig.rewardExperience);
       if (taskConfig.reward === "resources") {
-        setExplorationCoins((coins) => coins + EXPLORATION_TASK1_COINS);
-        setExplorationExperience((experience) => experience + EXPLORATION_TASK1_EXPERIENCE);
-        recordExplorationDailyEarnings(EXPLORATION_TASK1_COINS, EXPLORATION_TASK1_EXPERIENCE);
         sound.purchase();
         return;
       }
@@ -9864,11 +9876,12 @@ export function DeadRoadGame() {
     if (screen !== "explorationBattle" || !explorationBattle.completed || taskConfig.reward !== "police") return;
     // 招募剧情在每次通关任务二后都可重看；人物奖励仍由首次通关逻辑去重。
     const timer = window.setTimeout(() => {
+      setExplorationRecruitRewardEligible(explorationBattle.rewardEligible);
       setExplorationRecruitPhase("approach");
       changeScreen("explorationRecruit");
     }, 240);
     return () => window.clearTimeout(timer);
-  }, [changeScreen, explorationBattle.completed, explorationBattle.taskOrder, screen]);
+  }, [changeScreen, explorationBattle.completed, explorationBattle.rewardEligible, explorationBattle.taskOrder, screen]);
 
   useEffect(() => {
     if (screen !== "explorationRecruit" || explorationRecruitPhase !== "approach") return;
@@ -14218,12 +14231,17 @@ export function DeadRoadGame() {
 
             {explorationRecruitPhase === "reward" && (
               <div className="recruit-reward" role="dialog" aria-modal="true">
-                <p>新成员加入</p><h2>获得稀有人员 · 警察</h2>
+                <p>{explorationRecruitRewardEligible ? "新成员加入" : "招募事件回顾"}</p><h2>{explorationRecruitRewardEligible ? "获得稀有人员 · 警察" : "稀有人员 · 警察"}</h2>
                 <div className="recruit-reward-card rarity-rare">
                   <ExplorationMemberPreview member={policeRecruitMember} />
                   <div><strong>警察</strong><span>稀有 · 警察</span><small>Glock 17 · 70 HP · 17 勇气</small></div>
                 </div>
-                <button type="button" onClick={finishPoliceRecruitEvent}>确认加入并返回农田</button>
+                {explorationRecruitRewardEligible ? (
+                  <div className="recruit-resource-rewards"><b>+{EXPLORATION_TASK2_COINS} 金币</b><b>+{EXPLORATION_TASK2_EXPERIENCE} 经验点数</b></div>
+                ) : (
+                  <div className="recruit-resource-rewards recruit-resource-rewards-claimed"><b>首次通关奖励已领取</b></div>
+                )}
+                <button type="button" onClick={finishPoliceRecruitEvent}>{explorationRecruitRewardEligible ? "确认加入并返回农田" : "返回农田"}</button>
               </div>
             )}
           </div>
@@ -14578,7 +14596,7 @@ export function DeadRoadGame() {
                 <h2>{EXPLORATION_TASK_NAMES[explorationBattle.taskOrder - 1]}完成</h2>
                 <span>{currentExplorationBattleTaskConfig.completionSummary}</span>
                 {explorationBattle.rewardEligible && currentExplorationBattleTaskConfig.reward === "resources" ? (
-                  <div className="battle-rewards"><b>+{EXPLORATION_TASK1_COINS} 金币</b><b>+{EXPLORATION_TASK1_EXPERIENCE} 经验点数</b></div>
+                  <div className="battle-rewards"><b>+{currentExplorationBattleTaskConfig.rewardCoins} 金币</b><b>+{currentExplorationBattleTaskConfig.rewardExperience} 经验点数</b></div>
                 ) : explorationBattle.rewardEligible && currentExplorationBattleTaskConfig.reward === "police" ? (
                   <div className="battle-rewards"><b>公路招募事件即将开始</b></div>
                 ) : (

@@ -689,6 +689,8 @@ button { -webkit-tap-highlight-color: transparent; }
 .recruit-reward>p { margin:0; color:#73b8ff; font-size:10px; font-weight:1000; letter-spacing:.24em; }.recruit-reward>h2 { margin:0 0 5px; color:#edf6ff; font-size:clamp(28px,4vw,52px); text-shadow:0 0 22px #318cff; }
 .recruit-reward-card { width:min(520px,78vw); min-height:260px; display:grid; grid-template-columns:210px 1fr; align-items:center; padding:13px 24px; text-align:left; background:linear-gradient(135deg,#162333,#0e161f); border:2px solid #4ea8ff; box-shadow:0 0 18px #4ea8ff,0 0 65px rgba(48,144,255,.72),inset 0 0 35px rgba(58,142,245,.22); }
 .recruit-reward-card .team-member-preview { width:210px; height:260px; max-height:none; }.recruit-reward-card div { display:grid; gap:8px; }.recruit-reward-card strong { color:#eff8ff; font-size:31px; }.recruit-reward-card span { color:#72b9ff; font-size:13px; font-weight:1000; }.recruit-reward-card small { color:#b7c9d8; font-size:9px; }
+.recruit-resource-rewards { display:flex; gap:9px; }.recruit-resource-rewards b { padding:7px 12px; color:#f2dc77; background:rgba(25,35,47,.9); border:1px solid #527ba5; font-size:10px; }
+.recruit-resource-rewards-claimed b { color:#8493a0; border-color:#4b5965; }
 @keyframes recruit-reward-flash { 0% { opacity:0; filter:brightness(4); } 45% { opacity:1; filter:brightness(1.8); } 100% { filter:brightness(1); } }
 @media (max-width:720px) { .recruit-civilian,.recruit-police { width:140px; }.recruit-civilian .team-member-preview,.recruit-police .team-member-preview { width:140px; }.recruit-reward-card { grid-template-columns:145px 1fr; }.recruit-reward-card .team-member-preview { width:145px; } }
 
