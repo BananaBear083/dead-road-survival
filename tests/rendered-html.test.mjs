@@ -1411,7 +1411,8 @@ test("adds the exploration exchange shop, vehicle upgrades and courage auto-batt
   assert.match(source, /className=\{`exploration-vehicle vehicle-\$\{kind\}/);
   assert.doesNotMatch(source, /进入战斗测试/);
 
-  assert.match(source, /const EXPLORATION_DEPLOY_COST = 5/);
+  assert.match(source, /courageCost: 10/);
+  assert.match(source, /courageCost: 15/);
   assert.match(source, /const EXPLORATION_TASK1_COINS = 1536/);
   assert.match(source, /const EXPLORATION_TASK1_EXPERIENCE = 157/);
   assert.match(source, /const EXPLORATION_PROGRESS_KEY = "dead-road-exploration-progress"/);
@@ -1617,7 +1618,7 @@ test("keeps exploration zombies full-size and complete while attacking", async (
   assert.match(source, /function drawCompleteZombieBodyFrame\(/);
   assert.match(source, /function ZombieKindPreview[\s\S]*drawCompleteZombieBodyFrame\(ctx, z,/);
   assert.match(source, /for \(const z of g\.zombies\)[\s\S]*drawCompleteZombieBodyFrame\(ctx, z,/);
-  assert.match(source, /width=\{108\} height=\{168\} className="battle-zombie-shared-preview"/);
+  assert.match(source, /width=\{large \? 144 : 108\} height=\{large \? 220 : 168\} className="battle-zombie-shared-preview"/);
   assert.match(css, /\.battle-enemy-shared-model[^}]*width: 108px[^}]*height: 184px/);
   assert.match(css, /\.battle-unit-shared-model[^}]*width: 108px[^}]*height: 184px/);
 });
@@ -1647,7 +1648,8 @@ test("adds manual reward claims, member growth and reusable exploration support 
   assert.match(source, /EXPLORATION_SUPPORT_DURATION_MS = 10000/);
   assert.match(source, /EXPLORATION_SUPPORT_ARRIVAL_MS = 550/);
   assert.match(source, /recordExplorationDailyMetric\("consumablesPurchased"\)/);
-  assert.match(source, /测试阶段免费/);
+  assert.match(source, /使用金币购买/);
+  assert.match(source, /setExplorationCoins\(\(coins\) => coins - item\.price\)/);
   assert.match(source, /5名M16士兵支援/);
   assert.match(source, /ExplorationMemberPreview member=\{EXPLORATION_SUPPORT_SOLDIER\}/);
   assert.match(source, /automaticWeaponStartedAt=\{armySupportReady/);
@@ -1700,4 +1702,32 @@ test("shares consumable icons, classic gunfire and classic airstrike explosions 
   assert.match(css, /\.airstrike-falling-bomb/);
   assert.match(css, /\.armored-ejected-casing/);
   assert.match(css, /\.armored-dropped-ammo-box/);
+});
+
+test("supports paid supplies, repeat summons and a stable two-dimensional exploration battlefield", async () => {
+  const source = await readFile(new URL("../app/DeadRoadGame.tsx", import.meta.url), "utf8");
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  assert.match(source, /courageCost: number/);
+  assert.match(source, /name: "平民"[\s\S]*?courageCost: 10/);
+  assert.match(source, /name: "农民"[\s\S]*?courageCost: 15/);
+  assert.match(source, /name: "格斗士兵"[\s\S]*?courageCost: 15/);
+  assert.match(source, /召唤勇气值[\s\S]*selectedExplorationMember\.courageCost/);
+  assert.match(source, /nextUnitId/);
+  assert.match(source, /member-\$\{memberId\}-\$\{battle\.nextUnitId\}/);
+  assert.match(source, /courage: battle\.courage - member\.courageCost/);
+  assert.doesNotMatch(source, /battle\.deployed\.includes\(id\)/);
+  assert.match(source, /explorationCoins < item\.price/);
+  assert.match(source, /setExplorationCoins\(\(coins\) => coins - item\.price\)/);
+  assert.match(source, /购买 · \{item\.price\} 金币/);
+  assert.doesNotMatch(source, /测试阶段全部免费/);
+  assert.match(source, /function explorationBattleSpawnPoint/);
+  assert.match(source, /type ExplorationBattleZombie = \{[^}]*y: number/);
+  assert.match(source, /type ExplorationBattleUnit = \{[^}]*y: number/);
+  assert.match(source, /explorationPlaneDistance/);
+  assert.match(source, /style=\{\{ left: `\$\{zombie\.x\}%`, bottom: `\$\{zombie\.y\}%`/);
+  assert.doesNotMatch(source, /target\.missingLimbs = \[/);
+  assert.match(source, /battle-squad-bar[\s\S]*ExplorationMemberPreview member=\{member\}/);
+  assert.match(css, /\.battle-consumable-bar[^}]*top:\s*96px/);
+  assert.match(css, /--battle-entity-width:\s*108px/);
+  assert.match(css, /\.battle-squad-bar \.team-member-preview/);
 });

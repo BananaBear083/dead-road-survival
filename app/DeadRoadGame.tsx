@@ -45,9 +45,9 @@ type ExplorationMemberRarity = "common" | "rare" | "epic" | "legendary";
 type ExplorationMemberSpeed = "慢" | "中等" | "快";
 type ExplorationVehicleKind = "van" | "truck" | "bus";
 type ExplorationBattleAction = "guard" | "walk" | "attack" | "reload" | "kick" | "throw";
-type ExplorationBattleUnit = { id: string; memberId: string; label: string; level: number; hp: number; maxHp: number; damage: number; speedFactor: number; x: number; cooldown: number; ammo: number; reloadRemaining: number; attacksPerformed: number; skillCooldown: number; actionRemaining: number; action: ExplorationBattleAction };
-type ExplorationBattleZombie = { id: number; kind: "normal"; hp: number; maxHp: number; x: number; cooldown: number; damage: number; speed: number; action: "guard" | "walk" | "attack"; wounds: Wound[]; missingLimbs: ZombieLimb[]; legDamage: number; knockedDownRemaining: number };
-type ExplorationBattleKnife = { id: number; fromX: number; toX: number; life: number };
+type ExplorationBattleUnit = { id: string; memberId: string; label: string; level: number; hp: number; maxHp: number; damage: number; speedFactor: number; x: number; y: number; cooldown: number; ammo: number; reloadRemaining: number; attacksPerformed: number; skillCooldown: number; actionRemaining: number; action: ExplorationBattleAction };
+type ExplorationBattleZombie = { id: number; kind: ZombieKind; hp: number; maxHp: number; x: number; y: number; cooldown: number; damage: number; speed: number; action: "guard" | "walk" | "attack"; wounds: Wound[]; missingLimbs: ZombieLimb[]; legDamage: number; knockedDownRemaining: number };
+type ExplorationBattleKnife = { id: number; fromX: number; fromY: number; toX: number; toY: number; life: number };
 type ExplorationBattlePendingKick = { id: number; targetId: number; impactAt: number };
 type ExplorationAirstrikeEffect = { id: number; x: number; impactAt: number; until: number; impacted: boolean };
 type ExplorationZombieDamageState = { hp: number; wounds: Wound[]; missingLimbs: ZombieLimb[]; legDamage: number; knockedDownRemaining: number };
@@ -61,8 +61,8 @@ type ExplorationBattleState = {
   zombies: ExplorationBattleZombie[];
   knives: ExplorationBattleKnife[];
   pendingKicks: ExplorationBattlePendingKick[];
-  deployed: string[];
   nextZombieId: number;
+  nextUnitId: number;
   nextKnifeId: number;
   nextKickId: number;
   kills: number;
@@ -96,6 +96,7 @@ type ExplorationMemberDefinition = {
   damagePerLevel: number;
   speed: ExplorationMemberSpeed;
   speedFactor: number;
+  courageCost: number;
   purchaseCost: number;
   levelSkills: { level: 5 | 10 | 15; name: string }[];
   combatSkills?: {
@@ -796,7 +797,6 @@ const EXPLORATION_TASKS: ExplorationTask[] = Array.from({ length: 10 }, (_, inde
 const EXPLORATION_CLEARED_KEY = "dead-road-exploration-cleared";
 const EXPLORATION_PROGRESS_KEY = "dead-road-exploration-progress";
 const EXPLORATION_VOUCHER_EXCHANGE_COST = 100;
-const EXPLORATION_DEPLOY_COST = 5;
 const EXPLORATION_STARTER_PACK_COST = 1000;
 const EXPLORATION_STARTER_PACK_EXPERIENCE = 1000;
 const EXPLORATION_STARTER_PACK_COINS = 3000;
@@ -915,6 +915,7 @@ const EXPLORATION_MEMBERS: ExplorationMemberDefinition[] = [
     damagePerLevel: 1,
     speed: "中等",
     speedFactor: 1,
+    courageCost: 10,
     purchaseCost: 0,
     levelSkills: [{ level: 5, name: "无" }, { level: 10, name: "无" }, { level: 15, name: "无" }],
   },
@@ -931,6 +932,7 @@ const EXPLORATION_MEMBERS: ExplorationMemberDefinition[] = [
     damagePerLevel: 2,
     speed: "慢",
     speedFactor: .82,
+    courageCost: 15,
     purchaseCost: 0,
     levelSkills: [{ level: 5, name: "无" }, { level: 10, name: "无" }, { level: 15, name: "无" }],
   },
@@ -947,6 +949,7 @@ const EXPLORATION_MEMBERS: ExplorationMemberDefinition[] = [
     damagePerLevel: 2,
     speed: "快",
     speedFactor: 1.24,
+    courageCost: 15,
     purchaseCost: 0,
     levelSkills: [
       { level: 5, name: "每攻击 3 次进行一次蹬踹" },
@@ -970,6 +973,7 @@ const EXPLORATION_SUPPORT_SOLDIER: ExplorationMemberDefinition = {
   damagePerLevel: 0,
   speed: "中等",
   speedFactor: 1,
+  courageCost: 0,
   purchaseCost: 0,
   levelSkills: [{ level: 5, name: "无" }, { level: 10, name: "无" }, { level: 15, name: "无" }],
 };
@@ -1030,22 +1034,57 @@ function explorationAchievementValue(achievement: ExplorationAchievementDefiniti
   return progress[achievement.metric];
 }
 
+/** 低差异序列把僵尸均匀铺在右半场，避免一字排开或随机挤成一团。 */
+function fractionalPart(value: number) {
+  return value - Math.floor(value);
+}
+
+function explorationBattleSpawnPoint(seed: number) {
+  return {
+    x: 55 + fractionalPart(seed * .61803398875) * 40,
+    y: 6 + fractionalPart(seed * .754877666) * 48,
+  };
+}
+
+function explorationUnitSpawnPoint(seed: number) {
+  return { x: 22 + fractionalPart(seed * .41421356237) * 8, y: 6 + fractionalPart(seed * .569840291) * 48 };
+}
+
+function explorationPlaneDistance(a: { x: number; y: number }, b: { x: number; y: number }) {
+  return Math.hypot(a.x - b.x, (a.y - b.y) * .82);
+}
+
+function isLargeExplorationZombie(kind: ZombieKind) {
+  return kind === "brute" || kind === "largeSpitter" || kind === "juggernaut";
+}
+
+function moveExplorationEntityToward(entity: { x: number; y: number }, target: { x: number; y: number }, distance: number, step: number) {
+  if (distance <= 0) return;
+  entity.x += (target.x - entity.x) / distance * step;
+  entity.y += (target.y - entity.y) / distance * step;
+  entity.y = Math.max(4, Math.min(56, entity.y));
+}
+
 function freshExplorationBattle(vehicleHp: number, taskOrder: number, rewardEligible = false): ExplorationBattleState {
-  const zombies = taskOrder === 1 ? Array.from({ length: 3 }, (_, index): ExplorationBattleZombie => ({
-    id: index + 1,
-    kind: "normal",
-    hp: ZOMBIE_KIND_INFO.normal.hp,
-    maxHp: ZOMBIE_KIND_INFO.normal.hp,
-    x: 74 + index * 9,
-    cooldown: index * .25,
-    damage: 8,
-    speed: 2.4,
-    action: "walk",
-    wounds: [],
-    missingLimbs: [],
-    legDamage: 0,
-    knockedDownRemaining: 0,
-  })) : [];
+  const zombies = taskOrder === 1 ? Array.from({ length: 3 }, (_, index): ExplorationBattleZombie => {
+    const point = explorationBattleSpawnPoint(index + 1);
+    return {
+      id: index + 1,
+      kind: "normal",
+      hp: ZOMBIE_KIND_INFO.normal.hp,
+      maxHp: ZOMBIE_KIND_INFO.normal.hp,
+      x: point.x,
+      y: point.y,
+      cooldown: index * .25,
+      damage: 8,
+      speed: 2.4,
+      action: "walk",
+      wounds: [],
+      missingLimbs: [],
+      legDamage: 0,
+      knockedDownRemaining: 0,
+    };
+  }) : [];
   return {
     taskOrder,
     rewardEligible,
@@ -1056,8 +1095,8 @@ function freshExplorationBattle(vehicleHp: number, taskOrder: number, rewardElig
     zombies,
     knives: [],
     pendingKicks: [],
-    deployed: [],
     nextZombieId: zombies.length + 1,
+    nextUnitId: 1,
     nextKnifeId: 1,
     nextKickId: 1,
     kills: 0,
@@ -8682,7 +8721,7 @@ function WeaponPreview({ weapon }: { weapon: WeaponKey }) {
 }
 
 /** 格斗士兵飞刀直接复用生存模式的战斗刀模型，飞行阶段仅由 CSS 负责位移与旋转。 */
-function ExplorationThrownKnife({ fromX, toX }: { fromX: number; toX: number }) {
+function ExplorationThrownKnife({ fromX, fromY, toX, toY }: { fromX: number; fromY: number; toX: number; toY: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const canvas = ref.current;
@@ -8694,7 +8733,7 @@ function ExplorationThrownKnife({ fromX, toX }: { fromX: number; toX: number }) 
     drawWeaponModel(ctx, "combatknife", 1);
     ctx.restore();
   }, []);
-  return <canvas ref={ref} className="battle-throwing-knife" width={100} height={32} style={{ left: `${fromX}%`, "--knife-target": `${toX}%` } as React.CSSProperties} aria-hidden="true" />;
+  return <canvas ref={ref} className="battle-throwing-knife" width={100} height={32} style={{ left: `${fromX}%`, bottom: `${fromY}%`, "--knife-target": `${toX}%`, "--knife-target-y": `${toY}%` } as React.CSSProperties} aria-hidden="true" />;
 }
 
 /** 生存模式便装人物与探索队员共用的颅形、五官、头发和帽饰细节。 */
@@ -9323,12 +9362,19 @@ export function DeadRoadGame() {
   }, [explorationVouchers, recordExplorationDailyEarnings, recordExplorationVoucherSpend, starterPackPurchased]);
 
   const purchaseExplorationConsumable = useCallback((key: ExplorationConsumableKey) => {
-    // 测试阶段免费：保留原标价展示，但不扣金币。
+    const item = EXPLORATION_CONSUMABLES[key];
+    if (explorationCoins < item.price) {
+      setExplorationExchangeNotice(`金币不足，还需要 ${item.price - explorationCoins} 金币购买「${item.name}」。`);
+      sound.purchaseFail();
+      return;
+    }
+    setExplorationCoins((coins) => coins - item.price);
     setExplorationConsumableInventory((inventory) => ({ ...inventory, [key]: inventory[key] + 1 }));
     setDeployedExplorationConsumables((deployed) => deployed.includes(key) ? deployed : [...deployed, key].slice(0, 3));
     recordExplorationDailyMetric("consumablesPurchased");
+    setExplorationExchangeNotice(`已购买「${item.name}」，消耗 ${item.price} 金币。`);
     sound.purchase();
-  }, [recordExplorationDailyMetric]);
+  }, [explorationCoins, recordExplorationDailyMetric]);
 
   const toggleExplorationConsumableDeployment = useCallback((key: ExplorationConsumableKey) => {
     if (explorationConsumableInventory[key] <= 0) return;
@@ -9386,14 +9432,15 @@ export function DeadRoadGame() {
     if (!member || !deployedMemberIds.includes(memberId)) return;
     const level = explorationMemberLevels[memberId] ?? 1;
     const stats = explorationMemberStatsAtLevel(member, level);
-    const id = `member-${memberId}`;
     setExplorationBattle((battle) => {
-      if (battle.failed || battle.courage < EXPLORATION_DEPLOY_COST || battle.deployed.includes(id)) return battle;
+      if (battle.failed || battle.completed || battle.courage < member.courageCost) return battle;
+      const id = `member-${memberId}-${battle.nextUnitId}`;
+      const spawnPoint = explorationUnitSpawnPoint(battle.nextUnitId);
       sound.uiClick();
       return {
         ...battle,
-        courage: battle.courage - EXPLORATION_DEPLOY_COST,
-        deployed: [...battle.deployed, id],
+        courage: battle.courage - member.courageCost,
+        nextUnitId: battle.nextUnitId + 1,
         units: [...battle.units, {
           id,
           memberId,
@@ -9403,7 +9450,8 @@ export function DeadRoadGame() {
           maxHp: stats.hp,
           damage: stats.damage,
           speedFactor: member.speedFactor,
-          x: 30,
+          x: spawnPoint.x,
+          y: spawnPoint.y,
           cooldown: 0,
           ammo: MELEE_WEAPONS.has(member.weapon) ? 1 : WEAPONS[member.weapon].magazine,
           reloadRemaining: 0,
@@ -9431,21 +9479,26 @@ export function DeadRoadGame() {
         if (battle.failed) return battle;
         const tier = Math.floor(battle.elapsed / 15);
         const count = Math.min(4, 1 + Math.floor(battle.elapsed / 20));
-        const spawned = Array.from({ length: count }, (_, index): ExplorationBattleZombie => ({
-          id: battle.nextZombieId + index,
-          kind: "normal",
-          hp: 55 + tier * 18,
-          maxHp: 55 + tier * 18,
-          x: 94 + index * 2,
-          cooldown: .35 * index,
-          damage: 8 + tier * 2,
-          speed: 2.4 + Math.min(2.2, tier * .16),
-          action: "walk",
-          wounds: [],
-          missingLimbs: [],
-          legDamage: 0,
-          knockedDownRemaining: 0,
-        }));
+        const spawned = Array.from({ length: count }, (_, index): ExplorationBattleZombie => {
+          const id = battle.nextZombieId + index;
+          const point = explorationBattleSpawnPoint(id);
+          return {
+            id,
+            kind: "normal",
+            hp: 55 + tier * 18,
+            maxHp: 55 + tier * 18,
+            x: point.x,
+            y: point.y,
+            cooldown: .35 * index,
+            damage: 8 + tier * 2,
+            speed: 2.4 + Math.min(2.2, tier * .16),
+            action: "walk",
+            wounds: [],
+            missingLimbs: [],
+            legDamage: 0,
+            knockedDownRemaining: 0,
+          };
+        });
         return { ...battle, zombies: [...battle.zombies, ...spawned], nextZombieId: battle.nextZombieId + count };
       });
     }, 2500);
@@ -9552,7 +9605,7 @@ export function DeadRoadGame() {
           const combatSkills = member.combatSkills;
           const livingZombies = zombies.filter((zombie) => zombie.hp > 0);
           const nearestZombie = livingZombies.reduce<ExplorationBattleZombie | null>((nearest, zombie) => (
-            nearest === null || Math.abs(zombie.x - unit.x) < Math.abs(nearest.x - unit.x) ? zombie : nearest
+            nearest === null || explorationPlaneDistance(unit, zombie) < explorationPlaneDistance(unit, nearest) ? zombie : nearest
           ), null);
           if (!nearestZombie) { unit.action = "guard"; return; } // 没有敌人时，队员将在原地警戒。
           if (unit.reloadRemaining > 0) { unit.action = "reload"; return; }
@@ -9562,7 +9615,7 @@ export function DeadRoadGame() {
             if (target) {
               target.hp -= combatSkills.thrownKnifeDamage;
               target.wounds = [...target.wounds.slice(-7), { x: 0, y: -88, region: "body", size: 4.5 }];
-              knives = [...knives, { id: nextKnifeId, fromX: unit.x, toX: target.x, life: .5 }];
+              knives = [...knives, { id: nextKnifeId, fromX: unit.x, fromY: unit.y, toX: target.x, toY: target.y, life: .5 }];
               nextKnifeId += 1;
               unit.skillCooldown = combatSkills.thrownKnifeInterval;
               unit.actionRemaining = .42;
@@ -9572,10 +9625,10 @@ export function DeadRoadGame() {
               return;
             }
           }
-          const distance = nearestZombie.x - unit.x;
+          const distance = explorationPlaneDistance(unit, nearestZombie);
           const attackDistance = MELEE_WEAPONS.has(member.weapon) ? 4.5 : Math.min(22, weapon.range / 35);
-          if (Math.abs(distance) > attackDistance) {
-            unit.x += Math.sign(distance) * 1.15 * unit.speedFactor;
+          if (distance > attackDistance) {
+            moveExplorationEntityToward(unit, nearestZombie, distance, 1.15 * unit.speedFactor);
             unit.action = "walk";
           } else if (unit.cooldown <= 0) {
             if (!MELEE_WEAPONS.has(member.weapon) && unit.ammo <= 0) {
@@ -9590,7 +9643,7 @@ export function DeadRoadGame() {
               // 与生存模式同源：霰弹枪按弹丸数与散布逐颗结算；每次命中记录部位伤口，腿部累计伤害会触发倒地。
               const pellets = weapon.pellets ?? 1;
               for (let pellet = 0; pellet < pellets; pellet++) {
-                const normalizedDistance = Math.min(1, Math.abs(distance) / Math.max(1, weapon.range / 35));
+                const normalizedDistance = Math.min(1, distance / Math.max(1, weapon.range / 35));
                 const pelletHitChance = weapon.pellets ? Math.max(.28, 1 - normalizedDistance * (1.15 + (weapon.spread ?? 0) * 2.4)) : 1;
                 if (Math.random() > pelletHitChance) continue;
                 const roll = Math.random();
@@ -9627,9 +9680,6 @@ export function DeadRoadGame() {
                 sound.kick();
               }
               if (target.legDamage >= target.maxHp * .22) target.knockedDownRemaining = Math.max(target.knockedDownRemaining, 3);
-              if (target.hp > 0 && target.hp <= target.maxHp * .3 && target.missingLimbs.length === 0) {
-                target.missingLimbs = [target.legDamage >= target.maxHp * .22 ? "leftLeg" : "leftArm"];
-              }
             }
             unit.cooldown = weapon.fireRate / 1000 * (combatSkills?.attackIntervalFactor ?? 1);
             unit.action = performedKick ? "kick" : "attack";
@@ -9650,12 +9700,12 @@ export function DeadRoadGame() {
           if (zombie.knockedDownRemaining > 0) { zombie.action = "guard"; return; }
           const livingUnits = units.filter((unit) => unit.hp > 0);
           const nearestUnit = livingUnits.reduce<ExplorationBattleUnit | null>((nearest, unit) => (
-            nearest === null || Math.abs(unit.x - zombie.x) < Math.abs(nearest.x - zombie.x) ? unit : nearest
+            nearest === null || explorationPlaneDistance(zombie, unit) < explorationPlaneDistance(zombie, nearest) ? unit : nearest
           ), null);
           if (nearestUnit) {
-            const distance = nearestUnit.x - zombie.x;
-            if (Math.abs(distance) > 4.5) {
-              zombie.x += Math.sign(distance) * zombie.speed * .25;
+            const distance = explorationPlaneDistance(zombie, nearestUnit);
+            if (distance > 4.5) {
+              moveExplorationEntityToward(zombie, nearestUnit, distance, zombie.speed * .25);
               zombie.action = "walk";
             }
             else if (zombie.cooldown <= 0) {
@@ -9667,8 +9717,8 @@ export function DeadRoadGame() {
               zombie.cooldown = 1;
               zombie.action = "attack";
             }
-          } else if (zombie.x > 9) {
-            zombie.x -= zombie.speed * .25;
+          } else if (explorationPlaneDistance(zombie, { x: 9, y: 12 }) > 4.5) {
+            moveExplorationEntityToward(zombie, { x: 9, y: 12 }, explorationPlaneDistance(zombie, { x: 9, y: 12 }), zombie.speed * .25);
             zombie.action = "walk";
           } else if (zombie.cooldown <= 0) {
             vehicleHp -= zombie.damage;
@@ -14155,15 +14205,15 @@ export function DeadRoadGame() {
             </section>
             <section className="consumable-shop-page" aria-label="消耗品贩卖窗口">
               <div className="consumable-shop-window" aria-hidden="true"><i /><i /><b /></div>
-              <div className="consumable-shop-heading"><p>探索模式 · 战术物资</p><h2>消耗品贩卖窗口</h2><small>测试阶段全部免费 · 点击购买会增加库存</small></div>
+              <div className="consumable-shop-heading"><p>探索模式 · 战术物资</p><h2>消耗品贩卖窗口</h2><small>使用金币购买 · 点击后增加对应库存</small></div>
               <div className="consumable-shop-grid">
                 {(Object.keys(EXPLORATION_CONSUMABLES) as ExplorationConsumableKey[]).map((key) => {
                   const item = EXPLORATION_CONSUMABLES[key];
                   return <article key={key} className={`consumable-product product-${key}`}>
                     <div className="consumable-product-icon"><ExplorationConsumableIcon kind={key} /></div>
                     <h3>{item.name}</h3><p>{item.description}</p>
-                    <span>原价 <s>{item.price} 金币</s></span><strong>库存 {explorationConsumableInventory[key]}</strong>
-                    <button type="button" onClick={() => purchaseExplorationConsumable(key)}>免费购买</button>
+                    <span>价格 {item.price} 金币</span><strong>库存 {explorationConsumableInventory[key]}</strong>
+                    <button type="button" onClick={() => purchaseExplorationConsumable(key)} disabled={explorationCoins < item.price}>购买 · {item.price} 金币</button>
                   </article>;
                 })}
               </div>
@@ -14261,6 +14311,7 @@ export function DeadRoadGame() {
                         <div><dt>单次攻击伤害</dt><dd>{selectedExplorationMemberStats.damage} <small>（每级 +{selectedExplorationMember.damagePerLevel}）</small></dd></div>
                         <div><dt>人物速度</dt><dd>{selectedExplorationMember.speed}</dd></div>
                         <div><dt>当前武器</dt><dd>{WEAPONS[selectedExplorationMember.weapon].name}</dd></div>
+                        <div><dt>召唤勇气值</dt><dd>{selectedExplorationMember.courageCost}</dd></div>
                       </dl>
                       <div className="team-level-line"><span>人物等级</span><strong>LV.{selectedExplorationMemberLevel}</strong><small>上限 LV.{selectedExplorationMemberMaxLevel}</small></div>
                       <div className="team-skill-track">
@@ -14343,7 +14394,7 @@ export function DeadRoadGame() {
               {explorationBattle.units.map((unit) => {
                 const member = EXPLORATION_MEMBERS.find((candidate) => candidate.id === unit.memberId) ?? EXPLORATION_MEMBERS[0];
                 return (
-                  <div key={unit.id} className={`battle-unit battle-unit-shared-model ${explorationBattle.zombies.length === 0 ? "guarding" : "advancing"}`} style={{ left: `${unit.x}%` }} aria-label={`${unit.label}，HP ${Math.ceil(unit.hp)}`}>
+                  <div key={unit.id} className={`battle-unit battle-unit-shared-model ${explorationBattleHasLivingZombies ? "advancing" : "guarding"}`} style={{ left: `${unit.x}%`, bottom: `${unit.y}%`, zIndex: 50 + Math.round(60 - unit.y) }} aria-label={`${unit.label}，HP ${Math.ceil(unit.hp)}`}>
                     <ExplorationMemberPreview member={member} battleScale motion={unit.action === "walk" ? "moving" : unit.action === "attack" ? "attacking" : unit.action === "reload" ? "reloading" : unit.action === "kick" ? "kicking" : unit.action === "throw" ? "throwing" : "standing"} reloadProgress={unit.action === "reload" ? 1 - unit.reloadRemaining / Math.max(.001, WEAPONS[member.weapon].reload / 1000) : 0} />
                     {unit.action === "attack" && !MELEE_WEAPONS.has(member.weapon) && <span className="battle-ejected-casing" />}
                     {unit.action === "reload" && WEAPON_HOLD[member.weapon].reloadKind === "mag" && <span className="battle-dropped-magazine" />}
@@ -14351,14 +14402,17 @@ export function DeadRoadGame() {
                   </div>
                 );
               })}
-              {explorationBattle.zombies.map((zombie) => (
-                <div key={zombie.id} className="battle-enemy battle-enemy-shared-model" style={{ left: `${zombie.x}%` }} aria-label={`进攻僵尸，HP ${Math.ceil(zombie.hp)}`}>
-                  <ZombieKindPreview kind={zombie.kind} width={108} height={168} className="battle-zombie-shared-preview" fillHeight motion={zombie.action === "attack" ? "attacking" : zombie.action === "walk" ? "walking" : "standing"} hpRatio={zombie.hp / zombie.maxHp} wounds={zombie.wounds} missingLimbs={zombie.missingLimbs} knockedDown={zombie.knockedDownRemaining > 0} />
-                  {zombie.hp < zombie.maxHp && <span key={`${zombie.id}-${Math.ceil(zombie.hp)}`} className="battle-zombie-blood" />}
-                  <i className="battle-entity-hp"><b style={{ width: `${zombie.hp / zombie.maxHp * 100}%` }} /></i>
-                </div>
-              ))}
-              {explorationBattle.knives.map((knife) => <ExplorationThrownKnife key={knife.id} fromX={knife.fromX} toX={knife.toX} />)}
+              {explorationBattle.zombies.map((zombie) => {
+                const large = isLargeExplorationZombie(zombie.kind);
+                return (
+                  <div key={zombie.id} className={`battle-enemy battle-enemy-shared-model ${large ? "large" : ""}`} style={{ left: `${zombie.x}%`, bottom: `${zombie.y}%`, zIndex: 50 + Math.round(60 - zombie.y) }} aria-label={`进攻僵尸，HP ${Math.ceil(zombie.hp)}`}>
+                    <ZombieKindPreview kind={zombie.kind} width={large ? 144 : 108} height={large ? 220 : 168} className="battle-zombie-shared-preview" fillHeight={!large} motion={zombie.action === "attack" ? "attacking" : zombie.action === "walk" ? "walking" : "standing"} hpRatio={zombie.hp / zombie.maxHp} wounds={zombie.wounds} missingLimbs={zombie.missingLimbs} knockedDown={zombie.knockedDownRemaining > 0} />
+                    {zombie.hp < zombie.maxHp && <span key={`${zombie.id}-${Math.ceil(zombie.hp)}`} className="battle-zombie-blood" />}
+                    <i className="battle-entity-hp"><b style={{ width: `${zombie.hp / zombie.maxHp * 100}%` }} /></i>
+                  </div>
+                );
+              })}
+              {explorationBattle.knives.map((knife) => <ExplorationThrownKnife key={knife.id} fromX={knife.fromX} fromY={knife.fromY} toX={knife.toX} toY={knife.toY} />)}
               {explorationBattle.zombies.length === 0 && !explorationBattle.failed && <p className="battle-guard-message">没有敌人时，队员将在原地警戒</p>}
             </div>
 
@@ -14367,12 +14421,11 @@ export function DeadRoadGame() {
               {deployedMemberIds.map((memberId) => {
                 const member = EXPLORATION_MEMBERS.find((candidate) => candidate.id === memberId);
                 if (!member) return null;
-                const id = `member-${memberId}`;
-                const deployed = explorationBattle.deployed.includes(id);
-                const alive = explorationBattle.units.some((unit) => unit.id === id);
+                const activeCount = explorationBattle.units.filter((unit) => unit.memberId === memberId).length;
                 return (
-                  <button key={id} type="button" onClick={() => deployExplorationUnit(memberId)} disabled={explorationBattle.failed || deployed || explorationBattle.courage < EXPLORATION_DEPLOY_COST}>
-                    <i>{member.name.slice(0, 1)}</i><span>{member.name}</span><strong>{deployed ? alive ? "已出战" : "已阵亡" : `${EXPLORATION_DEPLOY_COST} 勇气`}</strong>
+                  <button key={memberId} type="button" onClick={() => deployExplorationUnit(memberId)} disabled={explorationBattle.failed || explorationBattle.completed || explorationBattle.courage < member.courageCost}>
+                    <ExplorationMemberPreview member={member} />
+                    <span>{member.name}</span><strong>{member.courageCost} 勇气 · 场上 {activeCount}</strong>
                   </button>
                 );
               })}

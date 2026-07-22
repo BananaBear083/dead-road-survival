@@ -516,6 +516,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .consumable-icon.compact .exploration-fighter-icon { width:52px; height:32px; }
 .consumable-product h3 { margin:0; font-size:20px; }.consumable-product p { margin:0; color:#9ba49a; font-size:10px; line-height:1.5; }.consumable-product span,.consumable-product strong { font-size:10px; }.consumable-product strong { color:#f1cf58; }
 .consumable-product button { padding:11px; color:#11160f; background:var(--signal); border:0; border-bottom:5px solid #705b18; cursor:pointer; font-weight:1000; }
+.consumable-product button:disabled { color:#777d73; background:#343b35; border-bottom-color:#202620; cursor:not-allowed; }
 
 /* 共用车辆模型：白漆底色叠加泥土、污渍和血渍；等级只改变车体外形。 */
 .exploration-vehicle { position: relative; width: 470px; height: 205px; filter: drop-shadow(13px 15px 6px rgba(0,0,0,.48)); }
@@ -693,14 +694,14 @@ button { -webkit-tap-highlight-color: transparent; }
 .battle-top-hud small { color: #939c92; font-size: 8px; font-weight: 900; letter-spacing: .1em; }
 .battle-top-hud strong { grid-row: 2; color: #f0eee0; font-family: monospace; font-size: 18px; }
 .battle-top-hud span { grid-column: 2; grid-row: 1 / 3; align-self: center; color: #9fa89d; font-size: 9px; }
-.battle-consumable-bar { position:absolute; z-index:13; right:2%; top:14px; display:flex; gap:6px; }
+.battle-consumable-bar { position:absolute; z-index:13; right:2%; top:96px; display:flex; gap:6px; }
 .battle-consumable-bar button { min-width:142px; display:grid; grid-template-columns:54px 1fr; grid-template-rows:repeat(3,auto); align-items:center; gap:1px 7px; padding:5px 8px; color:#e8e8dc; text-align:left; background:rgba(12,17,14,.94); border:1px solid #8a7b42; cursor:pointer; }.battle-consumable-bar button:disabled{opacity:.48;cursor:not-allowed}.battle-consumable-bar .consumable-icon{grid-row:1 / 4}.battle-consumable-bar strong{font-size:9px}.battle-consumable-bar small{color:#99a198;font-size:8px}.battle-consumable-bar b{color:var(--signal);font-size:9px}
 .battle-courage { border-color: #c9aa41 !important; }
 .battle-courage strong { color: #ffdd64; font-size: 27px; }
 .battle-vehicle-hp { min-width: 200px !important; }
 .battle-vehicle-hp i { grid-column: 1 / 3; height: 5px; overflow: hidden; background: #202520; }
 .battle-vehicle-hp i b { display: block; height: 100%; background: linear-gradient(90deg, #c83f43, #71ce70); transition: width .2s; }
-.battlefield { position: absolute; z-index: 3; left: 0; right: 0; top: 15%; bottom: 22%; }
+.battlefield { --battle-entity-width: 108px; --battle-entity-height: 184px; position: absolute; z-index: 3; left: 0; right: 0; top: 15%; bottom: 22%; }
 .army-support-squad { position:absolute; z-index:7; left:1%; bottom:3%; display:flex; align-items:flex-end; animation:army-support-arrive .45s ease-out both; }
 .army-support-squad.leaving { animation:army-support-leave .65s ease-in both; }
 .support-soldier-model { position:relative; width:108px; height:168px; display:block; }
@@ -730,18 +731,19 @@ button { -webkit-tap-highlight-color: transparent; }
 .battle-unit, .battle-enemy { position: absolute; z-index: 5; bottom: 9%; width: 45px; height: 104px; filter: drop-shadow(4px 5px 2px rgba(0,0,0,.55)); transform: translateX(-50%); transition: left .24s linear; }
 .battle-unit.advancing { animation: battle-walk .38s ease-in-out infinite alternate; }
 .battle-unit.guarding { animation: battle-guard 1.1s ease-in-out infinite alternate; }
-.battle-unit-shared-model { width: 108px; height: 184px; bottom: 3%; }
-.battle-unit-shared-model .team-member-preview { width: 108px; height: 168px; max-height: none; object-fit: contain; filter: drop-shadow(4px 6px 3px rgba(0,0,0,.58)); }
+.battle-unit-shared-model { width: 108px; height: 184px; }
+.battle-unit-shared-model .team-member-preview { width: var(--battle-entity-width); height: 168px; max-height: none; object-fit: contain; filter: drop-shadow(4px 6px 3px rgba(0,0,0,.58)); }
 .battle-muzzle-flash { position: absolute; z-index: 9; left: 77%; top: 38%; width: 20px; height: 13px; background: radial-gradient(circle at 0 50%, #fff5b6 0 17%, #f2a532 20% 42%, transparent 45%), conic-gradient(from 45deg at 0 50%, transparent, #ffd65a, transparent 24% 76%, #ffd65a, transparent); filter: drop-shadow(0 0 6px #f0a82c); animation: battle-flash .16s ease-out both; }
 .battle-ejected-casing { position: absolute; z-index: 8; left: 62%; top: 40%; width: 5px; height: 2px; border-radius: 2px; background: #c9a950; box-shadow: 0 0 0 1px #685728; animation: battle-casing .55s ease-out both; }
 .battle-dropped-magazine { position: absolute; z-index: 4; left: 57%; top: 54%; width: 7px; height: 16px; background: #252c29; border: 1px solid #697069; transform-origin: center; animation: battle-mag-drop .75s ease-in both; }
 @keyframes battle-flash { from { opacity: 1; transform: scale(1.2); } to { opacity: 0; transform: scale(.45); } }
 @keyframes battle-casing { to { opacity: .3; transform: translate(-18px, 38px) rotate(520deg); } }
 @keyframes battle-mag-drop { to { opacity: .55; transform: translateY(48px) rotate(48deg); } }
-.battle-enemy-shared-model { width: 108px; height: 184px; bottom: 3%; }
-.battle-zombie-shared-preview { display: block; width: 108px; height: 168px; object-fit: contain; filter: drop-shadow(4px 6px 3px rgba(0,0,0,.58)); }
+.battle-enemy-shared-model { width: 108px; height: 184px; }
+.battle-enemy-shared-model.large { width: 144px; height: 236px; }
+.battle-zombie-shared-preview { display: block; width: 100%; height: calc(100% - 16px); object-fit: contain; filter: drop-shadow(4px 6px 3px rgba(0,0,0,.58)); }
 .battle-throwing-knife { position: absolute; z-index: 10; bottom: 24%; width: 42px; height: 14px; object-fit: contain; filter: drop-shadow(0 0 3px rgba(238,242,221,.7)); animation: battle-knife-flight .42s linear both; }
-@keyframes battle-knife-flight { to { left: var(--knife-target); transform: rotate(540deg); } }
+@keyframes battle-knife-flight { to { left: var(--knife-target); bottom: var(--knife-target-y); transform: rotate(540deg); } }
 .battle-zombie-blood { position: absolute; z-index: 9; left: 45%; top: 33%; width: 6px; height: 6px; border-radius: 50%; background: #9b1922; box-shadow: -15px -7px 0 #72131a, 17px 3px 0 #b7242c, -8px 15px 0 #681016, 11px -14px 0 #88151d; animation: battle-blood-spray .34s ease-out both; }
 @keyframes battle-blood-spray { from { opacity: 1; transform: scale(.25); } to { opacity: 0; transform: scale(1.55) translate(8px, -4px); } }
 @keyframes battle-walk { to { margin-bottom: 3px; transform: translateX(-50%) rotate(-1deg); } }
@@ -767,10 +769,10 @@ button { -webkit-tap-highlight-color: transparent; }
 .battle-squad-heading { display: grid; align-content: center; padding: 10px; border-right: 1px solid #444e45; }
 .battle-squad-heading small { color: #8e978d; font-size: 9px; font-weight: 900; letter-spacing: .15em; }
 .battle-squad-heading strong { color: #e4dfc9; font-size: 14px; }
-.battle-squad-bar button { display: grid; grid-template-columns: 40px 1fr; grid-template-rows: 1fr 1fr; align-items: center; gap: 0 8px; padding: 9px; color: #e9e8dc; text-align: left; background: #202a23; border: 1px solid #647166; border-bottom: 5px solid #333c35; cursor: pointer; }
+.battle-squad-bar button { min-width:0; display: grid; grid-template-columns: 68px 1fr; grid-template-rows: 1fr 1fr; align-items: center; gap: 0 6px; padding: 5px; color: #e9e8dc; text-align: left; background: #202a23; border: 1px solid #647166; border-bottom: 5px solid #333c35; cursor: pointer; overflow:hidden; }
 .battle-squad-bar button:hover:not(:disabled) { border-color: var(--signal); background: #2c382e; }
 .battle-squad-bar button:disabled { opacity: .48; cursor: not-allowed; filter: grayscale(.55); }
-.battle-squad-bar button i { grid-row: 1 / 3; display: grid; place-items: center; width: 40px; height: 50px; color: #182018; background: #91a783; font-size: 23px; font-style: normal; }
+.battle-squad-bar .team-member-preview { grid-row:1 / 3; display:block; width:68px; height:84px; max-height:none; object-fit:contain; filter:drop-shadow(2px 3px 2px rgba(0,0,0,.55)); }
 .battle-squad-bar button span { align-self: end; font-size: 12px; font-weight: 1000; }
 .battle-squad-bar button strong { align-self: start; color: var(--signal); font-family: monospace; font-size: 9px; }
 .battle-failure { position: absolute; z-index: 30; inset: 0; display: grid; place-items: center; align-content: center; gap: 9px; text-align: center; background: rgba(10,5,6,.88); }
