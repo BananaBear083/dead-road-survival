@@ -228,7 +228,10 @@ button { -webkit-tap-highlight-color: transparent; }
 .lottery-actions { position: absolute; z-index: 10; left: 50%; bottom: clamp(18px, 4vh, 42px); display: flex; gap: 14px; transform: translateX(-50%); }
 .lottery-actions button { min-width: 220px; display: grid; gap: 3px; padding: 13px 24px; color: #ece9d8; background: rgba(15,21,16,.96); border: 1px solid #a6aa8c; border-bottom: 5px solid #434a3b; cursor: pointer; box-shadow: 6px 7px 0 rgba(0,0,0,.4); }
 .lottery-actions button:hover { transform: translateY(-3px); border-color: #f0cb4f; }
+.lottery-actions button:disabled { color: #73796f; background: rgba(29,34,30,.94); border-color: #50564d; border-bottom-color: #292e29; cursor: not-allowed; box-shadow: 3px 4px 0 rgba(0,0,0,.32); filter: grayscale(.75); }
+.lottery-actions button:disabled:hover { transform: none; border-color: #50564d; }
 .lottery-actions .lottery-ten { color: #17180f; background: #e7c54f; border-color: #fff1a1; border-bottom-color: #79641c; }
+.lottery-actions .lottery-ten:disabled { color: #73796f; background: rgba(29,34,30,.94); border-color: #50564d; border-bottom-color: #292e29; }
 .lottery-actions small { color: #9fa897; font-size: 8px; font-weight: 900; }
 .lottery-actions .lottery-ten small, .lottery-actions .lottery-ten em { color: #4e441e; }
 .lottery-actions strong { font-size: 20px; font-weight: 1000; letter-spacing: .12em; }
@@ -448,7 +451,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .exploration-vehicle.vehicle-bus .vehicle-body::after { content: ""; position: absolute; left: 22px; top: 19px; width: 302px; height: 49px; background: repeating-linear-gradient(90deg, #304345 0 48px, #b7b8ac 49px 56px); border: 4px solid #373d39; }
 .exploration-vehicle.vehicle-bus .vehicle-window-a, .exploration-vehicle.vehicle-bus .vehicle-window-b { display: none; }
 .exploration-vehicle.vehicle-bus .vehicle-wheel-b { right: 49px; }
-.exploration-vehicle.vehicle-compact { transform: scale(.43); transform-origin: left bottom; }
+.exploration-vehicle.vehicle-compact { transform: scale(.58); transform-origin: left bottom; }
 
 /* 车辆改装工棚。 */
 .vehicle-garage-panel { isolation: isolate; overflow: hidden; background: linear-gradient(180deg, #27302e 0 16%, #47483f 16% 78%, #272823 78%); }
@@ -473,23 +476,31 @@ button { -webkit-tap-highlight-color: transparent; }
 .garage-spec-card dl > div { display: flex; justify-content: space-between; padding-bottom: 5px; border-bottom: 1px solid #303831; }
 .garage-spec-card dt { color: #879087; font-size: 10px; }
 .garage-spec-card dd { margin: 0; font-size: 11px; font-weight: 1000; }
-.garage-upgrade, .garage-test-battle { min-height: 39px; color: #151913; background: var(--signal); border: 0; border-bottom: 5px solid #76631e; cursor: pointer; font-size: 11px; font-weight: 1000; }
+.garage-upgrade { min-height: 39px; color: #151913; background: var(--signal); border: 0; border-bottom: 5px solid #76631e; cursor: pointer; font-size: 11px; font-weight: 1000; }
 .garage-upgrade:disabled { color: #848a82; background: #343b35; border-bottom-color: #1f2420; cursor: not-allowed; }
 .garage-spec-card > small { color: #c47a79; font-size: 9px; font-weight: 900; }
-.garage-test-battle { color: #e5e7dd; background: #28362e; border: 1px solid #799278; border-bottom-width: 5px; }
 .garage-milestones { position: absolute; z-index: 6; left: 7%; right: 38%; bottom: 3%; display: flex; justify-content: space-between; gap: 8px; }
 .garage-milestones span { flex: 1; padding: 9px 11px; color: #8e978e; background: rgba(15,19,16,.9); border: 1px solid #454d46; text-align: center; font-size: 9px; font-weight: 900; }
 .garage-milestones span.active { color: #f3e8b1; border-color: #b99e42; }
 .garage-milestones b { display: block; color: var(--signal); font-family: monospace; font-size: 12px; }
 
-/* 探索自动战斗：车辆留在左后方，队员与僵尸在横向战线上自动索敌。 */
-.exploration-battle-panel { isolation: isolate; overflow: hidden; background: linear-gradient(180deg, #697c76 0 34%, #4b5946 34.5% 52%, #343a34 52.5%); }
-.battle-skyline { position: absolute; z-index: -3; inset: 0 0 46%; background: linear-gradient(180deg, rgba(255,224,142,.2), transparent), repeating-linear-gradient(90deg, transparent 0 80px, rgba(26,39,30,.45) 81px 155px); }
-.battle-skyline span { position: absolute; bottom: 0; width: 18%; height: 38%; background: #28372c; clip-path: polygon(0 100%, 0 39%, 18% 39%, 18% 8%, 74% 8%, 74% 48%, 100% 48%, 100% 100%); }
-.battle-skyline span:nth-child(1) { left: 5%; }
-.battle-skyline span:nth-child(2) { left: 42%; height: 52%; }
-.battle-skyline span:nth-child(3) { right: 2%; height: 31%; }
-.battle-road { position: absolute; z-index: -2; left: 0; right: 0; top: 50%; bottom: 0; background: repeating-linear-gradient(7deg, transparent 0 24px, rgba(255,255,255,.018) 25px 27px), linear-gradient(180deg, #454b46, #2a2f2b); border-top: 10px solid #676958; }
+/* 探索自动战斗：十个任务共用农场道路，车辆留在左后方，双方在加宽路面上交战。 */
+.exploration-battle-panel { isolation: isolate; overflow: hidden; background: linear-gradient(180deg, #8ba49a 0 26%, #738760 26% 32%, #343a34 32%); }
+.battle-farm-scenery { position: absolute; z-index: -3; inset: 0 0 61%; overflow: hidden; background: linear-gradient(180deg, rgba(255,225,150,.42), transparent 58%), repeating-linear-gradient(104deg, #687d49 0 28px, #7f8f54 29px 52px); }
+.battle-farm-hills { position: absolute; left: -4%; right: -4%; bottom: 0; height: 57%; background: #516944; clip-path: polygon(0 64%, 14% 19%, 29% 67%, 46% 9%, 62% 61%, 79% 21%, 100% 65%, 100% 100%, 0 100%); }
+.battle-farm-barn { position: absolute; left: 11%; bottom: 4%; width: 118px; height: 78px; background: #713b31; border: 6px solid #3b2c27; }
+.battle-farm-barn::before { content: ""; position: absolute; left: -13px; top: -47px; width: 132px; height: 54px; background: #3f332d; clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+.battle-farm-barn i { position: absolute; left: 39px; bottom: 0; width: 39px; height: 57px; background: #2d211d; border: 4px solid #9e7458; }
+.battle-farm-barn b { position: absolute; right: 12px; top: 15px; width: 24px; height: 20px; background: #d2bf83; border: 4px solid #3c3029; }
+.battle-farm-silo { position: absolute; left: 26%; bottom: 3%; width: 55px; height: 139px; background: repeating-linear-gradient(180deg, #7d8379 0 11px, #656d65 12px 15px); border: 5px solid #4a514b; border-radius: 25px 25px 3px 3px; }
+.battle-farm-silo i { position: absolute; left: -5px; top: -24px; width: 55px; height: 31px; background: #555d57; border: 5px solid #414942; border-radius: 50% 50% 8% 8%; }
+.battle-farm-fence { position: absolute; left: 38%; right: 2%; bottom: 3%; height: 54px; border-top: 7px solid #765e3c; border-bottom: 7px solid #765e3c; }
+.battle-farm-fence i { position: absolute; bottom: -14px; width: 10px; height: 78px; background: #5b472f; }
+.battle-farm-fence i:nth-child(1) { left: 3%; }
+.battle-farm-fence i:nth-child(2) { left: 34%; }
+.battle-farm-fence i:nth-child(3) { left: 66%; }
+.battle-farm-fence i:nth-child(4) { right: 3%; }
+.battle-road { position: absolute; z-index: -2; left: 0; right: 0; top: 32%; bottom: 0; background: repeating-linear-gradient(7deg, transparent 0 24px, rgba(255,255,255,.018) 25px 27px), linear-gradient(180deg, #4f5650, #282d29); border-top: 12px solid #70735d; }
 .battle-road i { position: absolute; top: 54%; width: 80px; height: 5px; background: #c7c18e; }
 .battle-road i:nth-child(1) { left: 31%; }
 .battle-road i:nth-child(2) { left: 54%; }
@@ -507,7 +518,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .battle-vehicle-hp i { grid-column: 1 / 3; height: 5px; overflow: hidden; background: #202520; }
 .battle-vehicle-hp i b { display: block; height: 100%; background: linear-gradient(90deg, #c83f43, #71ce70); transition: width .2s; }
 .battlefield { position: absolute; z-index: 3; left: 0; right: 0; top: 15%; bottom: 22%; }
-.battle-vehicle-position { position: absolute; z-index: 2; left: 1%; bottom: 3%; width: 210px; height: 120px; }
+.battle-vehicle-position { position: absolute; z-index: 2; left: 1%; bottom: 10%; width: 280px; height: 160px; }
 .battle-unit, .battle-enemy { position: absolute; z-index: 5; bottom: 9%; width: 45px; height: 104px; filter: drop-shadow(4px 5px 2px rgba(0,0,0,.55)); transform: translateX(-50%); transition: left .24s linear; }
 .battle-unit.advancing { animation: battle-walk .38s ease-in-out infinite alternate; }
 .battle-unit.guarding { animation: battle-guard 1.1s ease-in-out infinite alternate; }
@@ -547,6 +558,15 @@ button { -webkit-tap-highlight-color: transparent; }
 .battle-failure > div { display: flex; gap: 10px; margin-top: 10px; }
 .battle-failure button { min-width: 140px; padding: 11px; color: #171914; background: var(--signal); border: 0; border-bottom: 5px solid #725e1b; cursor: pointer; font-weight: 1000; }
 .battle-failure button:last-child { color: #dedfd7; background: #272e28; border: 1px solid #667067; border-bottom-width: 5px; }
+.battle-complete { position: absolute; z-index: 30; inset: 0; display: grid; place-items: center; align-content: center; gap: 9px; text-align: center; background: rgba(8,18,10,.9); }
+.battle-complete p { margin: 0; color: #8fd083; font-size: 10px; font-weight: 1000; letter-spacing: .22em; }
+.battle-complete h2 { margin: 0; color: #f4edcf; font-size: clamp(34px, 5vw, 64px); }
+.battle-complete > span { color: #b8c4b4; font-size: 12px; }
+.battle-rewards { display: flex; gap: 10px; margin: 9px 0; }
+.battle-rewards b { min-width: 150px; padding: 12px 17px; color: #171a12; background: var(--signal); border-bottom: 5px solid #77621d; font-family: monospace; font-size: 14px; }
+.battle-rewards b:last-child { color: #f0e8ff; background: #7d4db2; border-bottom-color: #422866; }
+.battle-rewards-claimed b { color: #c8d0c4 !important; background: #29322b !important; border: 1px solid #59655a; border-bottom: 5px solid #1a211b !important; }
+.battle-complete > button { min-width: 220px; padding: 12px 18px; color: #e5e8df; background: #29372c; border: 1px solid #82937e; border-bottom: 5px solid #172219; cursor: pointer; font-weight: 1000; }
 
 .eyebrow { margin: 0 0 15px; color: var(--signal); font-size: clamp(10px, 1.1vw, 14px); font-weight: 900; letter-spacing: .2em; text-transform: uppercase; }
 .menu-panel h1, .gameover-panel h2 { margin: 0; max-width: 760px; font-size: clamp(50px, 7.2vw, 108px); line-height: .89; letter-spacing: -.075em; font-weight: 1000; transform: skewY(-1deg); text-shadow: 4px 4px 0 rgba(0,0,0,.4); }

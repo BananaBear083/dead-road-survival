@@ -1312,7 +1312,7 @@ test("adds a farm exploration hub with sequential missions and split zombie code
   assert.match(source, /队伍/);
   assert.match(source, /章节/);
   assert.match(source, /const \[explorationCoins, setExplorationCoins\] = useState\(0\)/);
-  assert.match(source, /const \[explorationExperience\] = useState\(0\)/);
+  assert.match(source, /const \[explorationExperience, setExplorationExperience\] = useState\(0\)/);
   assert.match(source, /const \[explorationVouchers, setExplorationVouchers\] = useState\(0\)/);
   assert.match(source, /<small>点券<\/small><strong>\{explorationVouchers\}<\/strong>/);
   assert.match(source, /常规僵尸/);
@@ -1327,7 +1327,7 @@ test("adds a farm exploration hub with sequential missions and split zombie code
   assert.match(css, /@media \(max-width: 480px\)[\s\S]*\.volume-control \{ display: none; \}/);
 });
 
-test("adds a ticket-free player-aimed lottery road battle with weighted rarity reveals", async () => {
+test("adds a ticket-paid player-aimed lottery road battle with weighted rarity reveals", async () => {
   const source = await readFile(new URL("../app/DeadRoadGame.tsx", import.meta.url), "utf8");
   const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
 
@@ -1341,7 +1341,11 @@ test("adds a ticket-free player-aimed lottery road battle with weighted rarity r
   assert.match(source, /const \[recruitTickets, setRecruitTickets\] = useState\(0\)/);
   assert.match(source, /startLotteryDraw\(1\)/);
   assert.match(source, /startLotteryDraw\(10\)/);
-  assert.match(source, /测试版免券/);
+  assert.match(source, /if \(recruitTickets < count\) return/);
+  assert.match(source, /setRecruitTickets\(\(tickets\) => tickets - count\)/);
+  assert.match(source, /disabled=\{recruitTickets < 1\}/);
+  assert.match(source, /disabled=\{recruitTickets < 10\}/);
+  assert.doesNotMatch(source, /测试版免券|测试版不扣除/);
   assert.match(source, /鼠标瞄准 · 按住左键全自动射击 · MG42/);
   assert.match(source, /className=\{`lottery-zombie/);
   assert.match(source, /data-lottery-zombie=\{index\}/);
@@ -1405,8 +1409,22 @@ test("adds the exploration exchange shop, vehicle upgrades and courage auto-batt
   assert.match(source, /车辆改装/);
   assert.match(source, /className="vehicle-garage-panel/);
   assert.match(source, /className=\{`exploration-vehicle vehicle-\$\{kind\}/);
+  assert.doesNotMatch(source, /进入战斗测试/);
 
   assert.match(source, /const EXPLORATION_DEPLOY_COST = 5/);
+  assert.match(source, /const EXPLORATION_TASK1_COINS = 1536/);
+  assert.match(source, /const EXPLORATION_TASK1_EXPERIENCE = 157/);
+  assert.match(source, /const EXPLORATION_PROGRESS_KEY = "dead-road-exploration-progress"/);
+  assert.match(source, /const \[explorationExperience, setExplorationExperience\] = useState\(0\)/);
+  assert.match(source, /function freshExplorationBattle\(vehicleHp: number, taskOrder: number, rewardEligible = false\)/);
+  assert.match(source, /taskOrder === 1 \? Array\.from\(\{ length: 3 \}/);
+  assert.match(source, /kind: "normal"/);
+  assert.match(source, /setExplorationCoins\(\(coins\) => coins \+ EXPLORATION_TASK1_COINS\)/);
+  assert.match(source, /setExplorationExperience\(\(experience\) => experience \+ EXPLORATION_TASK1_EXPERIENCE\)/);
+  assert.match(source, /window\.localStorage\.setItem\(EXPLORATION_PROGRESS_KEY/);
+  assert.match(source, /onClick=\{\(\) => startExplorationBattle\(task\.order\)\}/);
+  assert.match(source, /任务一完成/);
+  assert.match(source, /首次通关奖励已领取/);
   assert.match(source, /window\.setInterval\([\s\S]*courage: battle\.courage \+ 1[\s\S]*1000/);
   assert.match(source, /nearestUnit/);
   assert.match(source, /nearestZombie/);
@@ -1424,6 +1442,9 @@ test("adds the exploration exchange shop, vehicle upgrades and courage auto-batt
   assert.match(css, /\.exploration-vehicle\.vehicle-truck/);
   assert.match(css, /\.exploration-vehicle\.vehicle-bus/);
   assert.match(css, /\.exploration-battle-panel/);
+  assert.match(css, /\.battle-farm-scenery/);
+  assert.match(css, /\.battle-road[^}]*top: 32%/);
+  assert.match(css, /\.battle-vehicle-position[^}]*bottom: 10%[^}]*width: 280px/);
   assert.match(css, /\.battle-courage/);
   assert.match(css, /\.battle-squad-bar/);
 });

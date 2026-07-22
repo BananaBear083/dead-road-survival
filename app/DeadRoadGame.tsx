@@ -34,8 +34,10 @@ type LotteryRarity = "common" | "rare" | "epic" | "legendary";
 type LotteryPhase = "idle" | "firing" | "flash" | "reveal";
 type ExplorationVehicleKind = "van" | "truck" | "bus";
 type ExplorationBattleUnit = { id: string; label: string; hp: number; maxHp: number; x: number; cooldown: number };
-type ExplorationBattleZombie = { id: number; hp: number; maxHp: number; x: number; cooldown: number; damage: number; speed: number };
+type ExplorationBattleZombie = { id: number; kind: "normal"; hp: number; maxHp: number; x: number; cooldown: number; damage: number; speed: number };
 type ExplorationBattleState = {
+  taskOrder: number;
+  rewardEligible: boolean;
   courage: number;
   elapsed: number;
   vehicleHp: number;
@@ -44,6 +46,7 @@ type ExplorationBattleState = {
   deployed: string[];
   nextZombieId: number;
   failed: boolean;
+  completed: boolean;
 };
 type WeaponKey =
   | "glock17" | "m1911" | "pkm" | "fruitknife" | "combatknife" | "crowbar"
@@ -739,9 +742,12 @@ const EXPLORATION_TASKS: ExplorationTask[] = Array.from({ length: 10 }, (_, inde
   y: EXPLORATION_TASK_POSITIONS[index][1],
 }));
 const EXPLORATION_CLEARED_KEY = "dead-road-exploration-cleared";
+const EXPLORATION_PROGRESS_KEY = "dead-road-exploration-progress";
 const EXPLORATION_VOUCHER_EXCHANGE_COST = 100;
 const EXPLORATION_DEPLOY_COST = 5;
 const EXPLORATION_MAX_VEHICLE_LEVEL = 10;
+const EXPLORATION_TASK1_COINS = 1536;
+const EXPLORATION_TASK1_EXPERIENCE = 157;
 const EXPLORATION_SQUAD = ["队员一", "队员二", "队员三", "队员四"] as const;
 
 function explorationVehicleKind(level: number): ExplorationVehicleKind {
@@ -754,16 +760,29 @@ function explorationVehicleMaxHp(level: number) { return 200 + (level - 1) * 20;
 
 function explorationVehicleUpgradeCost(level: number) { return 2000 + (level - 1) * 1000; }
 
-function freshExplorationBattle(vehicleHp: number): ExplorationBattleState {
+function freshExplorationBattle(vehicleHp: number, taskOrder: number, rewardEligible = false): ExplorationBattleState {
+  const zombies = taskOrder === 1 ? Array.from({ length: 3 }, (_, index): ExplorationBattleZombie => ({
+    id: index + 1,
+    kind: "normal",
+    hp: ZOMBIE_KIND_INFO.normal.hp,
+    maxHp: ZOMBIE_KIND_INFO.normal.hp,
+    x: 74 + index * 9,
+    cooldown: index * .25,
+    damage: 8,
+    speed: 2.4,
+  })) : [];
   return {
+    taskOrder,
+    rewardEligible,
     courage: 0,
     elapsed: 0,
     vehicleHp,
     units: [],
-    zombies: [],
+    zombies,
     deployed: [],
-    nextZombieId: 1,
+    nextZombieId: zombies.length + 1,
     failed: false,
+    completed: false,
   };
 }
 
@@ -815,6 +834,27 @@ function readExplorationClearedTasks(): number[] {
     return parsed.filter((order): order is number => Number.isInteger(order) && order >= 1 && order <= EXPLORATION_TASKS.length);
   } catch {
     return [];
+  }
+}
+
+type ExplorationProgress = { coins: number; experience: number; vouchers: number; recruitTickets: number; vehicleLevel: number };
+
+function readExplorationProgress(): ExplorationProgress {
+  const fallback = { coins: 0, experience: 0, vouchers: 0, recruitTickets: 0, vehicleLevel: 1 };
+  try {
+    if (typeof window === "undefined") return fallback;
+    const parsed = JSON.parse(window.localStorage.getItem(EXPLORATION_PROGRESS_KEY) ?? "null") as Partial<ExplorationProgress> | null;
+    if (!parsed) return fallback;
+    const nonNegative = (value: unknown) => typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+    return {
+      coins: nonNegative(parsed.coins),
+      experience: nonNegative(parsed.experience),
+      vouchers: nonNegative(parsed.vouchers),
+      recruitTickets: nonNegative(parsed.recruitTickets),
+      vehicleLevel: Math.max(1, Math.min(EXPLORATION_MAX_VEHICLE_LEVEL, nonNegative(parsed.vehicleLevel) || 1)),
+    };
+  } catch {
+    return fallback;
   }
 }
 
@@ -8216,20 +8256,22 @@ export function DeadRoadGame() {
   const lastFrameRef = useRef(0);
   const lotteryFireTimerRef = useRef<number | null>(null);
   const lotteryPointerRef = useRef({ x: 0, y: 0 });
+  const rewardedExplorationTasksRef = useRef(new Set<number>());
+  const explorationProgressLoadedRef = useRef(false);
   // 动态世界宽度：画布位图宽度（世界单位）跟随舞台实际宽高比；worldWRef 供各回调免闭包读取
   const [canvasW, setCanvasW] = useState(DEFAULT_WORLD_W);
   const worldWRef = useRef(DEFAULT_WORLD_W);
   const [screen, setScreen] = useState<Screen>("menu");
   const [majorMode, setMajorMode] = useState<MajorMode>("classic");
   const [explorationCoins, setExplorationCoins] = useState(0);
-  const [explorationExperience] = useState(0);
+  const [explorationExperience, setExplorationExperience] = useState(0);
   const [explorationVouchers, setExplorationVouchers] = useState(0);
   const [explorationNotice, setExplorationNotice] = useState<string | null>(null);
   const [explorationExchangeNotice, setExplorationExchangeNotice] = useState<string | null>(null);
   const [explorationClearedTasks, setExplorationClearedTasks] = useState<number[]>([]);
   const [recruitTickets, setRecruitTickets] = useState(0);
   const [explorationVehicleLevel, setExplorationVehicleLevel] = useState(1);
-  const [explorationBattle, setExplorationBattle] = useState<ExplorationBattleState>(() => freshExplorationBattle(200));
+  const [explorationBattle, setExplorationBattle] = useState<ExplorationBattleState>(() => freshExplorationBattle(200, 1));
   const [lotteryPhase, setLotteryPhase] = useState<LotteryPhase>("idle");
   const [lotteryDead, setLotteryDead] = useState<number[]>([]);
   const [lotteryLastHit, setLotteryLastHit] = useState<number | null>(null);
@@ -8243,6 +8285,30 @@ export function DeadRoadGame() {
     queueMicrotask(() => { if (active) setExplorationClearedTasks(readExplorationClearedTasks()); });
     return () => { active = false; };
   }, []);
+  useEffect(() => {
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      const progress = readExplorationProgress();
+      setExplorationCoins(progress.coins);
+      setExplorationExperience(progress.experience);
+      setExplorationVouchers(progress.vouchers);
+      setRecruitTickets(progress.recruitTickets);
+      setExplorationVehicleLevel(progress.vehicleLevel);
+      explorationProgressLoadedRef.current = true;
+    });
+    return () => { active = false; };
+  }, []);
+  useEffect(() => {
+    if (!explorationProgressLoadedRef.current) return;
+    window.localStorage.setItem(EXPLORATION_PROGRESS_KEY, JSON.stringify({
+      coins: explorationCoins,
+      experience: explorationExperience,
+      vouchers: explorationVouchers,
+      recruitTickets,
+      vehicleLevel: explorationVehicleLevel,
+    } satisfies ExplorationProgress));
+  }, [explorationCoins, explorationExperience, explorationVehicleLevel, explorationVouchers, recruitTickets]);
   const [shopTab, setShopTab] = useState<ShopTab>("weapons");
   // 靶场"僵尸生成"页签：各品种配置数量（0~30），纯 UI state，不进游戏快照
   const [spawnCounts, setSpawnCounts] = useState<Record<ZombieKind, number>>({
@@ -8363,11 +8429,15 @@ export function DeadRoadGame() {
     setExplorationVehicleLevel((level) => Math.min(EXPLORATION_MAX_VEHICLE_LEVEL, level + 1));
   }, [explorationCoins, explorationVehicleLevel]);
 
-  const startExplorationBattle = useCallback(() => {
+  const startExplorationBattle = useCallback((taskOrder: number) => {
     sound.uiClick();
-    setExplorationBattle(freshExplorationBattle(explorationVehicleMaxHp(explorationVehicleLevel)));
+    setExplorationBattle(freshExplorationBattle(
+      explorationVehicleMaxHp(explorationVehicleLevel),
+      taskOrder,
+      !explorationClearedTasks.includes(taskOrder),
+    ));
     changeScreen("explorationBattle");
-  }, [changeScreen, explorationVehicleLevel]);
+  }, [changeScreen, explorationClearedTasks, explorationVehicleLevel]);
 
   const deployExplorationUnit = useCallback((squadIndex: number) => {
     const id = `squad-${squadIndex}`;
@@ -8384,15 +8454,15 @@ export function DeadRoadGame() {
   }, []);
 
   useEffect(() => {
-    if (screen !== "explorationBattle" || explorationBattle.failed) return;
+    if (screen !== "explorationBattle" || explorationBattle.failed || explorationBattle.completed) return;
     const courageTimer = window.setInterval(() => {
       setExplorationBattle((battle) => battle.failed ? battle : { ...battle, courage: battle.courage + 1, elapsed: battle.elapsed + 1 });
     }, 1000);
     return () => window.clearInterval(courageTimer);
-  }, [explorationBattle.failed, screen]);
+  }, [explorationBattle.completed, explorationBattle.failed, screen]);
 
   useEffect(() => {
-    if (screen !== "explorationBattle" || explorationBattle.failed) return;
+    if (screen !== "explorationBattle" || explorationBattle.failed || explorationBattle.completed || explorationBattle.taskOrder === 1) return;
     const spawnTimer = window.setInterval(() => {
       setExplorationBattle((battle) => {
         if (battle.failed) return battle;
@@ -8400,6 +8470,7 @@ export function DeadRoadGame() {
         const count = Math.min(4, 1 + Math.floor(battle.elapsed / 20));
         const spawned = Array.from({ length: count }, (_, index): ExplorationBattleZombie => ({
           id: battle.nextZombieId + index,
+          kind: "normal",
           hp: 55 + tier * 18,
           maxHp: 55 + tier * 18,
           x: 94 + index * 2,
@@ -8411,10 +8482,10 @@ export function DeadRoadGame() {
       });
     }, 2500);
     return () => window.clearInterval(spawnTimer);
-  }, [explorationBattle.failed, screen]);
+  }, [explorationBattle.completed, explorationBattle.failed, explorationBattle.taskOrder, screen]);
 
   useEffect(() => {
-    if (screen !== "explorationBattle" || explorationBattle.failed) return;
+    if (screen !== "explorationBattle" || explorationBattle.failed || explorationBattle.completed) return;
     const combatTimer = window.setInterval(() => {
       setExplorationBattle((battle) => {
         if (battle.failed) return battle;
@@ -8436,7 +8507,9 @@ export function DeadRoadGame() {
             unit.cooldown = .75;
           }
         });
+        const hadZombies = zombies.length > 0;
         zombies = zombies.filter((zombie) => zombie.hp > 0);
+        const completed = battle.taskOrder === 1 && hadZombies && zombies.length === 0;
 
         let vehicleHp = battle.vehicleHp;
         zombies.forEach((zombie) => {
@@ -8461,11 +8534,24 @@ export function DeadRoadGame() {
         });
         units = units.filter((unit) => unit.hp > 0);
         vehicleHp = Math.max(0, vehicleHp);
-        return { ...battle, units, zombies, vehicleHp, failed: vehicleHp <= 0 };
+        return { ...battle, units, zombies, vehicleHp, completed, failed: !completed && vehicleHp <= 0 };
       });
     }, 250);
     return () => window.clearInterval(combatTimer);
-  }, [explorationBattle.failed, screen]);
+  }, [explorationBattle.completed, explorationBattle.failed, screen]);
+
+  useEffect(() => {
+    const taskOrder = explorationBattle.taskOrder;
+    if (screen !== "explorationBattle" || !explorationBattle.completed || !explorationBattle.rewardEligible || taskOrder !== 1) return;
+    if (explorationClearedTasks.includes(taskOrder) || rewardedExplorationTasksRef.current.has(taskOrder)) return;
+    rewardedExplorationTasksRef.current.add(taskOrder);
+    const nextCleared = [...explorationClearedTasks, taskOrder].sort((a, b) => a - b);
+    setExplorationClearedTasks(nextCleared);
+    window.localStorage.setItem(EXPLORATION_CLEARED_KEY, JSON.stringify(nextCleared));
+    setExplorationCoins((coins) => coins + EXPLORATION_TASK1_COINS);
+    setExplorationExperience((experience) => experience + EXPLORATION_TASK1_EXPERIENCE);
+    sound.purchase();
+  }, [explorationBattle.completed, explorationBattle.rewardEligible, explorationBattle.taskOrder, explorationClearedTasks, screen]);
 
   const resetLotteryBattle = useCallback(() => {
     setLotteryDead([]);
@@ -8489,12 +8575,14 @@ export function DeadRoadGame() {
   }, [changeScreen, lotteryPhase]);
 
   const startLotteryDraw = useCallback((count: 1 | 10) => {
+    if (recruitTickets < count) return;
     sound.uiClick();
+    setRecruitTickets((tickets) => tickets - count);
     setLotteryDrawCount(count);
     setLotteryRewards(Array.from({ length: count }, () => rollLotteryRarity()));
     resetLotteryBattle();
     setLotteryPhase("firing");
-  }, [resetLotteryBattle]);
+  }, [recruitTickets, resetLotteryBattle]);
 
   const updateLotteryAim = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     if (lotteryPhase !== "firing") return;
@@ -12705,7 +12793,7 @@ export function DeadRoadGame() {
                     style={{ "--task-x": `${task.x}%`, "--task-y": `${task.y}%` } as React.CSSProperties}
                     disabled={!unlocked}
                     aria-label={`${task.label}${unlocked ? cleared ? "，已通关，可重新进入" : "，可进入" : "，通关上一任务后解锁"}`}
-                    onClick={startExplorationBattle}
+                    onClick={() => startExplorationBattle(task.order)}
                   >
                     <span>{String(task.order).padStart(2, "0")}</span>
                     <strong>{task.label}</strong>
@@ -12784,7 +12872,6 @@ export function DeadRoadGame() {
                 {explorationVehicleLevel >= EXPLORATION_MAX_VEHICLE_LEVEL ? "已满级" : `升级 · ${currentExplorationVehicleUpgradeCost} 金币`}
               </button>
               {explorationVehicleLevel < EXPLORATION_MAX_VEHICLE_LEVEL && explorationCoins < currentExplorationVehicleUpgradeCost && <small>金币不足 · 当前 {explorationCoins}</small>}
-              <button type="button" className="garage-test-battle" onClick={startExplorationBattle}>进入战斗测试 →</button>
             </aside>
             <div className="garage-milestones" aria-label="车辆外观里程碑">
               <span className={explorationVehicleLevel >= 1 ? "active" : ""}><b>LV.1</b>白色面包车</span>
@@ -12796,10 +12883,15 @@ export function DeadRoadGame() {
 
         {screen === "explorationBattle" && (
           <div className="exploration-battle-panel overlay-panel">
-            <div className="battle-skyline" aria-hidden="true"><span /><span /><span /></div>
+            <div className="battle-farm-scenery" aria-hidden="true">
+              <span className="battle-farm-hills" />
+              <span className="battle-farm-barn"><i /><b /></span>
+              <span className="battle-farm-silo"><i /></span>
+              <span className="battle-farm-fence"><i /><i /><i /><i /></span>
+            </div>
             <div className="battle-road" aria-hidden="true"><i /><i /><i /></div>
             <button type="button" className="battle-exit" onClick={closeExplorationSubscreen}>撤离战斗</button>
-            <div className="battle-observer-label">第三人称旁观模式 · 自动作战</div>
+            <div className="battle-observer-label">任务{EXPLORATION_TASK_NAMES[explorationBattle.taskOrder - 1]?.replace("任务", "")} · 农场道路 · 第三人称自动作战</div>
             <div className="battle-top-hud">
               <div className="battle-courage"><small>勇气值</small><strong>{explorationBattle.courage}</strong><span>每秒 +1</span></div>
               <div className="battle-wave"><small>尸潮强度</small><strong>第 {explorationBattleWave} 阶段</strong><span>{explorationBattle.elapsed}s</span></div>
@@ -12840,7 +12932,21 @@ export function DeadRoadGame() {
             {explorationBattle.failed && (
               <div className="battle-failure" role="dialog" aria-modal="true">
                 <p>防线崩溃</p><h2>任务失败 · 车辆已被击毁</h2><span>升级车辆或调整队员部署时机后再次尝试。</span>
-                <div><button type="button" onClick={startExplorationBattle}>重新开始</button><button type="button" onClick={closeExplorationSubscreen}>返回农田</button></div>
+                <div><button type="button" onClick={() => startExplorationBattle(explorationBattle.taskOrder)}>重新开始</button><button type="button" onClick={closeExplorationSubscreen}>返回农田</button></div>
+              </div>
+            )}
+
+            {explorationBattle.completed && (
+              <div className="battle-complete" role="dialog" aria-modal="true">
+                <p>农场道路已肃清</p>
+                <h2>任务一完成</h2>
+                <span>三只普通僵尸已全部消灭</span>
+                {explorationBattle.rewardEligible ? (
+                  <div className="battle-rewards"><b>+{EXPLORATION_TASK1_COINS} 金币</b><b>+{EXPLORATION_TASK1_EXPERIENCE} 经验点数</b></div>
+                ) : (
+                  <div className="battle-rewards battle-rewards-claimed"><b>首次通关奖励已领取</b></div>
+                )}
+                <button type="button" onClick={closeExplorationSubscreen}>{explorationBattle.rewardEligible ? "领取并返回农田" : "返回农田"}</button>
               </div>
             )}
           </div>
@@ -12903,7 +13009,7 @@ export function DeadRoadGame() {
                     <small>清除尸群，让公路尽头的补给箱现身</small>
                   </div>
                   <div className="lottery-ticket-wallet">
-                    <i>券</i><small>招募券</small><strong>{recruitTickets}</strong><em>测试版免券</em>
+                    <i>券</i><small>招募券</small><strong>{recruitTickets}</strong>
                   </div>
                 </div>
 
@@ -12917,8 +13023,8 @@ export function DeadRoadGame() {
 
             {lotteryPhase === "idle" && (
               <div className="lottery-interface lottery-actions">
-                <button type="button" onClick={() => startLotteryDraw(1)}><small>消耗 1 张招募券</small><strong>抽一次</strong><em>测试版不扣除</em></button>
-                <button type="button" className="lottery-ten" onClick={() => startLotteryDraw(10)}><small>消耗 10 张招募券</small><strong>抽十次</strong><em>测试版不扣除</em></button>
+                <button type="button" onClick={() => startLotteryDraw(1)} disabled={recruitTickets < 1}><small>消耗 1 张招募券</small><strong>抽一次</strong></button>
+                <button type="button" className="lottery-ten" onClick={() => startLotteryDraw(10)} disabled={recruitTickets < 10}><small>消耗 10 张招募券</small><strong>抽十次</strong></button>
               </div>
             )}
 
