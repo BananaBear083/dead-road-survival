@@ -31,7 +31,7 @@ const KICK_KNOCKBACK_WORLD_X = 82;
 const KICK_KNOCKBACK_WORLD_Y = 52;
 
 type MajorMode = "classic" | "exploration";
-type Screen = "menu" | "exploration" | "playing" | "shop" | "loadout" | "gameover" | "codex" | "levels" | "levelComplete" | "lottery" | "explorationShop" | "vehicleGarage" | "explorationTeam" | "explorationTasks" | "explorationBattle";
+type Screen = "menu" | "exploration" | "playing" | "shop" | "loadout" | "gameover" | "codex" | "levels" | "levelComplete" | "lottery" | "explorationShop" | "vehicleGarage" | "explorationTeam" | "explorationTasks" | "explorationBattle" | "explorationRecruit";
 type GameMode = "survival" | "range" | "level";
 type ShopTab = "weapons" | "armor" | "supplies" | "items" | "partners" | "zombies";
 type CodexCategory = "regular" | "special";
@@ -39,6 +39,7 @@ type LotteryRarity = "common" | "rare" | "epic" | "legendary";
 type LotteryPhase = "idle" | "firing" | "flash" | "reveal";
 type ExplorationTeamTab = "personnel" | "consumables";
 type ExplorationTaskSystemTab = "daily" | "achievements";
+type ExplorationRecruitPhase = "approach" | "dialog" | "reward";
 type ExplorationConsumableKey = "armySupport" | "armoredSupport" | "airSupport";
 type ExplorationConsumableInventory = Record<ExplorationConsumableKey, number>;
 type ExplorationMemberRarity = "common" | "rare" | "epic" | "legendary";
@@ -782,6 +783,13 @@ const LEVEL8_ID = "level-clear-highway";
 const LEVEL8_TITLE = "清理高速";
 
 type ExplorationTask = { order: number; label: string; x: number; y: number };
+type ExplorationBattleTaskConfig = {
+  openingZombieCount: number;
+  finite: boolean;
+  reward: "resources" | "police" | "none";
+  completionEyebrow: string;
+  completionSummary: string;
+};
 const EXPLORATION_TASK_NAMES = ["任务一", "任务二", "任务三", "任务四", "任务五", "任务六", "任务七", "任务八", "任务九", "任务十"];
 const EXPLORATION_TASK_POSITIONS = [
   [22, 76], [33, 64], [44, 75], [54, 57], [65, 68],
@@ -804,6 +812,12 @@ const EXPLORATION_STARTER_PACK_COINS = 3000;
 const EXPLORATION_MAX_VEHICLE_LEVEL = 15;
 const EXPLORATION_TASK1_COINS = 1536;
 const EXPLORATION_TASK1_EXPERIENCE = 157;
+const EXPLORATION_TASK2_ZOMBIE_COUNT = 5;
+const EXPLORATION_BATTLE_TASK_CONFIGS: Record<number, ExplorationBattleTaskConfig> = {
+  1: { openingZombieCount: 3, finite: true, reward: "resources", completionEyebrow: "农场道路已肃清", completionSummary: "三只普通僵尸已全部消灭" },
+  2: { openingZombieCount: EXPLORATION_TASK2_ZOMBIE_COUNT, finite: true, reward: "police", completionEyebrow: "公路巡逻队已肃清", completionSummary: `${EXPLORATION_TASK2_ZOMBIE_COUNT} 只普通僵尸已全部消灭` },
+};
+const DEFAULT_EXPLORATION_BATTLE_TASK_CONFIG: ExplorationBattleTaskConfig = { openingZombieCount: 0, finite: false, reward: "none", completionEyebrow: "道路已肃清", completionSummary: "所有僵尸已全部消灭" };
 const EXPLORATION_TEAM_SIZE = 6;
 const EXPLORATION_DAILY_ACTIVITY_REWARD_TARGET = 300;
 const EXPLORATION_DAILY_ACTIVITY_REWARD_VOUCHERS = 100;
@@ -818,6 +832,10 @@ const EXPLORATION_CONSUMABLES: Record<ExplorationConsumableKey, { name: string; 
   armoredSupport: { name: "装甲车支援", price: 700, description: "第八关同型重机枪装甲车扫射 10 秒" },
   airSupport: { name: "空中支援", price: 1000, description: "向僵尸最密集的两处投下大威力航空炸弹" },
 };
+
+function explorationBattleTaskConfig(taskOrder: number) {
+  return EXPLORATION_BATTLE_TASK_CONFIGS[taskOrder] ?? DEFAULT_EXPLORATION_BATTLE_TASK_CONFIG;
+}
 
 function explorationAutomaticWeaponPhase(weaponKey: WeaponKey, startedAt: number, now: number) {
   const weapon = WEAPONS[weaponKey];
@@ -933,6 +951,23 @@ const EXPLORATION_MEMBERS: ExplorationMemberDefinition[] = [
     speed: "慢",
     speedFactor: .82,
     courageCost: 15,
+    purchaseCost: 0,
+    levelSkills: [{ level: 5, name: "无" }, { level: 10, name: "无" }, { level: 15, name: "无" }],
+  },
+  {
+    id: "police",
+    name: "警察",
+    weapon: "glock17",
+    rarity: "rare",
+    trait: "无",
+    faction: "警察",
+    hp: 70,
+    damage: weaponDamage("glock17"),
+    hpPerLevel: 3,
+    damagePerLevel: 2,
+    speed: "中等",
+    speedFactor: 1,
+    courageCost: 17,
     purchaseCost: 0,
     levelSkills: [{ level: 5, name: "无" }, { level: 10, name: "无" }, { level: 15, name: "无" }],
   },
@@ -1066,7 +1101,8 @@ function moveExplorationEntityToward(entity: { x: number; y: number }, target: {
 }
 
 function freshExplorationBattle(vehicleHp: number, taskOrder: number, rewardEligible = false): ExplorationBattleState {
-  const zombies = taskOrder === 1 ? Array.from({ length: 3 }, (_, index): ExplorationBattleZombie => {
+  const taskConfig = explorationBattleTaskConfig(taskOrder);
+  const zombies = Array.from({ length: taskConfig.openingZombieCount }, (_, index): ExplorationBattleZombie => {
     const point = explorationBattleSpawnPoint(index + 1);
     return {
       id: index + 1,
@@ -1084,7 +1120,7 @@ function freshExplorationBattle(vehicleHp: number, taskOrder: number, rewardElig
       legDamage: 0,
       knockedDownRemaining: 0,
     };
-  }) : [];
+  });
   return {
     taskOrder,
     rewardEligible,
@@ -8737,7 +8773,7 @@ function ExplorationThrownKnife({ fromX, fromY, toX, toY }: { fromX: number; fro
 }
 
 /** 生存模式便装人物与探索队员共用的颅形、五官、头发和帽饰细节。 */
-function drawSurvivalHumanHeadAndFace(ctx: CanvasRenderingContext2D, facing: number, headwear: "cap" | "farmerHat" | "combatHelmet" = "cap") {
+function drawSurvivalHumanHeadAndFace(ctx: CanvasRenderingContext2D, facing: number, headwear: "cap" | "farmerHat" | "policeCap" | "combatHelmet" = "cap") {
   ctx.fillStyle = "#c58e67";
   ctx.beginPath();
   ctx.moveTo(-5.5, -102); ctx.lineTo(5.5, -102); ctx.lineTo(4, -112); ctx.lineTo(-4, -112);
@@ -8776,6 +8812,15 @@ function drawSurvivalHumanHeadAndFace(ctx: CanvasRenderingContext2D, facing: num
     ctx.beginPath(); ctx.ellipse(0, -126, 10.5, 6.5, 0, Math.PI, 0); ctx.fill();
     ctx.strokeStyle = "rgba(74,55,23,.55)"; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(-10, -124); ctx.lineTo(10, -124); ctx.stroke();
+  } else if (headwear === "policeCap") {
+    ctx.fillStyle = "#182a42";
+    ctx.beginPath();
+    ctx.moveTo(facing * -10, -119); ctx.quadraticCurveTo(facing * -8, -128, 0, -130);
+    ctx.quadraticCurveTo(facing * 8, -128, facing * 10, -119); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#101c2b";
+    ctx.beginPath(); ctx.moveTo(facing * -1, -121); ctx.lineTo(facing * 22, -118); ctx.lineTo(facing * 3, -117); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#9fb8cf";
+    ctx.beginPath(); ctx.moveTo(-2.5, -125.5); ctx.lineTo(0, -128); ctx.lineTo(2.5, -125.5); ctx.lineTo(0, -121.5); ctx.closePath(); ctx.fill();
   } else {
     ctx.fillStyle = "#4a563b";
     ctx.beginPath();
@@ -8818,7 +8863,12 @@ function ExplorationMemberPreview({ member, motion = "standing", reloadProgress 
       const facing = 1;
       const scale = battleScale ? 2.8 : 1.9;
       const farmer = member.id === "farmer";
+      const police = member.faction === "警察";
       const soldier = member.faction === "军队";
+      const rearUniform = farmer ? "#5b513e" : police ? "#172b43" : soldier ? "#252d29" : "#313936";
+      const frontUniform = farmer ? "#665b44" : police ? "#1d3653" : soldier ? "#2c3530" : "#39423e";
+      const torsoUniform = farmer ? "#777045" : police ? "#254867" : soldier ? "#384537" : "#4e5b47";
+      const vestUniform = farmer ? "#5c5638" : police ? "#132a40" : soldier ? "#1f2a22" : "#3c4738";
       const gaitCycle = (now / 230) % 1;
       const moving = renderMotion === "moving";
       const kickProgress = Math.min(1, Math.max(0, (now - motionStartedAt) / KICK_ANIMATION_MS));
@@ -8831,16 +8881,20 @@ function ExplorationMemberPreview({ member, motion = "standing", reloadProgress 
       ctx.beginPath(); ctx.ellipse(0, 5, 28, 8, 0, 0, Math.PI * 2); ctx.fill();
       const rearLeg = renderMotion === "kicking" ? kickLegPose(kickProgress, facing) : moving ? gaitLegPose((gaitCycle + .5) % 1, facing, -5) : standingLegPose(facing, -5);
       const frontLeg = moving ? gaitLegPose(gaitCycle, facing, 5) : standingLegPose(facing, 5);
-      drawLimb(ctx, rearLeg, 7.5, farmer ? "#5b513e" : soldier ? "#252d29" : "#313936", "#151917");
-      drawLimb(ctx, frontLeg, 7.5, farmer ? "#665b44" : soldier ? "#2c3530" : "#39423e", "#171c19");
+      drawLimb(ctx, rearLeg, 7.5, rearUniform, "#151917");
+      drawLimb(ctx, frontLeg, 7.5, frontUniform, "#171c19");
       drawFoot(ctx, rearLeg[2], facing, 14, "#161a17", renderMotion === "kicking" ? 1 : moving ? gaitFootPitch((gaitCycle + .5) % 1) : 0);
       drawFoot(ctx, frontLeg[2], facing, 14, "#171b18", moving ? gaitFootPitch(gaitCycle) : 0);
-      ctx.fillStyle = farmer ? "#777045" : soldier ? "#384537" : "#4e5b47";
+      ctx.fillStyle = torsoUniform;
       ctx.beginPath();
       ctx.moveTo(-15, -102); ctx.lineTo(15, -102); ctx.lineTo(13, -66); ctx.lineTo(-13, -66); ctx.closePath(); ctx.fill();
-      ctx.fillStyle = farmer ? "#5c5638" : soldier ? "#1f2a22" : "#3c4738";
+      ctx.fillStyle = vestUniform;
       roundedRect(ctx, -11, -91, 22, 23, 3); ctx.fill();
-      drawSurvivalHumanHeadAndFace(ctx, facing, farmer ? "farmerHat" : soldier ? "combatHelmet" : "cap");
+      if (police) {
+        ctx.fillStyle = "#b7d0e2";
+        ctx.beginPath(); ctx.arc(0, -84, 3.1, 0, Math.PI * 2); ctx.fill();
+      }
+      drawSurvivalHumanHeadAndFace(ctx, facing, farmer ? "farmerHat" : police ? "policeCap" : soldier ? "combatHelmet" : "cap");
 
       const melee = MELEE_WEAPONS.has(member.weapon);
       const recoil = !melee && renderMotion === "attacking" ? Math.sin(Math.min(1, attackPhase * 2) * Math.PI) : 0;
@@ -8864,8 +8918,8 @@ function ExplorationMemberPreview({ member, motion = "standing", reloadProgress 
       const elbowDown = (shoulder: [number, number], hand: [number, number]): [number, number] => [(shoulder[0] + hand[0]) / 2, (shoulder[1] + hand[1]) / 2 + 15];
       const rightArm = solveTwoBoneArm(rearShoulder, rightHand, elbowDown(rearShoulder, rightHand));
       const leadArm = solveTwoBoneArm(leadShoulder, leadHand, elbowDown(leadShoulder, leadHand));
-      drawLimb(ctx, rightArm, 6.4, farmer ? "#777045" : soldier ? "#384537" : "#4e5b47", "#c79068");
-      drawLimb(ctx, leadArm, 6.4, farmer ? "#777045" : soldier ? "#384537" : "#4e5b47", "#c79068");
+      drawLimb(ctx, rightArm, 6.4, torsoUniform, "#c79068");
+      drawLimb(ctx, leadArm, 6.4, torsoUniform, "#c79068");
       drawHand(ctx, rightArm[2], rightArm[1], 6.5, "#c79068");
       drawHand(ctx, leadArm[2], leadArm[1], 6.5, "#c79068");
       ctx.save();
@@ -9068,6 +9122,7 @@ export function DeadRoadGame() {
   const [explorationMemberLevels, setExplorationMemberLevels] = useState<Record<string, number>>({ civilian: 1, farmer: 1 });
   const [starterPackPurchased, setStarterPackPurchased] = useState(false);
   const [explorationBattle, setExplorationBattle] = useState<ExplorationBattleState>(() => freshExplorationBattle(200, 1));
+  const [explorationRecruitPhase, setExplorationRecruitPhase] = useState<ExplorationRecruitPhase>("approach");
   const [explorationSupportClock, setExplorationSupportClock] = useState(0);
   const [lotteryPhase, setLotteryPhase] = useState<LotteryPhase>("idle");
   const [lotteryZombieDamage, setLotteryZombieDamage] = useState<ExplorationZombieDamageState[]>(freshLotteryZombieDamage);
@@ -9473,7 +9528,7 @@ export function DeadRoadGame() {
   }, [explorationBattle.completed, explorationBattle.failed, screen]);
 
   useEffect(() => {
-    if (screen !== "explorationBattle" || explorationBattle.failed || explorationBattle.completed || explorationBattle.taskOrder === 1) return;
+    if (screen !== "explorationBattle" || explorationBattle.failed || explorationBattle.completed || explorationBattleTaskConfig(explorationBattle.taskOrder).finite) return;
     const spawnTimer = window.setInterval(() => {
       setExplorationBattle((battle) => {
         if (battle.failed) return battle;
@@ -9693,7 +9748,7 @@ export function DeadRoadGame() {
         const hadZombies = zombies.length > 0;
         const killedThisTick = zombies.filter((zombie) => zombie.hp <= 0).length;
         zombies = zombies.filter((zombie) => zombie.hp > 0);
-        const completed = battle.taskOrder === 1 && hadZombies && zombies.length === 0;
+        const completed = explorationBattleTaskConfig(battle.taskOrder).finite && hadZombies && zombies.length === 0;
 
         let vehicleHp = battle.vehicleHp;
         zombies.forEach((zombie) => {
@@ -9776,17 +9831,61 @@ export function DeadRoadGame() {
 
   useEffect(() => {
     const taskOrder = explorationBattle.taskOrder;
-    if (screen !== "explorationBattle" || !explorationBattle.completed || !explorationBattle.rewardEligible || taskOrder !== 1) return;
+    const taskConfig = explorationBattleTaskConfig(taskOrder);
+    if (screen !== "explorationBattle" || !explorationBattle.completed || !explorationBattle.rewardEligible || taskConfig.reward === "none") return;
     if (explorationClearedTasks.includes(taskOrder) || rewardedExplorationTasksRef.current.has(taskOrder)) return;
     rewardedExplorationTasksRef.current.add(taskOrder);
     const nextCleared = [...explorationClearedTasks, taskOrder].sort((a, b) => a - b);
-    setExplorationClearedTasks(nextCleared);
     window.localStorage.setItem(EXPLORATION_CLEARED_KEY, JSON.stringify(nextCleared));
-    setExplorationCoins((coins) => coins + EXPLORATION_TASK1_COINS);
-    setExplorationExperience((experience) => experience + EXPLORATION_TASK1_EXPERIENCE);
-    recordExplorationDailyEarnings(EXPLORATION_TASK1_COINS, EXPLORATION_TASK1_EXPERIENCE);
-    sound.purchase();
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      setExplorationClearedTasks(nextCleared);
+      if (taskConfig.reward === "resources") {
+        setExplorationCoins((coins) => coins + EXPLORATION_TASK1_COINS);
+        setExplorationExperience((experience) => experience + EXPLORATION_TASK1_EXPERIENCE);
+        recordExplorationDailyEarnings(EXPLORATION_TASK1_COINS, EXPLORATION_TASK1_EXPERIENCE);
+        sound.purchase();
+        return;
+      }
+      if (taskConfig.reward === "police") {
+        // 首次通关任务二即永久获得警察；动画只负责按剧情顺序揭晓，避免中途刷新丢失奖励。
+        setOwnedMemberIds((owned) => owned.includes("police") ? owned : [...owned, "police"]);
+        setRecruitedMemberIds((recruited) => recruited.filter((id) => id !== "police"));
+        setExplorationMemberLevels((levels) => ({ ...levels, police: levels.police ?? 1 }));
+        setSelectedExplorationMemberId("police");
+      }
+    });
+    return () => { active = false; };
   }, [explorationBattle.completed, explorationBattle.rewardEligible, explorationBattle.taskOrder, explorationClearedTasks, recordExplorationDailyEarnings, screen]);
+
+  useEffect(() => {
+    const taskConfig = explorationBattleTaskConfig(explorationBattle.taskOrder);
+    if (screen !== "explorationBattle" || !explorationBattle.completed || taskConfig.reward !== "police") return;
+    // 招募剧情在每次通关任务二后都可重看；人物奖励仍由首次通关逻辑去重。
+    const timer = window.setTimeout(() => {
+      setExplorationRecruitPhase("approach");
+      changeScreen("explorationRecruit");
+    }, 240);
+    return () => window.clearTimeout(timer);
+  }, [changeScreen, explorationBattle.completed, explorationBattle.taskOrder, screen]);
+
+  useEffect(() => {
+    if (screen !== "explorationRecruit" || explorationRecruitPhase !== "approach") return;
+    const timer = window.setTimeout(() => setExplorationRecruitPhase("dialog"), 2200);
+    return () => window.clearTimeout(timer);
+  }, [explorationRecruitPhase, screen]);
+
+  const revealPoliceRecruitReward = useCallback(() => {
+    setExplorationRecruitPhase("reward");
+    sound.purchase();
+  }, []);
+
+  const finishPoliceRecruitEvent = useCallback(() => {
+    sound.uiClick();
+    setExplorationRecruitPhase("approach");
+    changeScreen("exploration");
+  }, [changeScreen]);
 
   const resetLotteryBattle = useCallback(() => {
     reportedLotteryKillsRef.current = 0;
@@ -13735,6 +13834,7 @@ export function DeadRoadGame() {
   const currentExplorationVehicleKind = explorationVehicleKind(explorationVehicleLevel);
   const currentExplorationVehicleMaxHp = explorationVehicleMaxHp(explorationVehicleLevel);
   const currentExplorationVehicleUpgradeCost = explorationVehicleUpgradeCost(explorationVehicleLevel);
+  const currentExplorationBattleTaskConfig = explorationBattleTaskConfig(explorationBattle.taskOrder);
   const explorationBattleWave = 1 + Math.floor(explorationBattle.elapsed / 20);
   const armySupportActive = explorationBattle.supportActiveUntil.armySupport > explorationSupportClock;
   const armySupportRemaining = explorationBattle.supportActiveUntil.armySupport - explorationSupportClock;
@@ -13750,6 +13850,7 @@ export function DeadRoadGame() {
   const armoredSupportFiring = armoredSupportReady && !armoredSupportReloading && explorationBattle.armoredSupportAmmo > 0 && explorationBattleHasLivingZombies;
   const selectedExplorationMember = EXPLORATION_MEMBERS.find((member) => member.id === selectedExplorationMemberId) ?? EXPLORATION_MEMBERS[0];
   const starterPackMember = EXPLORATION_MEMBERS.find((member) => member.id === "combatSoldier") ?? EXPLORATION_MEMBERS[0];
+  const policeRecruitMember = EXPLORATION_MEMBERS.find((member) => member.id === "police") ?? EXPLORATION_MEMBERS[0];
   const selectedExplorationMemberLevel = explorationMemberLevels[selectedExplorationMember.id] ?? 1;
   const selectedExplorationMemberStats = explorationMemberStatsAtLevel(selectedExplorationMember, selectedExplorationMemberLevel);
   const selectedExplorationMemberMaxLevel = Math.min(15, explorationVehicleLevel);
@@ -14090,6 +14191,39 @@ export function DeadRoadGame() {
               <div className="exploration-notice" role="status">
                 <span>{explorationNotice}</span>
                 <button type="button" onClick={() => { sound.uiClick(); setExplorationNotice(null); }} aria-label="关闭提示">×</button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {screen === "explorationRecruit" && (
+          <div className={`exploration-recruit-panel recruit-${explorationRecruitPhase} overlay-panel`} aria-label="任务二通关招募动画">
+            <div className="recruit-highway-scenery" aria-hidden="true">
+              <span className="recruit-skyline" /><span className="recruit-guardrail" /><span className="recruit-road-mark road-mark-a" /><span className="recruit-road-mark road-mark-b" /><span className="recruit-road-mark road-mark-c" />
+            </div>
+            <div className="recruit-cinematic-heading"><small>任务二 · 通关事件</small><strong>公路上的幸存者</strong></div>
+            <div className="recruit-civilian" aria-label="平民走向落单警察">
+              <ExplorationMemberPreview member={EXPLORATION_MEMBERS[0]} motion={explorationRecruitPhase === "approach" ? "moving" : "standing"} />
+            </div>
+            <div className="recruit-police" aria-label="落单警察">
+              <ExplorationMemberPreview member={policeRecruitMember} motion="standing" />
+            </div>
+
+            {explorationRecruitPhase === "dialog" && (
+              <div className="recruit-dialog" role="dialog" aria-modal="true">
+                <small>平民</small><p>你可以加入我们</p>
+                <button type="button" onClick={revealPoliceRecruitReward}>继续</button>
+              </div>
+            )}
+
+            {explorationRecruitPhase === "reward" && (
+              <div className="recruit-reward" role="dialog" aria-modal="true">
+                <p>新成员加入</p><h2>获得稀有人员 · 警察</h2>
+                <div className="recruit-reward-card rarity-rare">
+                  <ExplorationMemberPreview member={policeRecruitMember} />
+                  <div><strong>警察</strong><span>稀有 · 警察</span><small>Glock 17 · 70 HP · 17 勇气</small></div>
+                </div>
+                <button type="button" onClick={finishPoliceRecruitEvent}>确认加入并返回农田</button>
               </div>
             )}
           </div>
@@ -14440,15 +14574,17 @@ export function DeadRoadGame() {
 
             {explorationBattle.completed && (
               <div className="battle-complete" role="dialog" aria-modal="true">
-                <p>农场道路已肃清</p>
-                <h2>任务一完成</h2>
-                <span>三只普通僵尸已全部消灭</span>
-                {explorationBattle.rewardEligible ? (
+                <p>{currentExplorationBattleTaskConfig.completionEyebrow}</p>
+                <h2>{EXPLORATION_TASK_NAMES[explorationBattle.taskOrder - 1]}完成</h2>
+                <span>{currentExplorationBattleTaskConfig.completionSummary}</span>
+                {explorationBattle.rewardEligible && currentExplorationBattleTaskConfig.reward === "resources" ? (
                   <div className="battle-rewards"><b>+{EXPLORATION_TASK1_COINS} 金币</b><b>+{EXPLORATION_TASK1_EXPERIENCE} 经验点数</b></div>
+                ) : explorationBattle.rewardEligible && currentExplorationBattleTaskConfig.reward === "police" ? (
+                  <div className="battle-rewards"><b>公路招募事件即将开始</b></div>
                 ) : (
                   <div className="battle-rewards battle-rewards-claimed"><b>首次通关奖励已领取</b></div>
                 )}
-                <button type="button" onClick={closeExplorationSubscreen}>{explorationBattle.rewardEligible ? "领取并返回农田" : "返回农田"}</button>
+                {!(explorationBattle.rewardEligible && currentExplorationBattleTaskConfig.reward === "police") && <button type="button" onClick={closeExplorationSubscreen}>{explorationBattle.rewardEligible ? "领取并返回农田" : "返回农田"}</button>}
               </div>
             )}
           </div>

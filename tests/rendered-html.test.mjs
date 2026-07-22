@@ -1418,13 +1418,13 @@ test("adds the exploration exchange shop, vehicle upgrades and courage auto-batt
   assert.match(source, /const EXPLORATION_PROGRESS_KEY = "dead-road-exploration-progress"/);
   assert.match(source, /const \[explorationExperience, setExplorationExperience\] = useState\(0\)/);
   assert.match(source, /function freshExplorationBattle\(vehicleHp: number, taskOrder: number, rewardEligible = false\)/);
-  assert.match(source, /taskOrder === 1 \? Array\.from\(\{ length: 3 \}/);
+  assert.match(source, /1: \{ openingZombieCount: 3, finite: true, reward: "resources"/);
   assert.match(source, /kind: "normal"/);
   assert.match(source, /setExplorationCoins\(\(coins\) => coins \+ EXPLORATION_TASK1_COINS\)/);
   assert.match(source, /setExplorationExperience\(\(experience\) => experience \+ EXPLORATION_TASK1_EXPERIENCE\)/);
   assert.match(source, /window\.localStorage\.setItem\(EXPLORATION_PROGRESS_KEY/);
   assert.match(source, /onClick=\{\(\) => startExplorationBattle\(task\.order\)\}/);
-  assert.match(source, /任务一完成/);
+  assert.match(source, /EXPLORATION_TASK_NAMES\[explorationBattle\.taskOrder - 1\]\}完成/);
   assert.match(source, /首次通关奖励已领取/);
   assert.match(source, /window\.setInterval\([\s\S]*courage: battle\.courage \+ 1[\s\S]*1000/);
   assert.match(source, /nearestUnit/);
@@ -1484,7 +1484,7 @@ test("adds the exploration six-slot team roster with shared character and weapon
   assert.match(source, /const scale = battleScale \? 2\.8 : 1\.9/);
   assert.match(source, /function ExplorationMemberPreview/);
   assert.match(source, /function drawSurvivalHumanHeadAndFace/);
-  assert.match(source, /drawSurvivalHumanHeadAndFace\(ctx, facing, farmer \? "farmerHat" : soldier \? "combatHelmet" : "cap"\)/);
+  assert.match(source, /drawSurvivalHumanHeadAndFace\(ctx, facing, farmer \? "farmerHat" : police \? "policeCap" : soldier \? "combatHelmet" : "cap"\)/);
   assert.match(source, /if \(armor\.key === "civilian"\) \{\s*drawSurvivalHumanHeadAndFace\(ctx, facing, "cap"\)/);
   assert.match(source, /standingLegPose/);
   assert.match(source, /gaitLegPose/);
@@ -1730,4 +1730,30 @@ test("supports paid supplies, repeat summons and a stable two-dimensional explor
   assert.match(css, /\.battle-consumable-bar[^}]*top:\s*96px/);
   assert.match(css, /--battle-entity-width:\s*108px/);
   assert.match(css, /\.battle-squad-bar \.team-member-preview/);
+});
+
+test("recruits a rare police officer through the task two roadside cinematic", async () => {
+  const source = await readFile(new URL("../app/DeadRoadGame.tsx", import.meta.url), "utf8");
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  assert.match(source, /type ExplorationRecruitPhase = "approach" \| "dialog" \| "reward"/);
+  assert.match(source, /"explorationRecruit"/);
+  assert.match(source, /id: "police"[\s\S]*?name: "警察"[\s\S]*?weapon: "glock17"/);
+  assert.match(source, /id: "police"[\s\S]*?rarity: "rare"[\s\S]*?trait: "无"[\s\S]*?faction: "警察"/);
+  assert.match(source, /id: "police"[\s\S]*?hp: 70[\s\S]*?damage: weaponDamage\("glock17"\)/);
+  assert.match(source, /id: "police"[\s\S]*?hpPerLevel: 3[\s\S]*?damagePerLevel: 2/);
+  assert.match(source, /id: "police"[\s\S]*?speed: "中等"[\s\S]*?courageCost: 17/);
+  assert.match(source, /EXPLORATION_TASK2_ZOMBIE_COUNT/);
+  assert.match(source, /2: \{ openingZombieCount: EXPLORATION_TASK2_ZOMBIE_COUNT, finite: true, reward: "police"/);
+  assert.match(source, /explorationBattleTaskConfig\(battle\.taskOrder\)\.finite/);
+  assert.match(source, /taskConfig\.reward === "police"[\s\S]*setOwnedMemberIds[\s\S]*"police"/);
+  assert.match(source, /!explorationBattle\.completed \|\| taskConfig\.reward !== "police"/);
+  assert.match(source, /changeScreen\("explorationRecruit"\)/);
+  assert.match(source, /setExplorationMemberLevels\([\s\S]*police: levels\.police \?\? 1/);
+  assert.match(source, /平民[\s\S]*你可以加入我们/);
+  assert.match(source, /screen === "explorationRecruit"/);
+  assert.match(source, /ExplorationMemberPreview member=\{policeRecruitMember\}/);
+  assert.match(source, /稀有人员[\s\S]*警察/);
+  assert.match(css, /\.exploration-recruit-panel/);
+  assert.match(css, /\.recruit-police/);
+  assert.match(css, /\.recruit-reward-card[^{]*\{[^}]*#4ea8ff/);
 });
