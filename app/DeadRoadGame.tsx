@@ -4,6 +4,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { AccountControl } from "./account/AccountControl";
+import { notifyLocalSaveChanged } from "./account/saveData";
 import { soundManager as sound } from "./sound";
 
 // 世界高度恒定 720 单位；世界宽度动态化：画布位图跟随舞台实际宽高比（宽 = 720 × 实际比例），
@@ -512,11 +514,17 @@ function readProgressSave(): ProgressSave | null {
 }
 
 function writeProgressSave(save: ProgressSave) {
-  try { window.localStorage.setItem(PROGRESS_KEY, JSON.stringify(save)); } catch { /* 存储不可用时不阻断游戏 */ }
+  try {
+    window.localStorage.setItem(PROGRESS_KEY, JSON.stringify(save));
+    notifyLocalSaveChanged();
+  } catch { /* 存储不可用时不阻断游戏 */ }
 }
 
 function clearProgressSave() {
-  try { window.localStorage.removeItem(PROGRESS_KEY); } catch { /* 同上 */ }
+  try {
+    window.localStorage.removeItem(PROGRESS_KEY);
+    notifyLocalSaveChanged();
+  } catch { /* 同上 */ }
 }
 
 type Player = {
@@ -664,7 +672,10 @@ function markZombieSeen(kind: ZombieKind): boolean {
   const seen = readSeenZombies();
   if (seen.includes(kind)) return false;
   seen.push(kind);
-  try { window.localStorage.setItem(CODEX_KEY, JSON.stringify(seen)); } catch { /* 存储不可用时不阻断游戏 */ }
+  try {
+    window.localStorage.setItem(CODEX_KEY, JSON.stringify(seen));
+    notifyLocalSaveChanged();
+  } catch { /* 存储不可用时不阻断游戏 */ }
   return true;
 }
 
@@ -761,7 +772,10 @@ function readClearedLevels(): string[] {
 function markLevelCleared(levelId: string): string[] {
   const cleared = readClearedLevels();
   if (!cleared.includes(levelId)) cleared.push(levelId);
-  try { window.localStorage.setItem(LEVELS_CLEARED_KEY, JSON.stringify(cleared)); } catch { /* 存储不可用时不阻断游戏 */ }
+  try {
+    window.localStorage.setItem(LEVELS_CLEARED_KEY, JSON.stringify(cleared));
+    notifyLocalSaveChanged();
+  } catch { /* 存储不可用时不阻断游戏 */ }
   return cleared;
 }
 
@@ -8307,6 +8321,7 @@ export function DeadRoadGame() {
     setBestDay((current) => {
       const next = Math.max(current, day);
       window.localStorage.setItem(SAVE_KEY, String(next));
+      notifyLocalSaveChanged();
       return next;
     });
   }, []);
@@ -12221,6 +12236,7 @@ export function DeadRoadGame() {
         </div>
         <div className="masthead-side">
           <span className="edition">{majorMode === "classic" ? "经典模式 / 公路生存行动" : "探索模式 / 农田前哨"}</span>
+          <AccountControl />
           <label className="volume-control" title={`主音量 ${volume}%`}>
             <input
               type="range"
