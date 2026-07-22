@@ -350,7 +350,7 @@ test("expands menu/shop/loadout panels by hiding the key-hint bar outside battle
 
   // 非战斗界面隐藏底栏 + 紧凑页头，舞台面板向下扩展；战斗/暂停（screen === "playing"）几何不变
   assert.match(source, /const panelMode = screen !== "playing"/);
-  assert.match(source, /className=\{`game-shell \$\{panelMode \? "panel-mode" : ""\}`\}/);
+  assert.match(source, /className=\{`game-shell \$\{panelMode \? "panel-mode" : ""\} \$\{lotteryCinematic \? "lottery-cinematic" : ""\}`\}/);
   assert.match(css, /\.panel-mode \.controls-bar \{ display: none; \}/);
   assert.match(css, /\.panel-mode \.masthead \{ height: 52px; \}/);
   // 底栏按键条全局压缩（60px）
@@ -1323,4 +1323,45 @@ test("adds a farm exploration hub with sequential missions and split zombie code
   assert.match(css, /\.exploration-wallet/);
   assert.match(css, /\.codex-category-tabs/);
   assert.match(css, /@media \(max-width: 480px\)[\s\S]*\.volume-control \{ display: none; \}/);
+});
+
+test("adds a ticket-free lottery road cinematic with weighted rarity reveals", async () => {
+  const source = await readFile(new URL("../app/DeadRoadGame.tsx", import.meta.url), "utf8");
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+
+  assert.match(source, /type Screen = [^;]+"lottery"/);
+  assert.match(source, /type LotteryRarity = "common" \| "rare" \| "epic" \| "legendary"/);
+  assert.match(source, /LOTTERY_RARITIES:[\s\S]*common:[\s\S]*chance: 50[\s\S]*rare:[\s\S]*chance: 30[\s\S]*epic:[\s\S]*chance: 15[\s\S]*legendary:[\s\S]*chance: 5/);
+  assert.match(source, /const LOTTERY_RARITY_ORDER: LotteryRarity\[\] = \["common", "rare", "epic", "legendary"\]/);
+  assert.match(source, /function rollLotteryRarity\(/);
+  assert.match(source, /cumulativeChance \+= LOTTERY_RARITIES\[rarity\]\.chance \/ 100/);
+  assert.match(source, /if \(roll < cumulativeChance\) return rarity/);
+  assert.match(source, /const \[recruitTickets\] = useState\(0\)/);
+  assert.match(source, /startLotteryDraw\(1\)/);
+  assert.match(source, /startLotteryDraw\(10\)/);
+  assert.match(source, /测试版免券/);
+  assert.match(source, /第一人称火力演示 · MG42/);
+  assert.match(source, /className=\{`lottery-zombie/);
+  assert.match(source, /sound\.gunshot\("mg42"/);
+  assert.match(source, /setLotteryPhase\("flash"\)/);
+  assert.match(source, /setLotteryPhase\("reveal"\)/);
+  assert.match(source, /const LOTTERY_WHITE_FLASH_MS = 500/);
+  assert.match(source, /window\.clearInterval\(firingTimer\)/);
+  assert.match(source, /window\.clearTimeout\(revealTimer\)/);
+  assert.match(source, /const lotteryOverlayActive = screen === "lottery" && lotteryPhase !== "idle"/);
+  assert.match(source, /lotteryOverlayActive \? <div className="masthead lottery-masthead-placeholder" aria-hidden="true" \/> : <header className="masthead">/);
+  assert.match(source, /tabIndex=\{screen === "playing" \? 0 : -1\}/);
+  assert.match(source, /\{lotteryPhase === "idle" && \([\s\S]*lottery-topbar/);
+  assert.match(source, /奖励内容待公布/);
+  assert.match(css, /\.lottery-panel/);
+  assert.match(css, /\.lottery-first-person-gun/);
+  assert.match(css, /\.lottery-muzzle-flash/);
+  assert.match(css, /\.lottery-screen-flash/);
+  assert.match(css, /\.lottery-flash \.lottery-screen-flash \{ opacity: 1; \}/);
+  assert.match(css, /\.lottery-result-ten > \.lottery-reward-grid/);
+  assert.match(css, /repeat\(5, minmax\(52px, 1fr\)\)/);
+  assert.match(css, /\.lottery-common/);
+  assert.match(css, /\.lottery-rare/);
+  assert.match(css, /\.lottery-epic/);
+  assert.match(css, /\.lottery-legendary/);
 });

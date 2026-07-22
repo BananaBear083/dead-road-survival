@@ -26,10 +26,12 @@ const BLOOD_STAIN_MS = 10000;
 const MAX_BLOOD_STAINS = 60;
 
 type MajorMode = "classic" | "exploration";
-type Screen = "menu" | "exploration" | "playing" | "shop" | "loadout" | "gameover" | "codex" | "levels" | "levelComplete";
+type Screen = "menu" | "exploration" | "playing" | "shop" | "loadout" | "gameover" | "codex" | "levels" | "levelComplete" | "lottery";
 type GameMode = "survival" | "range" | "level";
 type ShopTab = "weapons" | "armor" | "supplies" | "items" | "partners" | "zombies";
 type CodexCategory = "regular" | "special";
+type LotteryRarity = "common" | "rare" | "epic" | "legendary";
+type LotteryPhase = "idle" | "firing" | "flash" | "reveal";
 type WeaponKey =
   | "glock17" | "m1911" | "pkm" | "fruitknife" | "combatknife" | "crowbar"
   | "hammer" | "fireaxe" | "baseballbat" | "sawedoff"
@@ -724,6 +726,36 @@ const EXPLORATION_TASKS: ExplorationTask[] = Array.from({ length: 10 }, (_, inde
   y: EXPLORATION_TASK_POSITIONS[index][1],
 }));
 const EXPLORATION_CLEARED_KEY = "dead-road-exploration-cleared";
+
+const LOTTERY_RARITIES: Record<LotteryRarity, { label: string; chance: number; rank: number }> = {
+  common: { label: "普通", chance: 50, rank: 0 },
+  rare: { label: "稀有", chance: 30, rank: 1 },
+  epic: { label: "史诗", chance: 15, rank: 2 },
+  legendary: { label: "传奇", chance: 5, rank: 3 },
+};
+const LOTTERY_RARITY_ORDER: LotteryRarity[] = ["common", "rare", "epic", "legendary"];
+const LOTTERY_ZOMBIES = [
+  [17, 34, .7], [28, 38, .76], [38, 32, .82], [48, 39, .68], [59, 34, .78], [70, 40, .7], [82, 33, .8],
+  [22, 22, .96], [34, 25, .88], [45, 19, 1.06], [56, 27, .9], [68, 21, 1.04], [78, 25, .92],
+  [29, 7, 1.22], [42, 10, 1.16], [55, 5, 1.3], [67, 11, 1.14], [76, 4, 1.28],
+] as const;
+const LOTTERY_KILL_INTERVAL_MS = 135;
+const LOTTERY_WHITE_FLASH_MS = 500;
+
+function rollLotteryRarity(roll = Math.random()): LotteryRarity {
+  let cumulativeChance = 0;
+  for (const rarity of LOTTERY_RARITY_ORDER) {
+    cumulativeChance += LOTTERY_RARITIES[rarity].chance / 100;
+    if (roll < cumulativeChance) return rarity;
+  }
+  return "legendary";
+}
+
+function highestLotteryRarity(rewards: LotteryRarity[]): LotteryRarity | null {
+  return rewards.reduce<LotteryRarity | null>((highest, rarity) => (
+    highest === null || LOTTERY_RARITIES[rarity].rank > LOTTERY_RARITIES[highest].rank ? rarity : highest
+  ), null);
+}
 
 function readExplorationClearedTasks(): number[] {
   try {
@@ -8141,6 +8173,11 @@ export function DeadRoadGame() {
   const [explorationExperience] = useState(0);
   const [explorationNotice, setExplorationNotice] = useState<string | null>(null);
   const [explorationClearedTasks, setExplorationClearedTasks] = useState<number[]>([]);
+  const [recruitTickets] = useState(0);
+  const [lotteryPhase, setLotteryPhase] = useState<LotteryPhase>("idle");
+  const [lotteryKilled, setLotteryKilled] = useState(0);
+  const [lotteryRewards, setLotteryRewards] = useState<LotteryRarity[]>([]);
+  const [lotteryDrawCount, setLotteryDrawCount] = useState<1 | 10>(1);
   useEffect(() => {
     let active = true;
     queueMicrotask(() => { if (active) setExplorationClearedTasks(readExplorationClearedTasks()); });
@@ -8240,6 +8277,54 @@ export function DeadRoadGame() {
     setExplorationNotice(null);
     changeScreen(next === "classic" ? "menu" : "exploration");
   }, [changeScreen]);
+
+  const openLottery = useCallback(() => {
+    sound.uiClick();
+    setLotteryPhase("idle");
+    setLotteryKilled(0);
+    setLotteryRewards([]);
+    changeScreen("lottery");
+  }, [changeScreen]);
+
+  const closeLottery = useCallback(() => {
+    if (lotteryPhase === "firing" || lotteryPhase === "flash") return;
+    sound.uiClick();
+    setLotteryPhase("idle");
+    changeScreen("exploration");
+  }, [changeScreen, lotteryPhase]);
+
+  const startLotteryDraw = useCallback((count: 1 | 10) => {
+    sound.uiClick();
+    setLotteryDrawCount(count);
+    setLotteryRewards(Array.from({ length: count }, () => rollLotteryRarity()));
+    setLotteryKilled(0);
+    setLotteryPhase("firing");
+  }, []);
+
+  useEffect(() => {
+    if (screen !== "lottery" || lotteryPhase !== "firing") return;
+    let nextKill = 0;
+    let finishTimer: number | undefined;
+    const firingTimer = window.setInterval(() => {
+      nextKill += 1;
+      setLotteryKilled(nextKill);
+      sound.gunshot("mg42", { fireRateMs: WEAPONS.mg42.fireRate, volume: .72 });
+      if (nextKill >= LOTTERY_ZOMBIES.length) {
+        window.clearInterval(firingTimer);
+        finishTimer = window.setTimeout(() => setLotteryPhase("flash"), 260);
+      }
+    }, LOTTERY_KILL_INTERVAL_MS);
+    return () => {
+      window.clearInterval(firingTimer);
+      if (finishTimer !== undefined) window.clearTimeout(finishTimer);
+    };
+  }, [lotteryPhase, screen]);
+
+  useEffect(() => {
+    if (screen !== "lottery" || lotteryPhase !== "flash") return;
+    const revealTimer = window.setTimeout(() => setLotteryPhase("reveal"), LOTTERY_WHITE_FLASH_MS);
+    return () => window.clearTimeout(revealTimer);
+  }, [lotteryPhase, screen]);
 
   // 僵尸图鉴：只列出"见过"的种类（生存模式生成上场即登记），一页一种翻页浏览；ESC 返回来源界面
   const codexSeenList = ZOMBIE_CONFIG_KINDS.filter((kind) => seenKinds.includes(kind));
@@ -10616,6 +10701,10 @@ export function DeadRoadGame() {
           // 关卡选择/通关结算：ESC 返回主菜单
           event.preventDefault();
           if (!event.repeat) closeLevels();
+        } else if (screenRef.current === "lottery") {
+          // 抽奖战斗演出期间锁定退出；待机/结果页可返回探索主界面
+          event.preventDefault();
+          if (!event.repeat) closeLottery();
         } else if (screenRef.current === "loadout" && loadoutOpenRef.current !== null) {
           // 二级选择界面：ESC 返回装备整备主视图（不回主菜单）
           event.preventDefault();
@@ -10671,7 +10760,7 @@ export function DeadRoadGame() {
       window.removeEventListener("keydown", keyDown);
       window.removeEventListener("keyup", keyUp);
     };
-  }, [advanceLevelDialog, callAirstrike, closeCodex, closeLevels, cycleWeapon, dropWeapon, flipCodex, kick, openRangeShop, reload, resumeRange, saveProgressAndMenu, selectItem, toggleMute, togglePause]);
+  }, [advanceLevelDialog, callAirstrike, closeCodex, closeLevels, closeLottery, cycleWeapon, dropWeapon, flipCodex, kick, openRangeShop, reload, resumeRange, saveProgressAndMenu, selectItem, toggleMute, togglePause]);
 
   const pointerPosition = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
     // 以位图实际尺寸（动态 worldW × H）按比例换算：CSS 等比缩放下鼠标映射恒正确
@@ -12058,6 +12147,9 @@ export function DeadRoadGame() {
   }, [attack, changeScreen, damageZombie, damageZombieFromExplosion, drawWorld, saveBest, spawnZombie, syncSnapshot, updateLevelNpcs, updateLevelTasks, updatePartner]);
 
   const rangeFree = snapshot.mode === "range";
+  const lotteryHighlight = highestLotteryRarity(lotteryRewards);
+  const lotteryCinematic = screen === "lottery" && (lotteryPhase === "firing" || lotteryPhase === "flash");
+  const lotteryOverlayActive = screen === "lottery" && lotteryPhase !== "idle";
   const spawnTotal = ZOMBIE_CONFIG_KINDS.reduce((sum, kind) => sum + spawnCounts[kind], 0);
   // 非战斗界面（菜单/商店/装备/结算）使用紧凑页头并隐藏底栏按键条，把纵向空间全部让给面板；
   // 战斗与暂停（screen 恒为 playing）保持完整底栏 → 暂停/进出战斗舞台几何不变、实体不跳变
@@ -12219,9 +12311,9 @@ export function DeadRoadGame() {
   }
 
   return (
-    <main className={`game-shell ${panelMode ? "panel-mode" : ""}`}>
+    <main className={`game-shell ${panelMode ? "panel-mode" : ""} ${lotteryCinematic ? "lottery-cinematic" : ""}`}>
       <div className="noise" aria-hidden="true" />
-      <header className="masthead">
+      {lotteryOverlayActive ? <div className="masthead lottery-masthead-placeholder" aria-hidden="true" /> : <header className="masthead">
         <div className="masthead-left">
           <a className="brand" href="#" onClick={(e) => { e.preventDefault(); sound.uiClick(); changeScreen(majorMode === "classic" ? "menu" : "exploration"); }} aria-label="返回主菜单">
             <span className="brand-mark">DR</span>
@@ -12260,14 +12352,14 @@ export function DeadRoadGame() {
             {muted ? "🔇" : "🔊"}
           </button>
         </div>
-      </header>
+      </header>}
 
       <section className={`game-stage ${screen === "playing" ? "is-playing" : ""}`} ref={stageRef}>
         <canvas
           ref={canvasRef}
           width={canvasW}
           height={H}
-          tabIndex={0}
+          tabIndex={screen === "playing" ? 0 : -1}
           aria-label="死路求生 2D 僵尸射击游戏画面"
           onContextMenu={(e) => e.preventDefault()}
           onPointerMove={(e) => { mouseRef.current = { ...mouseRef.current, ...pointerPosition(e) }; }}
@@ -12348,7 +12440,7 @@ export function DeadRoadGame() {
             </nav>
 
             <nav className="exploration-rail exploration-rail-right" aria-label="探索模式右侧功能">
-              <button type="button" onClick={() => { sound.uiClick(); setExplorationNotice("抽奖系统将在后续更新中开放。"); }}><b>✧</b><span>抽奖</span><small>获取探索奖励</small></button>
+              <button type="button" onClick={openLottery}><b>✧</b><span>抽奖</span><small>获取探索奖励</small></button>
               <button type="button" onClick={() => openCodex("exploration")}><b>▤</b><span>僵尸图鉴</span><small>已发现 {seenKinds.length} / {ZOMBIE_CONFIG_KINDS.length}</small></button>
             </nav>
 
@@ -12385,6 +12477,114 @@ export function DeadRoadGame() {
               <div className="exploration-notice" role="status">
                 <span>{explorationNotice}</span>
                 <button type="button" onClick={() => { sound.uiClick(); setExplorationNotice(null); }} aria-label="关闭提示">×</button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {screen === "lottery" && (
+          <div className={`lottery-panel overlay-panel lottery-${lotteryPhase} ${lotteryHighlight ? `lottery-${lotteryHighlight}` : ""}`}>
+            <div className="lottery-sky" aria-hidden="true">
+              <span className="lottery-cloud lottery-cloud-a" />
+              <span className="lottery-cloud lottery-cloud-b" />
+              <span className="lottery-horizon" />
+              <span className="lottery-road-sign"><b>17</b><small>封锁公路</small></span>
+            </div>
+            <div className="lottery-road" aria-hidden="true">
+              <span className="lottery-lane lottery-lane-left" />
+              <span className="lottery-lane lottery-lane-right" />
+              <span className="lottery-wreck"><i /><b /></span>
+            </div>
+
+            <div className="lottery-zombie-field" aria-label={`公路尸群，已击杀 ${lotteryKilled} / ${LOTTERY_ZOMBIES.length}`}>
+              {LOTTERY_ZOMBIES.map(([left, bottom, scale], index) => (
+                <span
+                  key={`${left}-${bottom}`}
+                  className={`lottery-zombie ${index < lotteryKilled ? "dead" : ""} ${index === lotteryKilled - 1 ? "hit" : ""}`}
+                  style={{ "--zombie-left": `${left}%`, "--zombie-bottom": `${bottom}%`, "--zombie-scale": scale, "--zombie-delay": `${(index % 5) * -.14}s` } as React.CSSProperties}
+                  aria-hidden="true"
+                >
+                  <i className="lottery-zombie-head" />
+                  <b className="lottery-zombie-body" />
+                  <span className="lottery-zombie-arm lottery-zombie-arm-left" />
+                  <span className="lottery-zombie-arm lottery-zombie-arm-right" />
+                  <span className="lottery-zombie-leg lottery-zombie-leg-left" />
+                  <span className="lottery-zombie-leg lottery-zombie-leg-right" />
+                  <span className="lottery-zombie-blood" />
+                </span>
+              ))}
+            </div>
+
+            {lotteryPhase === "idle" && (
+              <>
+                <div className="lottery-interface lottery-topbar">
+                  <button type="button" className="lottery-back" onClick={closeLottery}>← 返回探索</button>
+                  <div className="lottery-heading">
+                    <p className="eyebrow">探索模式 · 公路招募</p>
+                    <h2>火线招募</h2>
+                    <small>清除尸群，让公路尽头的补给箱现身</small>
+                  </div>
+                  <div className="lottery-ticket-wallet">
+                    <i>券</i><small>招募券</small><strong>{recruitTickets}</strong><em>测试版免券</em>
+                  </div>
+                </div>
+
+                <div className="lottery-interface lottery-rates" aria-label="抽奖概率">
+                  {(Object.keys(LOTTERY_RARITIES) as LotteryRarity[]).map((rarity) => (
+                    <span key={rarity} className={`lottery-rate-${rarity}`}><b>{LOTTERY_RARITIES[rarity].label}</b><strong>{LOTTERY_RARITIES[rarity].chance}%</strong></span>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {lotteryPhase === "idle" && (
+              <div className="lottery-interface lottery-actions">
+                <button type="button" onClick={() => startLotteryDraw(1)}><small>消耗 1 张招募券</small><strong>抽一次</strong><em>测试版不扣除</em></button>
+                <button type="button" className="lottery-ten" onClick={() => startLotteryDraw(10)}><small>消耗 10 张招募券</small><strong>抽十次</strong><em>测试版不扣除</em></button>
+              </div>
+            )}
+
+            {(lotteryPhase === "firing" || lotteryPhase === "flash") && (
+              <div className="lottery-combat-status">
+                <span>第一人称火力演示 · MG42</span>
+                <strong>清除公路尸群</strong>
+                <small>{Math.min(lotteryKilled, LOTTERY_ZOMBIES.length)} / {LOTTERY_ZOMBIES.length}</small>
+              </div>
+            )}
+
+            <div className="lottery-first-person-gun" aria-hidden="true">
+              <span className="lottery-fp-arm lottery-fp-arm-left" />
+              <span className="lottery-fp-arm lottery-fp-arm-right" />
+              <span className="lottery-mg42-stock" />
+              <span className="lottery-mg42-receiver"><i /><b /></span>
+              <span className="lottery-mg42-barrel"><i /></span>
+              <span className="lottery-mg42-bipod" />
+              <span className="lottery-ammo-belt">••••••••</span>
+              <span className="lottery-muzzle-flash" />
+              <span className="lottery-tracer lottery-tracer-a" />
+              <span className="lottery-tracer lottery-tracer-b" />
+            </div>
+
+            <div className="lottery-screen-flash" aria-hidden="true" />
+
+            {lotteryPhase === "reveal" && (
+              <div className={`lottery-result ${lotteryDrawCount === 10 ? "lottery-result-ten" : ""}`} role="dialog" aria-modal="true" aria-label="抽奖结果">
+                <p>公路已肃清</p>
+                <h2>{lotteryDrawCount === 10 ? "十连招募结果" : "招募结果"}</h2>
+                <div className="lottery-reward-grid">
+                  {lotteryRewards.map((rarity, index) => (
+                    <article key={`${rarity}-${index}`} className={`lottery-reward-card reward-${rarity}`}>
+                      <small>NO. {String(index + 1).padStart(2, "0")}</small>
+                      <i>?</i>
+                      <strong>{LOTTERY_RARITIES[rarity].label}</strong>
+                      <span>奖励内容待公布</span>
+                    </article>
+                  ))}
+                </div>
+                <div className="lottery-reveal-actions">
+                  <button type="button" autoFocus onClick={() => { sound.uiClick(); setLotteryPhase("idle"); setLotteryKilled(0); setLotteryRewards([]); }}>继续招募</button>
+                  <button type="button" onClick={closeLottery}>返回探索</button>
+                </div>
               </div>
             )}
           </div>
