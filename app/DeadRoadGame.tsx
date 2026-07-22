@@ -739,7 +739,6 @@ const LOTTERY_ZOMBIES = [
   [22, 22, .96], [34, 25, .88], [45, 19, 1.06], [56, 27, .9], [68, 21, 1.04], [78, 25, .92],
   [29, 7, 1.22], [42, 10, 1.16], [55, 5, 1.3], [67, 11, 1.14], [76, 4, 1.28],
 ] as const;
-const LOTTERY_KILL_INTERVAL_MS = 135;
 const LOTTERY_WHITE_FLASH_MS = 500;
 
 function rollLotteryRarity(roll = Math.random()): LotteryRarity {
@@ -8175,9 +8174,13 @@ export function DeadRoadGame() {
   const [explorationClearedTasks, setExplorationClearedTasks] = useState<number[]>([]);
   const [recruitTickets] = useState(0);
   const [lotteryPhase, setLotteryPhase] = useState<LotteryPhase>("idle");
-  const [lotteryKilled, setLotteryKilled] = useState(0);
+  const [lotteryDead, setLotteryDead] = useState<number[]>([]);
+  const [lotteryLastHit, setLotteryLastHit] = useState<number | null>(null);
+  const [lotteryShotSerial, setLotteryShotSerial] = useState(0);
+  const [lotteryAim, setLotteryAim] = useState({ x: 50, y: 48, angle: -90, distance: 240 });
   const [lotteryRewards, setLotteryRewards] = useState<LotteryRarity[]>([]);
   const [lotteryDrawCount, setLotteryDrawCount] = useState<1 | 10>(1);
+  const lotteryKilled = lotteryDead.length;
   useEffect(() => {
     let active = true;
     queueMicrotask(() => { if (active) setExplorationClearedTasks(readExplorationClearedTasks()); });
@@ -8278,13 +8281,19 @@ export function DeadRoadGame() {
     changeScreen(next === "classic" ? "menu" : "exploration");
   }, [changeScreen]);
 
+  const resetLotteryBattle = useCallback(() => {
+    setLotteryDead([]);
+    setLotteryLastHit(null);
+    setLotteryShotSerial(0);
+  }, []);
+
   const openLottery = useCallback(() => {
     sound.uiClick();
     setLotteryPhase("idle");
-    setLotteryKilled(0);
+    resetLotteryBattle();
     setLotteryRewards([]);
     changeScreen("lottery");
-  }, [changeScreen]);
+  }, [changeScreen, resetLotteryBattle]);
 
   const closeLottery = useCallback(() => {
     if (lotteryPhase === "firing" || lotteryPhase === "flash") return;
@@ -8297,28 +8306,43 @@ export function DeadRoadGame() {
     sound.uiClick();
     setLotteryDrawCount(count);
     setLotteryRewards(Array.from({ length: count }, () => rollLotteryRarity()));
-    setLotteryKilled(0);
+    resetLotteryBattle();
     setLotteryPhase("firing");
-  }, []);
+  }, [resetLotteryBattle]);
+
+  const updateLotteryAim = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (lotteryPhase !== "firing") return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const pointerX = Math.max(0, Math.min(rect.width, event.clientX - rect.left));
+    const pointerY = Math.max(0, Math.min(rect.height, event.clientY - rect.top));
+    // 以玩家持枪点为旋转原点，枪管、枪口焰、曳光和准星共用同一瞄准方向。
+    const originX = rect.width * .5;
+    const originY = rect.height * .82;
+    setLotteryAim({
+      x: pointerX / rect.width * 100,
+      y: pointerY / rect.height * 100,
+      angle: Math.atan2(pointerY - originY, pointerX - originX) * 180 / Math.PI,
+      distance: Math.hypot(pointerX - originX, pointerY - originY),
+    });
+  }, [lotteryPhase]);
+
+  const fireLottery = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (lotteryPhase !== "firing" || event.button !== 0) return;
+    updateLotteryAim(event);
+    sound.gunshot("mg42", { fireRateMs: WEAPONS.mg42.fireRate, volume: .72 });
+    setLotteryShotSerial((serial) => serial + 1);
+    const zombieTarget = (event.target as HTMLElement).closest("[data-lottery-zombie]");
+    const zombieIndex = Number(zombieTarget?.getAttribute("data-lottery-zombie"));
+    if (!Number.isInteger(zombieIndex) || zombieIndex < 0 || zombieIndex >= LOTTERY_ZOMBIES.length) return;
+    setLotteryLastHit(zombieIndex);
+    setLotteryDead((dead) => dead.includes(zombieIndex) ? dead : [...dead, zombieIndex]);
+  }, [lotteryPhase, updateLotteryAim]);
 
   useEffect(() => {
-    if (screen !== "lottery" || lotteryPhase !== "firing") return;
-    let nextKill = 0;
-    let finishTimer: number | undefined;
-    const firingTimer = window.setInterval(() => {
-      nextKill += 1;
-      setLotteryKilled(nextKill);
-      sound.gunshot("mg42", { fireRateMs: WEAPONS.mg42.fireRate, volume: .72 });
-      if (nextKill >= LOTTERY_ZOMBIES.length) {
-        window.clearInterval(firingTimer);
-        finishTimer = window.setTimeout(() => setLotteryPhase("flash"), 260);
-      }
-    }, LOTTERY_KILL_INTERVAL_MS);
-    return () => {
-      window.clearInterval(firingTimer);
-      if (finishTimer !== undefined) window.clearTimeout(finishTimer);
-    };
-  }, [lotteryPhase, screen]);
+    if (screen !== "lottery" || lotteryPhase !== "firing" || lotteryDead.length !== LOTTERY_ZOMBIES.length) return;
+    const finishTimer = window.setTimeout(() => setLotteryPhase("flash"), 260);
+    return () => window.clearTimeout(finishTimer);
+  }, [lotteryDead.length, lotteryPhase, screen]);
 
   useEffect(() => {
     if (screen !== "lottery" || lotteryPhase !== "flash") return;
@@ -12432,6 +12456,7 @@ export function DeadRoadGame() {
             <div className="exploration-wallet" aria-label="探索模式资源">
               <span><i>◉</i><small>金币</small><strong>{explorationCoins}</strong></span>
               <span><i>✦</i><small>经验点数</small><strong>{explorationExperience}</strong></span>
+              <span><i>券</i><small>点券</small><strong>{recruitTickets}</strong></span>
             </div>
 
             <nav className="exploration-rail exploration-rail-left" aria-label="探索模式左侧功能">
@@ -12483,7 +12508,17 @@ export function DeadRoadGame() {
         )}
 
         {screen === "lottery" && (
-          <div className={`lottery-panel overlay-panel lottery-${lotteryPhase} ${lotteryHighlight ? `lottery-${lotteryHighlight}` : ""}`}>
+          <div
+            className={`lottery-panel overlay-panel lottery-${lotteryPhase} ${lotteryHighlight ? `lottery-${lotteryHighlight}` : ""}`}
+            style={{
+              "--lottery-aim-x": `${lotteryAim.x}%`,
+              "--lottery-aim-y": `${lotteryAim.y}%`,
+              "--lottery-aim-angle": `${lotteryAim.angle}deg`,
+              "--lottery-aim-distance": `${lotteryAim.distance}px`,
+            } as React.CSSProperties}
+            onPointerMove={updateLotteryAim}
+            onPointerDown={fireLottery}
+          >
             <div className="lottery-sky" aria-hidden="true">
               <span className="lottery-cloud lottery-cloud-a" />
               <span className="lottery-cloud lottery-cloud-b" />
@@ -12500,7 +12535,8 @@ export function DeadRoadGame() {
               {LOTTERY_ZOMBIES.map(([left, bottom, scale], index) => (
                 <span
                   key={`${left}-${bottom}`}
-                  className={`lottery-zombie ${index < lotteryKilled ? "dead" : ""} ${index === lotteryKilled - 1 ? "hit" : ""}`}
+                  className={`lottery-zombie ${lotteryDead.includes(index) ? "dead" : ""} ${index === lotteryLastHit ? "hit" : ""}`}
+                  data-lottery-zombie={index}
                   style={{ "--zombie-left": `${left}%`, "--zombie-bottom": `${bottom}%`, "--zombie-scale": scale, "--zombie-delay": `${(index % 5) * -.14}s` } as React.CSSProperties}
                   aria-hidden="true"
                 >
@@ -12546,23 +12582,31 @@ export function DeadRoadGame() {
 
             {(lotteryPhase === "firing" || lotteryPhase === "flash") && (
               <div className="lottery-combat-status">
-                <span>第一人称火力演示 · MG42</span>
+                <span>鼠标瞄准 · 左键射击 · MG42</span>
                 <strong>清除公路尸群</strong>
                 <small>{Math.min(lotteryKilled, LOTTERY_ZOMBIES.length)} / {LOTTERY_ZOMBIES.length}</small>
               </div>
             )}
 
-            <div className="lottery-first-person-gun" aria-hidden="true">
-              <span className="lottery-fp-arm lottery-fp-arm-left" />
-              <span className="lottery-fp-arm lottery-fp-arm-right" />
-              <span className="lottery-mg42-stock" />
-              <span className="lottery-mg42-receiver"><i /><b /></span>
-              <span className="lottery-mg42-barrel"><i /></span>
-              <span className="lottery-mg42-bipod" />
-              <span className="lottery-ammo-belt">••••••••</span>
-              <span className="lottery-muzzle-flash" />
-              <span className="lottery-tracer lottery-tracer-a" />
-              <span className="lottery-tracer lottery-tracer-b" />
+            {lotteryPhase === "firing" && (
+              <>
+                <span className="lottery-crosshair" aria-hidden="true"><i /><b /></span>
+                <span key={`aim-${lotteryShotSerial}`} className={`lottery-aim-line ${lotteryShotSerial > 0 ? "shot" : ""}`} aria-hidden="true" />
+              </>
+            )}
+
+            <div className="lottery-gun-aim" aria-hidden="true">
+              <div className="lottery-first-person-gun">
+                <span className="lottery-fp-arm lottery-fp-arm-left" />
+                <span className="lottery-fp-arm lottery-fp-arm-right" />
+                <span className="lottery-mg42-stock" />
+                <span className="lottery-mg42-receiver"><i /><b /></span>
+                <span className="lottery-mg42-barrel"><i /></span>
+                <span className="lottery-mg42-bipod" />
+                <span className="lottery-ammo-belt">••••••••</span>
+                <span key={`muzzle-${lotteryShotSerial}`} className={`lottery-muzzle-flash ${lotteryShotSerial > 0 ? "shot" : ""}`} />
+                <span key={`tracer-${lotteryShotSerial}`} className={`lottery-tracer ${lotteryShotSerial > 0 ? "shot" : ""}`} />
+              </div>
             </div>
 
             <div className="lottery-screen-flash" aria-hidden="true" />
@@ -12582,7 +12626,7 @@ export function DeadRoadGame() {
                   ))}
                 </div>
                 <div className="lottery-reveal-actions">
-                  <button type="button" autoFocus onClick={() => { sound.uiClick(); setLotteryPhase("idle"); setLotteryKilled(0); setLotteryRewards([]); }}>继续招募</button>
+                  <button type="button" autoFocus onClick={() => { sound.uiClick(); setLotteryPhase("idle"); resetLotteryBattle(); setLotteryRewards([]); }}>继续招募</button>
                   <button type="button" onClick={closeLottery}>返回探索</button>
                 </div>
               </div>
