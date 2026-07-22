@@ -1483,7 +1483,7 @@ test("adds the exploration six-slot team roster with shared character and weapon
   assert.match(source, /const scale = battleScale \? 2\.8 : 1\.9/);
   assert.match(source, /function ExplorationMemberPreview/);
   assert.match(source, /function drawSurvivalHumanHeadAndFace/);
-  assert.match(source, /drawSurvivalHumanHeadAndFace\(ctx, facing, farmer \? "farmerHat" : "cap"\)/);
+  assert.match(source, /drawSurvivalHumanHeadAndFace\(ctx, facing, farmer \? "farmerHat" : soldier \? "combatHelmet" : "cap"\)/);
   assert.match(source, /if \(armor\.key === "civilian"\) \{\s*drawSurvivalHumanHeadAndFace\(ctx, facing, "cap"\)/);
   assert.match(source, /standingLegPose/);
   assert.match(source, /gaitLegPose/);
@@ -1511,5 +1511,53 @@ test("adds the exploration six-slot team roster with shared character and weapon
   assert.match(css, /\.team-member-preview/);
   assert.match(css, /\.team-consumable-grid[^}]*repeat\(3, 1fr\)/);
   assert.match(css, /\.battle-unit-shared-model[^}]*width: 108px[^}]*height: 184px/);
-  assert.match(css, /\.battle-enemy-shared-model[^}]*width: 102px[^}]*height: 182px/);
+  assert.match(css, /\.battle-enemy-shared-model[^}]*width: 108px[^}]*height: 184px/);
+});
+
+test("adds escalating member upgrades, repeatable lottery rewards, shared hurt audio and the persistent starter pack", async () => {
+  const source = await readFile(new URL("../app/DeadRoadGame.tsx", import.meta.url), "utf8");
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  const sound = await readFile(new URL("../app/sound.ts", import.meta.url), "utf8");
+
+  assert.match(source, /function explorationMemberUpgradeCost\(level: number\) \{ return 200 \+ \(level - 1\) \* 50; \}/);
+  assert.match(source, /const upgradeCost = explorationMemberUpgradeCost\(level\)/);
+  assert.match(source, /const selectedExplorationMemberUpgradeCost = explorationMemberUpgradeCost\(selectedExplorationMemberLevel\)/);
+  assert.match(source, /setLotteryRewards\(Array\.from\(\{ length: count \}, \(\) => rollLotteryRarity\(\)\)\)/);
+  assert.doesNotMatch(source, /setLotteryRewards\([^\n]*new Set/);
+
+  assert.match(source, /id: "combatSoldier"[\s\S]*name: "格斗士兵"[\s\S]*weapon: "combatknife"[\s\S]*rarity: "legendary"[\s\S]*trait: "攻速较快"[\s\S]*faction: "军队"[\s\S]*hp: 150[\s\S]*damage: 50[\s\S]*speed: "快"/);
+  assert.match(source, /level: 5, name: "每攻击 3 次进行一次蹬踹"/);
+  assert.match(source, /level: 10, name: "每次攻击 30% 概率连续攻击"/);
+  assert.match(source, /level: 15, name: "每 10 秒投掷 100 伤害飞刀"/);
+  assert.match(source, /combatSkills: \{ attackIntervalFactor: \.72, kickEvery: 3, comboChance: \.3, thrownKnifeInterval: 10, thrownKnifeDamage: 100 \}/);
+  assert.match(source, /unit\.level >= 5 && unit\.attacksPerformed % combatSkills\.kickEvery === 0/);
+  assert.match(source, /unit\.level >= 10 && Math\.random\(\) < combatSkills\.comboChance/);
+  assert.match(source, /combatSkills && unit\.level >= 15 && unit\.skillCooldown <= 0/);
+  assert.match(source, /target\.hp -= combatSkills\.thrownKnifeDamage/);
+  assert.match(source, /className="battle-throwing-knife"/);
+  assert.match(source, /drawWeaponModel\(ctx, "combatknife", 1\)/);
+  assert.match(source, /function survivalKickDamage\(day: number\) \{ return 11 \+ day \* \.75; \}/);
+  assert.match(source, /unit\.actionRemaining = KICK_ANIMATION_MS \/ 1000/);
+  assert.match(source, /impactAt: performance\.now\(\) \+ KICK_IMPACT_DELAY_MS/);
+  assert.match(source, /hp: zombie\.hp - survivalKickDamage\(1\) \* impactCount/);
+  assert.match(source, /x: zombie\.x \+ explorationKickKnockbackPercent\(\) \* impactCount/);
+
+  assert.match(source, /const EXPLORATION_STARTER_PACK_COST = 1000/);
+  assert.match(source, /const EXPLORATION_STARTER_PACK_EXPERIENCE = 1000/);
+  assert.match(source, /const EXPLORATION_STARTER_PACK_COINS = 3000/);
+  assert.match(source, /starterPackPurchased: boolean/);
+  assert.match(source, /setOwnedMemberIds\(\(owned\) => owned\.includes\("combatSoldier"\)/);
+  assert.match(source, /starterPackPurchased \? "已购买" : `1000 点券购买`/);
+  assert.match(css, /\.exploration-shop-panel[^}]*overflow-y: auto/);
+  assert.match(css, /\.starter-pack-page[^}]*top: 100%/);
+  assert.match(css, /\.starter-pack-page[^}]*border: 4px solid #d4ad3a/);
+
+  assert.match(sound, /bodyHit\(options: PlayOptions = \{\}\)/);
+  assert.match(source, /sound\.bodyHit\(\{ volume: distanceVolume\(z\.x, g\.player\.x\) \* \.58 \}\)/);
+  assert.match(source, /sound\.playerHurt\(\{ volume: distanceVolume\(targetNpc\.field\.x, p\.x\) \* \.7 \}\)/);
+  assert.match(source, /sound\.playerHurt\(\{ volume: \.62 \}\)/);
+  assert.match(css, /\.battle-enemy-shared-model[^}]*width: 108px[^}]*height: 184px/);
+  assert.match(css, /\.battle-unit-shared-model[^}]*width: 108px[^}]*height: 184px/);
+  assert.doesNotMatch(source, /--enemy-scale/);
+  assert.doesNotMatch(css, /--enemy-scale/);
 });

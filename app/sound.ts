@@ -1081,9 +1081,18 @@ export const soundManager = {
     tone({ type: "sine", from: 3800, duration: 2.6, attack: 0.002, volume: 0.22, critical: true });
   },
 
-  playerHurt() {
-    tone({ type: "sawtooth", from: 170, to: 85, duration: 0.16, volume: 0.4, filter: { type: "lowpass", frequency: 1000 }, critical: true });
-    noise({ duration: 0.1, volume: 0.26, filter: { type: "lowpass", from: 500 }, playbackRate: 0.6 });
+  /** 人物受伤：主角、关卡队友与探索队员共用的短促痛呼/钝击反馈。 */
+  playerHurt(options: PlayOptions = {}) {
+    const v = options.volume ?? 1;
+    tone({ type: "sawtooth", from: 170, to: 85, duration: 0.16, volume: 0.4 * v, filter: { type: "lowpass", frequency: 1000 }, critical: true });
+    noise({ duration: 0.1, volume: 0.26 * v, filter: { type: "lowpass", from: 500 }, playbackRate: 0.6 });
+  },
+
+  /** 肉体受击：所有模式中的僵尸/人物命中共享低频撞击与湿润冲击层。 */
+  bodyHit(options: PlayOptions = {}) {
+    const v = options.volume ?? 1;
+    tone({ type: "sine", from: 105, to: 48, duration: 0.09, volume: 0.25 * v });
+    noise({ duration: 0.075, volume: 0.2 * v, filter: { type: "lowpass", from: 720 }, playbackRate: 0.65 });
   },
 
   uiClick() {
