@@ -359,6 +359,9 @@ button { -webkit-tap-highlight-color: transparent; }
 .exploration-rail button > b { grid-row: 1 / 3; display: grid; place-items: center; color: #f0cf5d; font-size: 27px; }
 .exploration-rail button > span { align-self: end; font-size: 15px; font-weight: 1000; letter-spacing: .1em; }
 .exploration-rail button > small { color: #a7ad98; font-size: 9px; font-weight: 800; }
+.exploration-task-entry { position: relative; }
+.task-unclaimed-dot { position: absolute; right: 7px; top: 7px; width: 12px; height: 12px; background: #e13c43; border: 2px solid #ffd9d9; border-radius: 50%; box-shadow: 0 0 10px #e13c43; animation: task-dot-pulse .8s ease-in-out infinite alternate; }
+@keyframes task-dot-pulse { to { transform: scale(.76); opacity: .72; } }
 
 .exploration-task-map { position: absolute; z-index: 3; inset: 13% 13% 8%; }
 .exploration-route { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 3px 1px rgba(0,0,0,.46)); }
@@ -400,12 +403,14 @@ button { -webkit-tap-highlight-color: transparent; }
 .daily-activity-card > div { grid-column: 1 / 3; height: 7px; overflow: hidden; background: #303830; border: 1px solid #4e584f; }
 .daily-activity-card > div span { display: block; height: 100%; background: linear-gradient(90deg, #c9962f, #f2d45f); box-shadow: 0 0 9px #e7be45; }
 .daily-activity-card > p { grid-column: 1 / 3; margin: 0; color: #959e94; font-size: 9px; font-weight: 900; }
+.daily-activity-card > button { grid-column: 1 / 3; padding: 7px; color: #10150f; background: var(--signal); border: 0; cursor: pointer; font-size: 9px; font-weight: 1000; }
 .daily-activity-card.claimed { border-color: #67b77a; border-right-color: #67d785; }
 .daily-activity-card.claimed > strong, .daily-activity-card.claimed > p { color: #77dc8d; }
 .task-system-list { position: absolute; z-index: 7; left: 7%; right: 7%; top: 30%; bottom: 5%; display: grid; align-content: start; gap: 9px; padding: 3px 10px 15px 2px; overflow-y: auto; scrollbar-color: var(--signal) #151b16; }
 .achievement-list { top: 24%; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
 .task-system-card { position: relative; min-height: 84px; display: grid; grid-template-columns: 45px minmax(190px,1fr) minmax(120px,180px) minmax(125px,175px) 86px; align-items: center; gap: 13px; padding: 12px 14px; color: #e6e8dd; background: rgba(19,25,20,.95); border: 1px solid #475248; border-left: 5px solid #7b846f; box-shadow: 5px 6px 0 rgba(0,0,0,.3); }
 .task-system-card.completed { background: rgba(26,40,28,.96); border-color: #5d8d65; border-left-color: #79d28a; }
+.task-system-card.claimable { border-color: #c8a742; border-left-color: var(--signal); box-shadow: 0 0 13px rgba(241,198,67,.2), 5px 6px 0 rgba(0,0,0,.3); }
 .task-card-index { display: grid; place-items: center; width: 39px; height: 39px; color: #e6c957; background: #111711; border: 1px solid #625d3e; border-radius: 50%; font-family: monospace; font-size: 12px; }
 .task-card-copy { display: grid; gap: 5px; }
 .task-card-copy strong { font-size: 14px; letter-spacing: .04em; }
@@ -419,12 +424,14 @@ button { -webkit-tap-highlight-color: transparent; }
 .task-card-reward strong { color: #efd16a; font-size: 10px; }
 .task-system-card > em { color: #9ca49a; text-align: right; font-size: 10px; font-style: normal; font-weight: 1000; white-space: nowrap; }
 .task-system-card.completed > em { color: #7cdb8d; }
+.task-claim-button { justify-self: end; min-width: 68px; padding: 9px 10px; color: #12160f; background: var(--signal); border: 1px solid #fff0a3; border-bottom: 4px solid #766018; cursor: pointer; font-size: 10px; font-weight: 1000; }
 .achievement-card { min-height: 112px; grid-template-columns: 40px minmax(120px,1fr) 110px; grid-template-rows: 1fr auto; gap: 7px 11px; }
 .achievement-card .task-card-index { grid-row: 1 / 3; }
 .achievement-card .task-card-copy { grid-column: 2; }
 .achievement-card .task-card-progress { grid-column: 2; grid-row: 2; }
 .achievement-card .task-card-reward { grid-column: 3; grid-row: 1; align-self: stretch; justify-content: center; }
 .achievement-card > em { grid-column: 3; grid-row: 2; }
+.achievement-card > .task-claim-button { grid-column: 3; grid-row: 2; }
 
 /* 探索模式子界面通用标题与返回按钮。 */
 .exploration-subscreen-back, .battle-exit { position: absolute; z-index: 15; left: clamp(16px, 3vw, 46px); top: 20px; padding: 10px 15px; color: #e4e6dc; background: rgba(15,20,16,.92); border: 1px solid #7c8879; border-bottom: 4px solid #343c35; cursor: pointer; font-size: 11px; font-weight: 1000; letter-spacing: .08em; }
@@ -436,7 +443,7 @@ button { -webkit-tap-highlight-color: transparent; }
 
 /* 探索商店：旧公路旁的小型商铺，柜台前仅提供点券兑换。 */
 .exploration-shop-panel { isolation: isolate; overflow-x: hidden; overflow-y: auto; background: #303733; scroll-snap-type: y proximity; }
-.exploration-shop-scroll-spacer { width: 1px; height: 200%; pointer-events: none; }
+.exploration-shop-scroll-spacer { width: 1px; height: 300%; pointer-events: none; }
 .exploration-shop-scenery { position: absolute; z-index: -1; left: 0; right: 0; top: 0; height: 100%; overflow: hidden; background: repeating-linear-gradient(90deg, rgba(255,255,255,.018) 0 4px, transparent 5px 68px), linear-gradient(180deg, #303b35 0 18%, #5c5140 18% 72%, #39342d 72%); }
 .shop-awning { position: absolute; left: 12%; right: 12%; top: 16%; height: 42px; background: repeating-linear-gradient(90deg, #6f2f2b 0 72px, #d4c39a 73px 142px); border: 4px solid #2d2d26; clip-path: polygon(2% 0, 98% 0, 100% 100%, 0 100%); box-shadow: 0 13px 0 rgba(0,0,0,.24); }
 .shop-shelf { position: absolute; top: 29%; width: 25%; height: 39%; display: flex; align-items: end; justify-content: space-around; padding: 18px; background: repeating-linear-gradient(180deg, transparent 0 29%, #29271f 30% 34%, transparent 35% 62%, #29271f 63% 68%, transparent 69%); border: 7px solid #312d23; }
@@ -487,6 +494,21 @@ button { -webkit-tap-highlight-color: transparent; }
 .starter-pack-card > button { grid-column: 2; min-height: 48px; color: #17170e; background: #efc849; border: 1px solid #fff0a3; border-bottom: 6px solid #796219; cursor: pointer; font-size: 15px; font-weight: 1000; letter-spacing: .08em; box-shadow: 0 0 18px rgba(255,198,45,.35); }
 .starter-pack-card > button:disabled { color: #f3ddb0; background: #5b5135; border-color: #9f884d; border-bottom-color: #302a1d; cursor: default; }
 .starter-pack-card > small { grid-column: 2; color: #cdb875; text-align: center; font-size: 9px; font-weight: 900; }
+
+.consumable-shop-page { position: absolute; z-index: 5; left: 0; right: 0; top: 200%; height: 100%; overflow: hidden; scroll-snap-align: start; background: linear-gradient(180deg,#3c493f 0 25%,#272d28 25%); border: 4px solid #657468; }
+.consumable-shop-window { position: absolute; inset: 12% 5% 6%; background: repeating-linear-gradient(90deg,#313a33 0 90px,#263029 91px 96px); border: 10px solid #171d19; box-shadow: inset 0 0 80px #0b0f0c; }
+.consumable-shop-heading { position: absolute; z-index: 2; left: 50%; top: 7%; text-align: center; transform: translateX(-50%); }
+.consumable-shop-heading p,.consumable-shop-heading small { margin: 0; color: #d6bf66; font-size: 9px; font-weight: 1000; }
+.consumable-shop-heading h2 { margin: 3px 0; font-size: 36px; }
+.consumable-shop-grid { position: absolute; z-index: 3; left: 7%; right: 7%; top: 29%; bottom: 8%; display: grid; grid-template-columns: repeat(3,1fr); gap: 18px; }
+.consumable-product { display: grid; grid-template-rows: 115px auto 1fr auto auto auto; gap: 7px; padding: 18px; color: #e8e9dd; background: rgba(12,17,13,.94); border: 1px solid #68766a; box-shadow: 8px 10px 0 rgba(0,0,0,.38); }
+.consumable-product-icon { position: relative; background: radial-gradient(circle,#697667,transparent 65%); }
+.consumable-product-icon::before { content:""; position:absolute; left:50%; top:50%; width:74px; height:42px; background:#56624f; border:5px solid #202720; transform:translate(-50%,-50%); }
+.product-armySupport .consumable-product-icon::after { content:"×5 M16"; position:absolute; inset:0; display:grid; place-items:center; color:#f0ce55; font-weight:1000; }
+.product-armoredSupport .consumable-product-icon::after { content:"HMG"; position:absolute; inset:0; display:grid; place-items:center; color:#f0ce55; font-weight:1000; }
+.product-airSupport .consumable-product-icon::after { content:"✈  ×2"; position:absolute; inset:0; display:grid; place-items:center; color:#f0ce55; font-size:25px; font-weight:1000; }
+.consumable-product h3 { margin:0; font-size:20px; }.consumable-product p { margin:0; color:#9ba49a; font-size:10px; line-height:1.5; }.consumable-product span,.consumable-product strong { font-size:10px; }.consumable-product strong { color:#f1cf58; }
+.consumable-product button { padding:11px; color:#11160f; background:var(--signal); border:0; border-bottom:5px solid #705b18; cursor:pointer; font-weight:1000; }
 
 /* 共用车辆模型：白漆底色叠加泥土、污渍和血渍；等级只改变车体外形。 */
 .exploration-vehicle { position: relative; width: 470px; height: 205px; filter: drop-shadow(13px 15px 6px rgba(0,0,0,.48)); }
@@ -610,6 +632,12 @@ button { -webkit-tap-highlight-color: transparent; }
 .team-consumable-slot b { font-size: 29px; font-weight: 400; }
 .team-consumable-slot strong { color: #b6bcb3; font-size: 10px; }
 .team-consumable-slot small { font-size: 8px; }
+.team-consumable-slot.equipped { color:#e9e7d8; background:#1d2a20; border:2px solid #d8b84c; cursor:pointer; }
+.team-consumable-inventory { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:18px; }
+.team-consumable-inventory button { display:grid; gap:5px; padding:14px; color:#e7e8dc; text-align:left; background:#151c17; border:1px solid #4e5a50; cursor:pointer; }
+.team-consumable-inventory button:disabled { opacity:.6; cursor:default; }
+.team-consumable-inventory small { color:#8e988e; }
+.team-consumable-inventory b { color:var(--signal); }
 .team-consumables-section > p { margin-top: 24px; color: #8b948a; text-align: center; font-size: 10px; }
 
 @media (max-width: 980px) {
@@ -657,12 +685,35 @@ button { -webkit-tap-highlight-color: transparent; }
 .battle-top-hud small { color: #939c92; font-size: 8px; font-weight: 900; letter-spacing: .1em; }
 .battle-top-hud strong { grid-row: 2; color: #f0eee0; font-family: monospace; font-size: 18px; }
 .battle-top-hud span { grid-column: 2; grid-row: 1 / 3; align-self: center; color: #9fa89d; font-size: 9px; }
+.battle-consumable-bar { position:absolute; z-index:13; right:2%; top:14px; display:flex; gap:6px; }
+.battle-consumable-bar button { min-width:100px; display:grid; gap:2px; padding:7px 9px; color:#e8e8dc; background:rgba(12,17,14,.94); border:1px solid #8a7b42; cursor:pointer; }.battle-consumable-bar button:disabled{opacity:.48;cursor:not-allowed}.battle-consumable-bar strong{font-size:9px}.battle-consumable-bar small{color:#99a198;font-size:8px}.battle-consumable-bar b{color:var(--signal);font-size:9px}
 .battle-courage { border-color: #c9aa41 !important; }
 .battle-courage strong { color: #ffdd64; font-size: 27px; }
 .battle-vehicle-hp { min-width: 200px !important; }
 .battle-vehicle-hp i { grid-column: 1 / 3; height: 5px; overflow: hidden; background: #202520; }
 .battle-vehicle-hp i b { display: block; height: 100%; background: linear-gradient(90deg, #c83f43, #71ce70); transition: width .2s; }
 .battlefield { position: absolute; z-index: 3; left: 0; right: 0; top: 15%; bottom: 22%; }
+.army-support-squad { position:absolute; z-index:7; left:1%; bottom:3%; display:flex; align-items:flex-end; animation:army-support-arrive .45s ease-out both; }
+.army-support-squad.leaving { animation:army-support-leave .65s ease-in both; }
+.support-soldier-model { position:relative; width:108px; height:168px; display:block; }
+.support-soldier-model + .support-soldier-model { margin-left:-25px; }
+.army-support-squad .team-member-preview { width:108px; height:168px; max-height:none; object-fit:contain; filter:drop-shadow(3px 4px 2px rgba(0,0,0,.55)); }
+.armored-support-vehicle { position:absolute; z-index:6; left:3%; bottom:0; width:264px; height:193px; pointer-events:none; animation:armored-support-arrive .55s cubic-bezier(.2,.75,.25,1) both; }
+.armored-support-vehicle.leaving { animation:armored-support-leave .65s ease-in both; }
+.armored-support-vehicle canvas { display:block; width:264px; height:193px; object-fit:contain; filter:drop-shadow(5px 7px 4px rgba(0,0,0,.58)); }
+@keyframes armored-support-arrive { from { opacity:0; transform:translateX(-300px); } to { opacity:1; transform:translateX(0); } }
+@keyframes armored-support-leave { from { opacity:1; transform:translateX(0); } to { opacity:0; transform:translateX(-330px); } }
+@keyframes army-support-arrive { from { opacity:0; transform:translateX(-140px); } to { opacity:1; transform:translateX(0); } }
+@keyframes army-support-leave { from { opacity:1; transform:translateX(0); } to { opacity:0; transform:translateX(-180px); } }
+.battle-airstrike-blast { position:absolute; z-index:10; bottom:4%; width:130px; height:210px; transform:translateX(-50%); }
+.battle-airstrike-blast.incoming::before { content:""; position:absolute; left:58px; top:-95px; width:14px; height:52px; background:linear-gradient(90deg,#282c2c,#8b8e83 45%,#222727); border-radius:45% 45% 24% 24%; box-shadow:0 -16px 0 -5px #303535; animation:airstrike-bomb-fall .55s linear both; }
+.battle-airstrike-blast.incoming::after { content:""; position:absolute; left:50%; bottom:0; width:38px; height:10px; border:2px solid rgba(255,211,89,.75); border-radius:50%; transform:translateX(-50%); animation:airstrike-target-pulse .3s ease-in-out infinite alternate; }
+.battle-airstrike-blast.impact { background:radial-gradient(ellipse at 50% 90%,rgba(255,195,62,.9),rgba(225,67,26,.62) 24%,transparent 58%); animation:airstrike-column 1.25s ease-out forwards; }
+.battle-airstrike-blast.impact::before { content:""; position:absolute; left:25%; right:25%; bottom:18%; height:72%; background:linear-gradient(0deg,#e96b26,#e9be56 30%,#4b4b42 70%,transparent); filter:blur(8px); }
+@keyframes airstrike-bomb-fall { from { transform:translateY(0); } to { transform:translateY(245px); } }
+@keyframes airstrike-target-pulse { to { width:64px; height:18px; opacity:.45; } }
+@keyframes airstrike-column { from { opacity:0; transform:translateX(-50%) scale(.3); } 20% { opacity:1; } to { opacity:0; transform:translateX(-50%) scale(1.35); } }
+.airstrike-shaking { animation:battle-airstrike-shake .08s linear infinite alternate}@keyframes battle-airstrike-shake{to{transform:translate(5px,-3px)}}
 .battle-vehicle-position { position: absolute; z-index: 2; left: .5%; bottom: 5%; width: 390px; height: 220px; }
 .battle-unit, .battle-enemy { position: absolute; z-index: 5; bottom: 9%; width: 45px; height: 104px; filter: drop-shadow(4px 5px 2px rgba(0,0,0,.55)); transform: translateX(-50%); transition: left .24s linear; }
 .battle-unit.advancing { animation: battle-walk .38s ease-in-out infinite alternate; }

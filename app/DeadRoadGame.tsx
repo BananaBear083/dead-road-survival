@@ -39,6 +39,8 @@ type LotteryRarity = "common" | "rare" | "epic" | "legendary";
 type LotteryPhase = "idle" | "firing" | "flash" | "reveal";
 type ExplorationTeamTab = "personnel" | "consumables";
 type ExplorationTaskSystemTab = "daily" | "achievements";
+type ExplorationConsumableKey = "armySupport" | "armoredSupport" | "airSupport";
+type ExplorationConsumableInventory = Record<ExplorationConsumableKey, number>;
 type ExplorationMemberRarity = "common" | "rare" | "epic" | "legendary";
 type ExplorationMemberSpeed = "慢" | "中等" | "快";
 type ExplorationVehicleKind = "van" | "truck" | "bus";
@@ -47,6 +49,7 @@ type ExplorationBattleUnit = { id: string; memberId: string; label: string; leve
 type ExplorationBattleZombie = { id: number; kind: "normal"; hp: number; maxHp: number; x: number; cooldown: number; damage: number; speed: number; action: "guard" | "walk" | "attack"; wounds: Wound[]; missingLimbs: ZombieLimb[]; legDamage: number; knockedDownRemaining: number };
 type ExplorationBattleKnife = { id: number; fromX: number; toX: number; life: number };
 type ExplorationBattlePendingKick = { id: number; targetId: number; impactAt: number };
+type ExplorationAirstrikeEffect = { id: number; x: number; impactAt: number; until: number; impacted: boolean };
 type ExplorationZombieDamageState = { hp: number; wounds: Wound[]; missingLimbs: ZombieLimb[]; legDamage: number; knockedDownRemaining: number };
 type ExplorationBattleState = {
   taskOrder: number;
@@ -63,6 +66,11 @@ type ExplorationBattleState = {
   nextKnifeId: number;
   nextKickId: number;
   kills: number;
+  supportCooldownUntil: ExplorationConsumableInventory;
+  supportActiveUntil: ExplorationConsumableInventory;
+  armySupportNextShotAt: number;
+  armoredSupportNextShotAt: number;
+  airstrikeEffects: ExplorationAirstrikeEffect[];
   failed: boolean;
   completed: boolean;
 };
@@ -82,6 +90,8 @@ type ExplorationMemberDefinition = {
   faction: string;
   hp: number;
   damage: number;
+  hpPerLevel: number;
+  damagePerLevel: number;
   speed: ExplorationMemberSpeed;
   speedFactor: number;
   purchaseCost: number;
@@ -795,6 +805,29 @@ const EXPLORATION_TASK1_EXPERIENCE = 157;
 const EXPLORATION_TEAM_SIZE = 6;
 const EXPLORATION_DAILY_ACTIVITY_REWARD_TARGET = 300;
 const EXPLORATION_DAILY_ACTIVITY_REWARD_VOUCHERS = 100;
+const EXPLORATION_SUPPORT_DURATION_MS = 10000;
+const EXPLORATION_SUPPORT_ARRIVAL_MS = 550;
+const EXPLORATION_CONSUMABLE_COOLDOWN_MS = 30000;
+const EMPTY_EXPLORATION_CONSUMABLES = (): ExplorationConsumableInventory => ({ armySupport: 0, armoredSupport: 0, airSupport: 0 });
+const EXPLORATION_CONSUMABLES: Record<ExplorationConsumableKey, { name: string; price: number; description: string }> = {
+  armySupport: { name: "军队支援", price: 500, description: "5 名持 M16 士兵参战 10 秒后撤离" },
+  armoredSupport: { name: "装甲车支援", price: 700, description: "第八关同型重机枪装甲车扫射 10 秒" },
+  airSupport: { name: "空中支援", price: 1000, description: "向僵尸最密集的两处投下大威力航空炸弹" },
+};
+
+function explorationAutomaticWeaponPhase(weaponKey: WeaponKey, startedAt: number, now: number) {
+  const weapon = WEAPONS[weaponKey];
+  const fireDuration = weapon.magazine * weapon.fireRate;
+  const cycleDuration = fireDuration + weapon.reload;
+  const elapsed = Math.max(0, now - startedAt);
+  const cycleElapsed = cycleDuration > 0 ? elapsed % cycleDuration : 0;
+  const reloading = weapon.reload > 0 && cycleElapsed >= fireDuration;
+  return {
+    reloading,
+    reloadProgress: reloading ? Math.min(1, (cycleElapsed - fireDuration) / weapon.reload) : 0,
+    shotSerial: Math.floor(elapsed / Math.max(1, weapon.fireRate)),
+  };
+}
 type ExplorationDailyMetric = "mainlineCompletions" | "recruitDraws" | "consumablesPurchased" | "coinsEarned" | "experienceEarned";
 type ExplorationDailyProgress = {
   dateKey: string;
@@ -804,7 +837,7 @@ type ExplorationDailyProgress = {
   coinsEarned: number;
   experienceEarned: number;
   activity: number;
-  completedTaskIds: string[];
+  claimedTaskIds: string[];
   activityRewardClaimed: boolean;
 };
 type ExplorationAchievementProgress = {
@@ -874,6 +907,8 @@ const EXPLORATION_MEMBERS: ExplorationMemberDefinition[] = [
     faction: "民间武装",
     hp: 80,
     damage: 15,
+    hpPerLevel: 5,
+    damagePerLevel: 1,
     speed: "中等",
     speedFactor: 1,
     purchaseCost: 0,
@@ -888,6 +923,8 @@ const EXPLORATION_MEMBERS: ExplorationMemberDefinition[] = [
     faction: "民间武装",
     hp: 70,
     damage: WEAPONS.sawedoff.damage,
+    hpPerLevel: 3,
+    damagePerLevel: 2,
     speed: "慢",
     speedFactor: .82,
     purchaseCost: 0,
@@ -902,6 +939,8 @@ const EXPLORATION_MEMBERS: ExplorationMemberDefinition[] = [
     faction: "军队",
     hp: 150,
     damage: 50,
+    hpPerLevel: 5,
+    damagePerLevel: 2,
     speed: "快",
     speedFactor: 1.24,
     purchaseCost: 0,
@@ -913,6 +952,23 @@ const EXPLORATION_MEMBERS: ExplorationMemberDefinition[] = [
     combatSkills: { attackIntervalFactor: .72, kickEvery: 3, comboChance: .3, thrownKnifeInterval: 10, thrownKnifeDamage: 100 },
   },
 ];
+/** 临时军队支援同样复用探索人物/生存武器模型，但不进入玩家可培养的人员列表。 */
+const EXPLORATION_SUPPORT_SOLDIER: ExplorationMemberDefinition = {
+  id: "supportSoldier",
+  name: "支援士兵",
+  weapon: "m16",
+  rarity: "rare",
+  trait: "10 秒火力支援",
+  faction: "军队",
+  hp: 100,
+  damage: WEAPONS.m16.damage,
+  hpPerLevel: 0,
+  damagePerLevel: 0,
+  speed: "中等",
+  speedFactor: 1,
+  purchaseCost: 0,
+  levelSkills: [{ level: 5, name: "无" }, { level: 10, name: "无" }, { level: 15, name: "无" }],
+};
 const EXPLORATION_MEMBER_IDS = new Set(EXPLORATION_MEMBERS.map((member) => member.id));
 
 function explorationVehicleKind(level: number): ExplorationVehicleKind {
@@ -926,6 +982,11 @@ function explorationVehicleMaxHp(level: number) { return 200 + (level - 1) * 20;
 function explorationVehicleUpgradeCost(level: number) { return 2000 + (level - 1) * 1000; }
 
 function explorationMemberUpgradeCost(level: number) { return 200 + (level - 1) * 50; }
+
+function explorationMemberStatsAtLevel(member: ExplorationMemberDefinition, level: number) {
+  const gainedLevels = Math.max(0, level - 1);
+  return { hp: member.hp + gainedLevels * member.hpPerLevel, damage: member.damage + gainedLevels * member.damagePerLevel };
+}
 
 function survivalKickDamage(day: number) { return 11 + day * .75; }
 
@@ -947,7 +1008,7 @@ function freshExplorationDailyProgress(dateKey = explorationLocalDateKey()): Exp
     coinsEarned: 0,
     experienceEarned: 0,
     activity: 0,
-    completedTaskIds: [],
+    claimedTaskIds: [],
     activityRewardClaimed: false,
   };
 }
@@ -996,6 +1057,11 @@ function freshExplorationBattle(vehicleHp: number, taskOrder: number, rewardElig
     nextKnifeId: 1,
     nextKickId: 1,
     kills: 0,
+    supportCooldownUntil: EMPTY_EXPLORATION_CONSUMABLES(),
+    supportActiveUntil: EMPTY_EXPLORATION_CONSUMABLES(),
+    armySupportNextShotAt: 0,
+    armoredSupportNextShotAt: 0,
+    airstrikeEffects: [],
     failed: false,
     completed: false,
   };
@@ -1010,6 +1076,30 @@ function ExplorationVehicleModel({ kind, compact = false }: { kind: ExplorationV
       <span className="vehicle-bumper" />
     </div>
   );
+}
+
+/** 消耗品装甲车直接调用经典模式第八关的 M-ATV 绘制函数，确保车体与重机枪完全同型。 */
+function ExplorationArmoredSupportModel({ firing }: { firing: boolean }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const canvas = ref.current;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return;
+    let animationFrame = 0;
+    const draw = (now: number) => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawLevel8ArmoredVehicle(ctx, {
+        truckX: 225,
+        truckY: 304,
+        vehicleAimAngle: -.06,
+        vehicleLastShot: firing ? now : 0,
+      }, now);
+      animationFrame = window.requestAnimationFrame(draw);
+    };
+    draw(performance.now());
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [firing]);
+  return <canvas ref={ref} width={480} height={350} aria-label="经典模式第八关同型重机枪装甲车" />;
 }
 
 const LOTTERY_RARITIES: Record<LotteryRarity, { label: string; chance: number; rank: number }> = {
@@ -1069,6 +1159,8 @@ type ExplorationProgress = {
   starterPackPurchased: boolean;
   dailyProgress: ExplorationDailyProgress;
   achievementProgress: ExplorationAchievementProgress;
+  consumableInventory: ExplorationConsumableInventory;
+  deployedConsumables: ExplorationConsumableKey[];
 };
 
 function readExplorationProgress(): ExplorationProgress {
@@ -1085,6 +1177,8 @@ function readExplorationProgress(): ExplorationProgress {
     starterPackPurchased: false,
     dailyProgress: freshExplorationDailyProgress(),
     achievementProgress: freshExplorationAchievementProgress(),
+    consumableInventory: EMPTY_EXPLORATION_CONSUMABLES(),
+    deployedConsumables: [],
   };
   try {
     if (typeof window === "undefined") return fallback;
@@ -1116,9 +1210,11 @@ function readExplorationProgress(): ExplorationProgress {
       coinsEarned: nonNegative(rawDaily.coinsEarned),
       experienceEarned: nonNegative(rawDaily.experienceEarned),
       activity: nonNegative(rawDaily.activity),
-      completedTaskIds: Array.isArray(rawDaily.completedTaskIds)
-        ? [...new Set(rawDaily.completedTaskIds.filter((id): id is string => typeof id === "string" && EXPLORATION_DAILY_TASK_IDS.has(id)))]
-        : [],
+      claimedTaskIds: Array.isArray(rawDaily.claimedTaskIds)
+        ? [...new Set(rawDaily.claimedTaskIds.filter((id): id is string => typeof id === "string" && EXPLORATION_DAILY_TASK_IDS.has(id)))]
+        : Array.isArray((rawDaily as ExplorationDailyProgress & { completedTaskIds?: unknown[] }).completedTaskIds)
+          ? [...new Set((rawDaily as ExplorationDailyProgress & { completedTaskIds: unknown[] }).completedTaskIds.filter((id): id is string => typeof id === "string" && EXPLORATION_DAILY_TASK_IDS.has(id)))]
+          : [],
       activityRewardClaimed: rawDaily.activityRewardClaimed === true,
     } : freshExplorationDailyProgress(today);
     const rawAchievements = parsed.achievementProgress && typeof parsed.achievementProgress === "object" ? parsed.achievementProgress : null;
@@ -1130,6 +1226,15 @@ function readExplorationProgress(): ExplorationProgress {
         ? [...new Set(rawAchievements.claimedAchievementIds.filter((id): id is string => typeof id === "string" && EXPLORATION_ACHIEVEMENT_IDS.has(id)))]
         : [],
     };
+    const rawConsumables = parsed.consumableInventory && typeof parsed.consumableInventory === "object" ? parsed.consumableInventory : EMPTY_EXPLORATION_CONSUMABLES();
+    const consumableInventory: ExplorationConsumableInventory = {
+      armySupport: nonNegative(rawConsumables.armySupport),
+      armoredSupport: nonNegative(rawConsumables.armoredSupport),
+      airSupport: nonNegative(rawConsumables.airSupport),
+    };
+    const deployedConsumables = Array.isArray(parsed.deployedConsumables)
+      ? [...new Set(parsed.deployedConsumables.filter((key): key is ExplorationConsumableKey => typeof key === "string" && key in EXPLORATION_CONSUMABLES))].slice(0, 3)
+      : [];
     return {
       coins: nonNegative(parsed.coins),
       experience: nonNegative(parsed.experience),
@@ -1143,6 +1248,8 @@ function readExplorationProgress(): ExplorationProgress {
       starterPackPurchased: parsed.starterPackPurchased === true,
       dailyProgress,
       achievementProgress,
+      consumableInventory,
+      deployedConsumables,
     };
   } catch {
     return fallback;
@@ -2304,7 +2411,9 @@ function drawLevel8TollCorridor(ctx: CanvasRenderingContext2D, g: GameState) {
   drawText(ctx, "出口 / 管理中心", W - 260, 120, 20, "#d3c982", "center");
 }
 
-function drawLevel8ArmoredVehicle(ctx: CanvasRenderingContext2D, level: LevelRunState, now: number, parkedX = level.truckX, parkedY = level.truckY) {
+type Level8ArmoredVehicleDrawingState = Pick<LevelRunState, "truckX" | "truckY" | "vehicleAimAngle" | "vehicleLastShot">;
+
+function drawLevel8ArmoredVehicle(ctx: CanvasRenderingContext2D, level: Level8ArmoredVehicleDrawingState, now: number, parkedX = level.truckX, parkedY = level.truckY) {
   const x = parkedX;
   const y = parkedY;
   ctx.save(); ctx.translate(x, y);
@@ -8380,6 +8489,30 @@ function previewZombie(kind: ZombieKind): Zombie {
   };
 }
 
+/** 生存、关卡、图鉴与探索战斗共用的完整僵尸身体帧，攻击时也不会漏绘躯干、头部或四肢。 */
+function drawCompleteZombieBodyFrame(
+  ctx: CanvasRenderingContext2D,
+  zombie: Zombie,
+  scale: number,
+  facing: number,
+  now: number,
+  rearLeg: Array<[number, number]>,
+  frontLeg: Array<[number, number]>,
+  leftArm: Array<[number, number]>,
+  rightArm: Array<[number, number]>,
+  alive = true,
+) {
+  if (zombie.kind === "zombieDog") drawZombieDog(ctx, zombie, scale, facing, now);
+  else {
+    const skin = zombie.radius > 29 ? "#6e7c52" : "#7e8c60";
+    drawZombieLegAssembly(ctx, zombie, rearLeg, frontLeg, scale);
+    drawZombieTorso(ctx, zombie, scale);
+    drawZombieArmAssembly(ctx, zombie, leftArm, rightArm, scale, skin);
+    drawZombieHeadAndWounds(ctx, zombie, scale, facing, alive);
+  }
+  if (zombie.kind === "shield" && zombie.shieldIntact) drawZombieShield(ctx, zombie, scale, facing);
+}
+
 function ZombieKindPreview({ kind, width = 150, height = 200, className = "spawn-preview", motion = "standing", hpRatio = 1, wounds = [], missingLimbs = [], knockedDown = false, fillHeight = false }: { kind: ZombieKind; width?: number; height?: number; className?: string; motion?: "standing" | "walking" | "attacking"; hpRatio?: number; wounds?: Wound[]; missingLimbs?: ZombieLimb[]; knockedDown?: boolean; fillHeight?: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
@@ -8396,7 +8529,6 @@ function ZombieKindPreview({ kind, width = 150, height = 200, className = "spawn
       const referenceRadius = fillHeight ? z.radius : 36;
       const fit = (height - 14) / (BASE_HUMAN_HEIGHT * (referenceRadius / 25) * CHARACTER_SCALE);
       const scale = (z.radius / 25) * CHARACTER_SCALE * fit;
-      const skin = z.radius > 29 ? "#6e7c52" : "#7e8c60";
       const gaitCycle = (now / 300) % 1;
       const attackProgress = motion === "attacking" ? (now % 560) / 560 : 0;
       const rearLeg = motion === "walking" ? gaitLegPose((gaitCycle + .5) % 1, -1, -5, 7, 3.5) : standingLegPose(-1, -5);
@@ -8404,14 +8536,7 @@ function ZombieKindPreview({ kind, width = 150, height = 200, className = "spawn
       ctx.save();
       ctx.translate(knockedDown ? canvas.width * .2 : canvas.width / 2, knockedDown ? canvas.height * .73 : canvas.height - 6 + (motion === "walking" ? Math.sin(gaitCycle * Math.PI * 4) : 0));
       if (knockedDown) ctx.rotate(-Math.PI * .46);
-      if (z.kind === "zombieDog") drawZombieDog(ctx, z, scale, -1, now);
-      else {
-        drawZombieLegAssembly(ctx, z, rearLeg, frontLeg, scale);
-        drawZombieTorso(ctx, z, scale);
-        drawZombieArmAssembly(ctx, z, zombieSmashArmPose(attackProgress, -1, -1), zombieSmashArmPose(Math.max(0, attackProgress - .035), -1, 1), scale, skin);
-        drawZombieHeadAndWounds(ctx, z, scale, -1, true);
-      }
-      if (z.kind === "shield" && z.shieldIntact) drawZombieShield(ctx, z, scale, -1);
+      drawCompleteZombieBodyFrame(ctx, z, scale, -1, now, rearLeg, frontLeg, zombieSmashArmPose(attackProgress, -1, -1), zombieSmashArmPose(Math.max(0, attackProgress - .035), -1, 1));
       ctx.restore();
       if (motion !== "standing") animationFrame = window.requestAnimationFrame(draw);
     };
@@ -8533,7 +8658,7 @@ function ExplorationMemberPreview({ member, motion = "standing", reloadProgress 
       const facing = 1;
       const scale = battleScale ? 2.8 : 1.9;
       const farmer = member.id === "farmer";
-      const soldier = member.id === "combatSoldier";
+      const soldier = member.faction === "军队";
       const gaitCycle = (now / 230) % 1;
       const moving = motion === "moving";
       const kickProgress = Math.min(1, Math.max(0, (now - motionStartedAt) / KICK_ANIMATION_MS));
@@ -8747,6 +8872,8 @@ export function DeadRoadGame() {
   const [explorationTaskSystemTab, setExplorationTaskSystemTab] = useState<ExplorationTaskSystemTab>("daily");
   const [explorationDailyProgress, setExplorationDailyProgress] = useState<ExplorationDailyProgress>(freshExplorationDailyProgress);
   const [explorationAchievementProgress, setExplorationAchievementProgress] = useState<ExplorationAchievementProgress>(freshExplorationAchievementProgress);
+  const [explorationConsumableInventory, setExplorationConsumableInventory] = useState<ExplorationConsumableInventory>(EMPTY_EXPLORATION_CONSUMABLES);
+  const [deployedExplorationConsumables, setDeployedExplorationConsumables] = useState<ExplorationConsumableKey[]>([]);
   const [selectedExplorationMemberId, setSelectedExplorationMemberId] = useState("civilian");
   const [deployedMemberIds, setDeployedMemberIds] = useState<string[]>(["civilian", "farmer"]);
   const [ownedMemberIds, setOwnedMemberIds] = useState<string[]>(["civilian", "farmer"]);
@@ -8754,6 +8881,7 @@ export function DeadRoadGame() {
   const [explorationMemberLevels, setExplorationMemberLevels] = useState<Record<string, number>>({ civilian: 1, farmer: 1 });
   const [starterPackPurchased, setStarterPackPurchased] = useState(false);
   const [explorationBattle, setExplorationBattle] = useState<ExplorationBattleState>(() => freshExplorationBattle(200, 1));
+  const [explorationSupportClock, setExplorationSupportClock] = useState(0);
   const [lotteryPhase, setLotteryPhase] = useState<LotteryPhase>("idle");
   const [lotteryZombieDamage, setLotteryZombieDamage] = useState<ExplorationZombieDamageState[]>(freshLotteryZombieDamage);
   const [lotteryLastHit, setLotteryLastHit] = useState<number | null>(null);
@@ -8791,6 +8919,8 @@ export function DeadRoadGame() {
       setStarterPackPurchased(progress.starterPackPurchased);
       setExplorationDailyProgress(progress.dailyProgress);
       setExplorationAchievementProgress(progress.achievementProgress);
+      setExplorationConsumableInventory(progress.consumableInventory);
+      setDeployedExplorationConsumables(progress.deployedConsumables);
       explorationProgressLoadedRef.current = true;
     });
     return () => { active = false; };
@@ -8810,8 +8940,10 @@ export function DeadRoadGame() {
       starterPackPurchased,
       dailyProgress: explorationDailyProgress,
       achievementProgress: explorationAchievementProgress,
+      consumableInventory: explorationConsumableInventory,
+      deployedConsumables: deployedExplorationConsumables,
     } satisfies ExplorationProgress));
-  }, [deployedMemberIds, explorationAchievementProgress, explorationCoins, explorationDailyProgress, explorationExperience, explorationMemberLevels, explorationVehicleLevel, explorationVouchers, ownedMemberIds, recruitTickets, recruitedMemberIds, starterPackPurchased]);
+  }, [deployedExplorationConsumables, deployedMemberIds, explorationAchievementProgress, explorationCoins, explorationConsumableInventory, explorationDailyProgress, explorationExperience, explorationMemberLevels, explorationVehicleLevel, explorationVouchers, ownedMemberIds, recruitTickets, recruitedMemberIds, starterPackPurchased]);
   const [shopTab, setShopTab] = useState<ShopTab>("weapons");
   // 靶场"僵尸生成"页签：各品种配置数量（0~30），纯 UI state，不进游戏快照
   const [spawnCounts, setSpawnCounts] = useState<Record<ZombieKind, number>>({
@@ -8944,65 +9076,34 @@ export function DeadRoadGame() {
     return () => window.clearTimeout(timer);
   }, [explorationDailyProgress.dateKey]);
 
-  useEffect(() => {
-    if (!explorationProgressLoadedRef.current) return;
+  const claimExplorationDailyTask = useCallback((task: ExplorationDailyTaskDefinition) => {
     const progress = currentExplorationDailyProgress(explorationDailyProgress);
-    if (progress !== explorationDailyProgress) return;
-    const newlyCompleted = EXPLORATION_DAILY_TASKS.filter((task) => (
-      progress[task.metric] >= task.target && !progress.completedTaskIds.includes(task.id)
-    ));
-    if (newlyCompleted.length === 0) return;
-    const rewardCoins = newlyCompleted.reduce((sum, task) => sum + (task.rewardCoins ?? 0), 0);
-    const rewardExperience = newlyCompleted.reduce((sum, task) => sum + (task.rewardExperience ?? 0), 0);
-    const earnedActivity = newlyCompleted.reduce((sum, task) => sum + task.activity, 0);
-    let active = true;
-    queueMicrotask(() => {
-      if (!active) return;
-      setExplorationDailyProgress((current) => ({
-        ...current,
-        coinsEarned: current.coinsEarned + rewardCoins,
-        experienceEarned: current.experienceEarned + rewardExperience,
-        activity: current.activity + earnedActivity,
-        completedTaskIds: [...current.completedTaskIds, ...newlyCompleted.map((task) => task.id)],
-      }));
-      if (rewardCoins > 0) setExplorationCoins((coins) => coins + rewardCoins);
-      if (rewardExperience > 0) setExplorationExperience((experience) => experience + rewardExperience);
-      sound.purchase();
-    });
-    return () => { active = false; };
+    if (progress[task.metric] < task.target || progress.claimedTaskIds.includes(task.id)) return;
+    setExplorationDailyProgress((current) => ({
+      ...current,
+      coinsEarned: current.coinsEarned + (task.rewardCoins ?? 0),
+      experienceEarned: current.experienceEarned + (task.rewardExperience ?? 0),
+      activity: current.activity + task.activity,
+      claimedTaskIds: [...current.claimedTaskIds, task.id],
+    }));
+    if (task.rewardCoins) setExplorationCoins((coins) => coins + task.rewardCoins!);
+    if (task.rewardExperience) setExplorationExperience((experience) => experience + task.rewardExperience!);
+    sound.purchase();
   }, [explorationDailyProgress]);
 
-  useEffect(() => {
-    if (!explorationProgressLoadedRef.current || explorationDailyProgress.activityRewardClaimed || explorationDailyProgress.activity < EXPLORATION_DAILY_ACTIVITY_REWARD_TARGET) return;
-    let active = true;
-    queueMicrotask(() => {
-      if (!active) return;
-      setExplorationDailyProgress((progress) => ({ ...progress, activityRewardClaimed: true }));
-      setExplorationVouchers((vouchers) => vouchers + EXPLORATION_DAILY_ACTIVITY_REWARD_VOUCHERS);
-      sound.purchase();
-    });
-    return () => { active = false; };
+  const claimExplorationActivityReward = useCallback(() => {
+    if (explorationDailyProgress.activity < EXPLORATION_DAILY_ACTIVITY_REWARD_TARGET || explorationDailyProgress.activityRewardClaimed) return;
+    setExplorationDailyProgress((progress) => ({ ...progress, activityRewardClaimed: true }));
+    setExplorationVouchers((vouchers) => vouchers + EXPLORATION_DAILY_ACTIVITY_REWARD_VOUCHERS);
+    sound.purchase();
   }, [explorationDailyProgress.activity, explorationDailyProgress.activityRewardClaimed]);
 
-  useEffect(() => {
-    if (!explorationProgressLoadedRef.current) return;
-    const newlyCompleted = EXPLORATION_ACHIEVEMENTS.filter((achievement) => (
-      explorationAchievementValue(achievement, explorationAchievementProgress, explorationClearedTasks) >= achievement.target
-      && !explorationAchievementProgress.claimedAchievementIds.includes(achievement.id)
-    ));
-    if (newlyCompleted.length === 0) return;
-    const rewardVouchers = newlyCompleted.reduce((sum, achievement) => sum + achievement.rewardVouchers, 0);
-    let active = true;
-    queueMicrotask(() => {
-      if (!active) return;
-      setExplorationAchievementProgress((progress) => ({
-        ...progress,
-        claimedAchievementIds: [...progress.claimedAchievementIds, ...newlyCompleted.map((achievement) => achievement.id)],
-      }));
-      setExplorationVouchers((vouchers) => vouchers + rewardVouchers);
-      sound.purchase();
-    });
-    return () => { active = false; };
+  const claimExplorationAchievement = useCallback((achievement: ExplorationAchievementDefinition) => {
+    if (explorationAchievementValue(achievement, explorationAchievementProgress, explorationClearedTasks) < achievement.target
+      || explorationAchievementProgress.claimedAchievementIds.includes(achievement.id)) return;
+    setExplorationAchievementProgress((progress) => ({ ...progress, claimedAchievementIds: [...progress.claimedAchievementIds, achievement.id] }));
+    setExplorationVouchers((vouchers) => vouchers + achievement.rewardVouchers);
+    sound.purchase();
   }, [explorationAchievementProgress, explorationClearedTasks]);
 
   const exchangeRecruitTicket = useCallback(() => {
@@ -9073,6 +9174,51 @@ export function DeadRoadGame() {
     setExplorationExchangeNotice("新手大礼包购买成功：获得 1000 经验点数、3000 金币和传奇人员「格斗士兵」。");
   }, [explorationVouchers, recordExplorationDailyEarnings, recordExplorationVoucherSpend, starterPackPurchased]);
 
+  const purchaseExplorationConsumable = useCallback((key: ExplorationConsumableKey) => {
+    // 测试阶段免费：保留原标价展示，但不扣金币。
+    setExplorationConsumableInventory((inventory) => ({ ...inventory, [key]: inventory[key] + 1 }));
+    setDeployedExplorationConsumables((deployed) => deployed.includes(key) ? deployed : [...deployed, key].slice(0, 3));
+    recordExplorationDailyMetric("consumablesPurchased");
+    sound.purchase();
+  }, [recordExplorationDailyMetric]);
+
+  const toggleExplorationConsumableDeployment = useCallback((key: ExplorationConsumableKey) => {
+    if (explorationConsumableInventory[key] <= 0) return;
+    sound.uiClick();
+    setDeployedExplorationConsumables((deployed) => deployed.includes(key) ? deployed.filter((item) => item !== key) : [...deployed, key].slice(0, 3));
+  }, [explorationConsumableInventory]);
+
+  const activateExplorationConsumable = useCallback((key: ExplorationConsumableKey) => {
+    const now = performance.now();
+    if (!deployedExplorationConsumables.includes(key) || explorationConsumableInventory[key] <= 0 || explorationBattle.supportCooldownUntil[key] > now) return;
+    setExplorationConsumableInventory((inventory) => ({ ...inventory, [key]: Math.max(0, inventory[key] - 1) }));
+    setExplorationBattle((battle) => {
+      const supportCooldownUntil = { ...battle.supportCooldownUntil, [key]: now + EXPLORATION_CONSUMABLE_COOLDOWN_MS };
+      if (key !== "airSupport") return {
+        ...battle,
+        supportCooldownUntil,
+        supportActiveUntil: { ...battle.supportActiveUntil, [key]: now + EXPLORATION_SUPPORT_DURATION_MS },
+        armySupportNextShotAt: key === "armySupport" ? now + EXPLORATION_SUPPORT_ARRIVAL_MS : battle.armySupportNextShotAt,
+        armoredSupportNextShotAt: key === "armoredSupport" ? now + EXPLORATION_SUPPORT_ARRIVAL_MS : battle.armoredSupportNextShotAt,
+      };
+      const alive = battle.zombies.filter((zombie) => zombie.hp > 0);
+      const density = alive.map((candidate) => ({
+        x: candidate.x,
+        count: alive.filter((zombie) => Math.abs(zombie.x - candidate.x) <= 9).length,
+      })).sort((a, b) => b.count - a.count);
+      const firstX = density[0]?.x ?? 72;
+      const secondX = density.find((entry) => Math.abs(entry.x - firstX) >= 12)?.x ?? Math.min(94, firstX + 18);
+      const targets = [firstX, secondX];
+      return {
+        ...battle,
+        supportCooldownUntil,
+        airstrikeEffects: targets.map((x, index) => ({ id: Math.floor(now) + index, x, impactAt: now + 550, until: now + 1800, impacted: false })),
+      };
+    });
+    if (key === "airSupport") sound.airstrike();
+    else sound.uiClick();
+  }, [deployedExplorationConsumables, explorationBattle.supportCooldownUntil, explorationConsumableInventory]);
+
   const startExplorationBattle = useCallback((taskOrder: number) => {
     sound.uiClick();
     reportedCompletedExplorationBattleRef.current = false;
@@ -9088,6 +9234,8 @@ export function DeadRoadGame() {
   const deployExplorationUnit = useCallback((memberId: string) => {
     const member = EXPLORATION_MEMBERS.find((candidate) => candidate.id === memberId);
     if (!member || !deployedMemberIds.includes(memberId)) return;
+    const level = explorationMemberLevels[memberId] ?? 1;
+    const stats = explorationMemberStatsAtLevel(member, level);
     const id = `member-${memberId}`;
     setExplorationBattle((battle) => {
       if (battle.failed || battle.courage < EXPLORATION_DEPLOY_COST || battle.deployed.includes(id)) return battle;
@@ -9100,10 +9248,10 @@ export function DeadRoadGame() {
           id,
           memberId,
           label: member.name,
-          level: explorationMemberLevels[memberId] ?? 1,
-          hp: member.hp,
-          maxHp: member.hp,
-          damage: member.damage,
+          level,
+          hp: stats.hp,
+          maxHp: stats.hp,
+          damage: stats.damage,
           speedFactor: member.speedFactor,
           x: 30,
           cooldown: 0,
@@ -9157,6 +9305,7 @@ export function DeadRoadGame() {
   useEffect(() => {
     if (screen !== "explorationBattle" || explorationBattle.failed || explorationBattle.completed) return;
     const combatTimer = window.setInterval(() => {
+      setExplorationSupportClock(performance.now());
       setExplorationBattle((battle) => {
         if (battle.failed) return battle;
         let units = battle.units.map((unit): ExplorationBattleUnit => {
@@ -9183,6 +9332,51 @@ export function DeadRoadGame() {
         let nextKnifeId = battle.nextKnifeId;
         let pendingKicks = battle.pendingKicks;
         let nextKickId = battle.nextKickId;
+        let armySupportNextShotAt = battle.armySupportNextShotAt;
+        let armoredSupportNextShotAt = battle.armoredSupportNextShotAt;
+        const supportNow = performance.now();
+        let airstrikeEffects = battle.airstrikeEffects.filter((effect) => effect.until > supportNow);
+        const impactingAirstrikes = airstrikeEffects.filter((effect) => !effect.impacted && effect.impactAt <= supportNow);
+        if (impactingAirstrikes.length > 0) {
+          zombies = zombies.map((zombie) => {
+            const hitCount = impactingAirstrikes.filter((effect) => Math.abs(zombie.x - effect.x) <= 11).length;
+            return hitCount > 0 ? {
+              ...zombie,
+              hp: zombie.hp - 500 * hitCount,
+              wounds: [...zombie.wounds.slice(-6), { x: 0, y: -82, region: "body" as HitRegion, size: 8 + hitCount * 2 }],
+            } : zombie;
+          });
+          airstrikeEffects = airstrikeEffects.map((effect) => effect.impactAt <= supportNow ? { ...effect, impacted: true } : effect);
+          impactingAirstrikes.forEach(() => sound.explosion("rocket"));
+        }
+        if (battle.supportActiveUntil.armySupport > supportNow) {
+          const armySupportStartedAt = battle.supportActiveUntil.armySupport - EXPLORATION_SUPPORT_DURATION_MS + EXPLORATION_SUPPORT_ARRIVAL_MS;
+          if (!zombies.some((zombie) => zombie.hp > 0)) armySupportNextShotAt = supportNow + WEAPONS.m16.fireRate;
+          while (zombies.some((zombie) => zombie.hp > 0) && armySupportNextShotAt <= supportNow) {
+            const shotPhase = explorationAutomaticWeaponPhase("m16", armySupportStartedAt, armySupportNextShotAt);
+            if (!shotPhase.reloading) {
+              // 五名士兵分别锁定道路上最近的五个目标，每发沿用生存模式 M16 的伤害与射速。
+              zombies.filter((zombie) => zombie.hp > 0).sort((a, b) => a.x - b.x).slice(0, 5).forEach((zombie) => {
+                zombie.hp -= weaponDamage("m16");
+                zombie.wounds = [...zombie.wounds.slice(-7), { x: 0, y: -86, region: "body", size: 3 }];
+              });
+              sound.gunshot("m16", { fireRateMs: WEAPONS.m16.fireRate, volume: .28 });
+            }
+            armySupportNextShotAt += WEAPONS.m16.fireRate;
+          }
+        }
+        if (battle.supportActiveUntil.armoredSupport > supportNow) {
+          // 探索战斗是单一路线：每一发仍按第八关的 86ms 节拍，沿道路由左到右顺次贯穿最多 7 个目标。
+          if (!zombies.some((zombie) => zombie.hp > 0)) armoredSupportNextShotAt = supportNow + LEVEL8_HMG_FIRE_MS;
+          while (zombies.some((zombie) => zombie.hp > 0) && armoredSupportNextShotAt <= supportNow) {
+            zombies.filter((zombie) => zombie.hp > 0).sort((a, b) => a.x - b.x).slice(0, LEVEL8_HMG_PENETRATION).forEach((zombie) => {
+              zombie.hp -= LEVEL8_HMG_DAMAGE;
+              zombie.wounds = [...zombie.wounds.slice(-7), { x: 4, y: -82, region: "body", size: 4 }];
+            });
+            armoredSupportNextShotAt += LEVEL8_HMG_FIRE_MS;
+            sound.gunshot("m240l", { fireRateMs: LEVEL8_HMG_FIRE_MS, volume: .42 });
+          }
+        }
 
         units.forEach((unit) => {
           const member = EXPLORATION_MEMBERS.find((candidate) => candidate.id === unit.memberId);
@@ -9234,7 +9428,9 @@ export function DeadRoadGame() {
                 if (Math.random() > pelletHitChance) continue;
                 const roll = Math.random();
                 const region: HitRegion = roll < .16 ? "head" : roll < .46 ? "legs" : "body";
-                const pelletDamage = weapon.pellets ? weaponDamage(member.weapon) : unit.damage;
+                const pelletDamage = weapon.pellets
+                  ? weaponDamage(member.weapon) + (unit.damage - member.damage) / pellets
+                  : unit.damage;
                 target.hp -= pelletDamage;
                 const wound: Wound = region === "head"
                   ? { x: (Math.random() - .5) * 10, y: -118 + (Math.random() - .5) * 10, region, size: 2.4 + Math.random() * 2 }
@@ -9316,7 +9512,7 @@ export function DeadRoadGame() {
         });
         units = units.filter((unit) => unit.hp > 0);
         vehicleHp = Math.max(0, vehicleHp);
-        return { ...battle, units, zombies, knives, pendingKicks, nextKnifeId, nextKickId, kills: battle.kills + killedThisTick, vehicleHp, completed, failed: !completed && vehicleHp <= 0 };
+        return { ...battle, units, zombies, knives, pendingKicks, airstrikeEffects, armySupportNextShotAt, armoredSupportNextShotAt, nextKnifeId, nextKickId, kills: battle.kills + killedThisTick, vehicleHp, completed, failed: !completed && vehicleHp <= 0 };
       });
     }, 250);
     return () => window.clearInterval(combatTimer);
@@ -12565,20 +12761,12 @@ export function DeadRoadGame() {
       const spitWindup = (z.kind === "spitter" || z.kind === "largeSpitter" || z.bossKind === "giantMutant") && z.spitAt > 0
         ? 1 - Math.max(0, Math.min(1, (z.spitAt - now) / spitWindupMs)) : 0;
       if (spitWindup > 0) ctx.rotate(-poseFacing * spitWindup * .13);
-      const skin = z.radius > 29 ? "#6e7c52" : "#7e8c60";
-      if (z.kind === "zombieDog") drawZombieDog(ctx, z, scale, poseFacing, now);
-      else {
-        drawZombieLegAssembly(ctx, z, pose.body.rearLeg, pose.body.frontLeg, scale);
-        drawZombieTorso(ctx, z, scale);
-        drawZombieArmAssembly(ctx, z, pose.body.leftArm, pose.body.rightArm, scale, skin);
-        drawZombieHeadAndWounds(ctx, z, scale, poseFacing, true);
-      }
+      drawCompleteZombieBodyFrame(ctx, z, scale, poseFacing, now, pose.body.rearLeg, pose.body.frontLeg, pose.body.leftArm, pose.body.rightArm);
       if (spitWindup > 0) {
         ctx.fillStyle = `rgba(143,206,74,${(.35 + spitWindup * .45).toFixed(3)})`;
         ctx.beginPath(); ctx.arc(poseFacing * 5 * scale, -110 * scale, (3 + spitWindup * 5) * scale, 0, Math.PI * 2); ctx.fill();
         if (spitWindup > .5) { ctx.fillStyle = "#8fce4a"; ctx.beginPath(); ctx.arc(poseFacing * 8 * scale, (-104 + spitWindup * 6) * scale, 1.6 * scale, 0, Math.PI * 2); ctx.fill(); }
       }
-      if (z.kind === "shield" && z.shieldIntact) drawZombieShield(ctx, z, scale, poseFacing);
       if (z.ignitedAt > 0) drawZombieIgnition(ctx, z, scale, now);
       if (zombieDebuffed) {
         ctx.strokeStyle = "rgba(232,224,156,.86)"; ctx.lineWidth = 1.5 * scale;
@@ -13324,13 +13512,25 @@ export function DeadRoadGame() {
 
   const rangeFree = snapshot.mode === "range";
   const lotteryHighlight = highestLotteryRarity(lotteryRewards);
+  const hasUnclaimedDailyTask = EXPLORATION_DAILY_TASKS.some((task) => explorationDailyProgress[task.metric] >= task.target && !explorationDailyProgress.claimedTaskIds.includes(task.id));
+  const hasUnclaimedActivityReward = explorationDailyProgress.activity >= EXPLORATION_DAILY_ACTIVITY_REWARD_TARGET && !explorationDailyProgress.activityRewardClaimed;
+  const hasUnclaimedAchievement = EXPLORATION_ACHIEVEMENTS.some((achievement) => explorationAchievementValue(achievement, explorationAchievementProgress, explorationClearedTasks) >= achievement.target && !explorationAchievementProgress.claimedAchievementIds.includes(achievement.id));
+  const hasUnclaimedExplorationReward = hasUnclaimedDailyTask || hasUnclaimedActivityReward || hasUnclaimedAchievement;
   const currentExplorationVehicleKind = explorationVehicleKind(explorationVehicleLevel);
   const currentExplorationVehicleMaxHp = explorationVehicleMaxHp(explorationVehicleLevel);
   const currentExplorationVehicleUpgradeCost = explorationVehicleUpgradeCost(explorationVehicleLevel);
   const explorationBattleWave = 1 + Math.floor(explorationBattle.elapsed / 20);
+  const armySupportActive = explorationBattle.supportActiveUntil.armySupport > explorationSupportClock;
+  const armySupportRemaining = explorationBattle.supportActiveUntil.armySupport - explorationSupportClock;
+  const armySupportStartedAt = explorationBattle.supportActiveUntil.armySupport - EXPLORATION_SUPPORT_DURATION_MS + EXPLORATION_SUPPORT_ARRIVAL_MS;
+  const armySupportReady = armySupportActive && explorationSupportClock >= armySupportStartedAt;
+  const armySupportPhase = explorationAutomaticWeaponPhase("m16", armySupportStartedAt, explorationSupportClock);
+  const armoredSupportActive = explorationBattle.supportActiveUntil.armoredSupport > explorationSupportClock;
+  const armoredSupportRemaining = explorationBattle.supportActiveUntil.armoredSupport - explorationSupportClock;
   const selectedExplorationMember = EXPLORATION_MEMBERS.find((member) => member.id === selectedExplorationMemberId) ?? EXPLORATION_MEMBERS[0];
   const starterPackMember = EXPLORATION_MEMBERS.find((member) => member.id === "combatSoldier") ?? EXPLORATION_MEMBERS[0];
   const selectedExplorationMemberLevel = explorationMemberLevels[selectedExplorationMember.id] ?? 1;
+  const selectedExplorationMemberStats = explorationMemberStatsAtLevel(selectedExplorationMember, selectedExplorationMemberLevel);
   const selectedExplorationMemberMaxLevel = Math.min(15, explorationVehicleLevel);
   const selectedExplorationMemberUpgradeCost = explorationMemberUpgradeCost(selectedExplorationMemberLevel);
   // 下栏只展示已拥有但未上阵，以及已招募、尚未用金币购买的角色；未招募角色不会提前泄露。
@@ -13633,7 +13833,7 @@ export function DeadRoadGame() {
             <nav className="exploration-rail exploration-rail-right" aria-label="探索模式右侧功能">
               <button type="button" onClick={openLottery}><b>✧</b><span>抽奖</span><small>获取探索奖励</small></button>
               <button type="button" onClick={() => openCodex("exploration")}><b>▤</b><span>僵尸图鉴</span><small>已发现 {seenKinds.length} / {ZOMBIE_CONFIG_KINDS.length}</small></button>
-              <button type="button" onClick={() => { sound.uiClick(); setExplorationTaskSystemTab("daily"); changeScreen("explorationTasks"); }}><b>✓</b><span>任务</span><small>日常与成就</small></button>
+              <button type="button" className="exploration-task-entry" onClick={() => { sound.uiClick(); setExplorationTaskSystemTab("daily"); changeScreen("explorationTasks"); }}><b>✓</b><span>任务</span><small>日常与成就</small>{hasUnclaimedExplorationReward && <i className="task-unclaimed-dot" aria-label="有可领取奖励" />}</button>
             </nav>
 
             <div className="exploration-task-map" aria-label="探索任务地图">
@@ -13693,19 +13893,21 @@ export function DeadRoadGame() {
                   <small>本日活跃度</small>
                   <strong>{Math.min(EXPLORATION_DAILY_ACTIVITY_REWARD_TARGET, explorationDailyProgress.activity)}<i> / {EXPLORATION_DAILY_ACTIVITY_REWARD_TARGET}</i></strong>
                   <div><span style={{ width: `${Math.min(100, explorationDailyProgress.activity / EXPLORATION_DAILY_ACTIVITY_REWARD_TARGET * 100)}%` }} /></div>
-                  <p>{explorationDailyProgress.activityRewardClaimed ? "✓ 100 点券已发放" : "达到 300 活跃度奖励 100 点券"}</p>
+                  <p>{explorationDailyProgress.activityRewardClaimed ? "✓ 100 点券已领取" : "达到 300 活跃度奖励 100 点券"}</p>
+                  {!explorationDailyProgress.activityRewardClaimed && explorationDailyProgress.activity >= EXPLORATION_DAILY_ACTIVITY_REWARD_TARGET && <button type="button" onClick={claimExplorationActivityReward}>领取 100 点券</button>}
                 </section>
                 <div className="task-system-list daily-task-list">
                   {EXPLORATION_DAILY_TASKS.map((task, index) => {
                     const progress = Math.min(task.target, explorationDailyProgress[task.metric]);
-                    const completed = explorationDailyProgress.completedTaskIds.includes(task.id);
+                    const claimable = explorationDailyProgress[task.metric] >= task.target;
+                    const claimed = explorationDailyProgress.claimedTaskIds.includes(task.id);
                     return (
-                      <article key={task.id} className={`task-system-card ${completed ? "completed" : ""}`}>
+                      <article key={task.id} className={`task-system-card ${claimed ? "completed" : claimable ? "claimable" : ""}`}>
                         <b className="task-card-index">{String(index + 1).padStart(2, "0")}</b>
                         <div className="task-card-copy"><strong>{task.title}</strong><small>{task.description}</small></div>
                         <div className="task-card-progress"><span><i style={{ width: `${progress / task.target * 100}%` }} /></span><b>{progress} / {task.target}</b></div>
                         <div className="task-card-reward"><small>任务奖励</small><strong>{task.rewardCoins ? `${task.rewardCoins} 金币` : `${task.rewardExperience} 经验点数`} · {task.activity} 活跃度</strong></div>
-                        <em>{completed ? "✓ 已完成" : "进行中"}</em>
+                        {claimed ? <em>✓ 已领取</em> : claimable ? <button type="button" className="task-claim-button" onClick={() => claimExplorationDailyTask(task)}>领取</button> : <em>进行中</em>}
                       </article>
                     );
                   })}
@@ -13716,14 +13918,15 @@ export function DeadRoadGame() {
                 {EXPLORATION_ACHIEVEMENTS.map((achievement, index) => {
                   const rawProgress = explorationAchievementValue(achievement, explorationAchievementProgress, explorationClearedTasks);
                   const progress = Math.min(achievement.target, rawProgress);
-                  const completed = explorationAchievementProgress.claimedAchievementIds.includes(achievement.id);
+                  const claimable = rawProgress >= achievement.target;
+                  const claimed = explorationAchievementProgress.claimedAchievementIds.includes(achievement.id);
                   return (
-                    <article key={achievement.id} className={`task-system-card achievement-card ${completed ? "completed" : ""}`}>
+                    <article key={achievement.id} className={`task-system-card achievement-card ${claimed ? "completed" : claimable ? "claimable" : ""}`}>
                       <b className="task-card-index">{String(index + 1).padStart(2, "0")}</b>
                       <div className="task-card-copy"><strong>{achievement.title}</strong><small>{achievement.description}</small></div>
                       <div className="task-card-progress"><span><i style={{ width: `${progress / achievement.target * 100}%` }} /></span><b>{progress} / {achievement.target}</b></div>
                       <div className="task-card-reward"><small>成就奖励</small><strong>{achievement.rewardVouchers} 点券</strong></div>
-                      <em>{completed ? "◆ 已达成" : "累积中"}</em>
+                      {claimed ? <em>◆ 已领取</em> : claimable ? <button type="button" className="task-claim-button" onClick={() => claimExplorationAchievement(achievement)}>领取</button> : <em>累积中</em>}
                     </article>
                   );
                 })}
@@ -13778,6 +13981,21 @@ export function DeadRoadGame() {
                 </button>
                 {starterPackPurchased && <small role="status">礼包已领取，商品永久保留展示。</small>}
               </article>
+            </section>
+            <section className="consumable-shop-page" aria-label="消耗品贩卖窗口">
+              <div className="consumable-shop-window" aria-hidden="true"><i /><i /><b /></div>
+              <div className="consumable-shop-heading"><p>探索模式 · 战术物资</p><h2>消耗品贩卖窗口</h2><small>测试阶段全部免费 · 点击购买会增加库存</small></div>
+              <div className="consumable-shop-grid">
+                {(Object.keys(EXPLORATION_CONSUMABLES) as ExplorationConsumableKey[]).map((key) => {
+                  const item = EXPLORATION_CONSUMABLES[key];
+                  return <article key={key} className={`consumable-product product-${key}`}>
+                    <div className="consumable-product-icon"><i /><b /><em /></div>
+                    <h3>{item.name}</h3><p>{item.description}</p>
+                    <span>原价 <s>{item.price} 金币</s></span><strong>库存 {explorationConsumableInventory[key]}</strong>
+                    <button type="button" onClick={() => purchaseExplorationConsumable(key)}>免费购买</button>
+                  </article>;
+                })}
+              </div>
             </section>
           </div>
         )}
@@ -13868,8 +14086,8 @@ export function DeadRoadGame() {
                       <dl>
                         <div><dt>人物特性</dt><dd>{selectedExplorationMember.trait}</dd></div>
                         <div><dt>隶属机构</dt><dd>{selectedExplorationMember.faction}</dd></div>
-                        <div><dt>人物血量</dt><dd>{selectedExplorationMember.hp} HP</dd></div>
-                        <div><dt>单次攻击伤害</dt><dd>{selectedExplorationMember.damage}</dd></div>
+                        <div><dt>人物血量</dt><dd>{selectedExplorationMemberStats.hp} HP <small>（每级 +{selectedExplorationMember.hpPerLevel}）</small></dd></div>
+                        <div><dt>单次攻击伤害</dt><dd>{selectedExplorationMemberStats.damage} <small>（每级 +{selectedExplorationMember.damagePerLevel}）</small></dd></div>
                         <div><dt>人物速度</dt><dd>{selectedExplorationMember.speed}</dd></div>
                         <div><dt>当前武器</dt><dd>{WEAPONS[selectedExplorationMember.weapon].name}</dd></div>
                       </dl>
@@ -13896,11 +14114,18 @@ export function DeadRoadGame() {
               </>
             ) : (
               <section className="team-consumables-section">
-                <header><span>当前上阵消耗品</span><small>消耗品种类与战斗效果等待后续开放</small></header>
+                <header><span>当前上阵消耗品</span><small>{deployedExplorationConsumables.length} / 3 · 战斗中可重复使用，单类冷却 30 秒</small></header>
                 <div className="team-consumable-grid">
-                  {Array.from({ length: 3 }, (_, index) => <div key={index} className="team-consumable-slot"><b>+</b><strong>消耗品栏位 {index + 1}</strong><small>尚未配置</small></div>)}
+                  {Array.from({ length: 3 }, (_, index) => {
+                    const key = deployedExplorationConsumables[index];
+                    if (!key) return <div key={index} className="team-consumable-slot"><b>+</b><strong>消耗品栏位 {index + 1}</strong><small>尚未配置</small></div>;
+                    return <button type="button" key={key} className={`team-consumable-slot equipped product-${key}`} onClick={() => toggleExplorationConsumableDeployment(key)}><b>×</b><strong>{EXPLORATION_CONSUMABLES[key].name}</strong><small>库存 {explorationConsumableInventory[key]} · 点击卸下</small></button>;
+                  })}
                 </div>
-                <p>后续获得消耗品后，可在这里选择携带进入探索任务。</p>
+                <div className="team-consumable-inventory">
+                  {(Object.keys(EXPLORATION_CONSUMABLES) as ExplorationConsumableKey[]).filter((key) => explorationConsumableInventory[key] > 0).map((key) => <button type="button" key={key} disabled={deployedExplorationConsumables.includes(key)} onClick={() => toggleExplorationConsumableDeployment(key)}><strong>{EXPLORATION_CONSUMABLES[key].name}</strong><small>库存 {explorationConsumableInventory[key]}</small><b>{deployedExplorationConsumables.includes(key) ? "已上阵" : "上阵"}</b></button>)}
+                  {(Object.keys(EXPLORATION_CONSUMABLES) as ExplorationConsumableKey[]).every((key) => explorationConsumableInventory[key] === 0) && <p>暂无消耗品，请前往商店向下滑动购买。</p>}
+                </div>
               </section>
             )}
           </div>
@@ -13922,9 +14147,28 @@ export function DeadRoadGame() {
               <div className="battle-wave"><small>尸潮强度</small><strong>第 {explorationBattleWave} 阶段</strong><span>{explorationBattle.elapsed}s</span></div>
               <div className="battle-vehicle-hp"><small>车辆 HP</small><strong>{Math.ceil(explorationBattle.vehicleHp)} / {currentExplorationVehicleMaxHp}</strong><i><b style={{ width: `${explorationBattle.vehicleHp / currentExplorationVehicleMaxHp * 100}%` }} /></i></div>
             </div>
+            <div className="battle-consumable-bar" aria-label="战斗消耗品">
+              {deployedExplorationConsumables.map((key) => {
+                const cooldown = Math.max(0, Math.ceil((explorationBattle.supportCooldownUntil[key] - explorationSupportClock) / 1000));
+                return <button type="button" key={key} onClick={() => activateExplorationConsumable(key)} disabled={explorationBattle.failed || explorationBattle.completed || explorationConsumableInventory[key] <= 0 || cooldown > 0}><strong>{EXPLORATION_CONSUMABLES[key].name}</strong><small>剩余 {explorationConsumableInventory[key]}</small><b>{cooldown > 0 ? `${cooldown}s` : "使用"}</b></button>;
+              })}
+            </div>
 
-            <div className="battlefield" aria-label="探索模式自动战斗区域">
+            <div className={`battlefield ${explorationBattle.airstrikeEffects.some((effect) => effect.impacted) ? "airstrike-shaking" : ""}`} aria-label="探索模式自动战斗区域">
               <div className="battle-vehicle-position"><ExplorationVehicleModel kind={currentExplorationVehicleKind} compact /></div>
+              {armySupportActive && (
+                <div className={`army-support-squad ${armySupportRemaining < 700 ? "leaving" : ""}`} aria-label="5名M16士兵支援">
+                  {Array.from({ length: 5 }, (_, index) => (
+                    <span className="support-soldier-model" key={index}>
+                      <ExplorationMemberPreview member={EXPLORATION_SUPPORT_SOLDIER} battleScale motion={!armySupportReady || explorationBattle.zombies.length === 0 ? "standing" : armySupportPhase.reloading ? "reloading" : "attacking"} reloadProgress={armySupportPhase.reloadProgress} />
+                      {armySupportReady && explorationBattle.zombies.length > 0 && !armySupportPhase.reloading && <><i key={`flash-${armySupportPhase.shotSerial}`} className="battle-muzzle-flash" /><i key={`case-${armySupportPhase.shotSerial}`} className="battle-ejected-casing" /></>}
+                      {armySupportPhase.reloading && <i key={`mag-${Math.floor(armySupportPhase.shotSerial / WEAPONS.m16.magazine)}`} className="battle-dropped-magazine" />}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {armoredSupportActive && <div className={`armored-support-vehicle ${armoredSupportRemaining < 700 ? "leaving" : ""}`} aria-label="重机枪装甲车支援"><ExplorationArmoredSupportModel firing={explorationBattle.zombies.length > 0} /></div>}
+              {explorationBattle.airstrikeEffects.map((effect) => <div key={effect.id} className={`battle-airstrike-blast ${effect.impacted ? "impact" : "incoming"}`} style={{ left: `${effect.x}%` }} aria-hidden="true"><i /><b /><em /></div>)}
               {explorationBattle.units.map((unit) => {
                 const member = EXPLORATION_MEMBERS.find((candidate) => candidate.id === unit.memberId) ?? EXPLORATION_MEMBERS[0];
                 return (
@@ -13938,7 +14182,7 @@ export function DeadRoadGame() {
               })}
               {explorationBattle.zombies.map((zombie) => (
                 <div key={zombie.id} className="battle-enemy battle-enemy-shared-model" style={{ left: `${zombie.x}%` }} aria-label={`进攻僵尸，HP ${Math.ceil(zombie.hp)}`}>
-                  <ZombieKindPreview kind={zombie.kind} width={140} height={130} className="battle-zombie-shared-preview" fillHeight motion={zombie.action === "attack" ? "attacking" : zombie.action === "walk" ? "walking" : "standing"} hpRatio={zombie.hp / zombie.maxHp} wounds={zombie.wounds} missingLimbs={zombie.missingLimbs} knockedDown={zombie.knockedDownRemaining > 0} />
+                  <ZombieKindPreview kind={zombie.kind} width={108} height={168} className="battle-zombie-shared-preview" fillHeight motion={zombie.action === "attack" ? "attacking" : zombie.action === "walk" ? "walking" : "standing"} hpRatio={zombie.hp / zombie.maxHp} wounds={zombie.wounds} missingLimbs={zombie.missingLimbs} knockedDown={zombie.knockedDownRemaining > 0} />
                   {zombie.hp < zombie.maxHp && <span key={`${zombie.id}-${Math.ceil(zombie.hp)}`} className="battle-zombie-blood" />}
                   <i className="battle-entity-hp"><b style={{ width: `${zombie.hp / zombie.maxHp * 100}%` }} /></i>
                 </div>

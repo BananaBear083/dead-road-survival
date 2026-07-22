@@ -1599,11 +1599,71 @@ test("adds midnight-reset daily missions and permanent exploration achievements"
   assert.match(source, /role="tab" aria-selected=\{explorationTaskSystemTab === "achievements"\}/);
   assert.match(source, /本日活跃度/);
   assert.match(source, /已完成/);
-  assert.match(source, /已达成/);
+  assert.match(source, /claimExplorationDailyTask/);
+  assert.match(source, /claimExplorationAchievement/);
+  assert.match(source, /已领取/);
   assert.match(css, /\.exploration-tasks-panel/);
   assert.match(css, /\.daily-activity-card/);
   assert.match(css, /\.achievement-list/);
 
   assert.match(source, /ctx\.ellipse\(0, -123, 18, 3\.5/);
   assert.match(source, /ctx\.ellipse\(0, -126, 10\.5, 6\.5/);
+});
+
+test("keeps exploration zombies full-size and complete while attacking", async () => {
+  const source = await readFile(new URL("../app/DeadRoadGame.tsx", import.meta.url), "utf8");
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+
+  assert.match(source, /function drawCompleteZombieBodyFrame\(/);
+  assert.match(source, /function ZombieKindPreview[\s\S]*drawCompleteZombieBodyFrame\(ctx, z,/);
+  assert.match(source, /for \(const z of g\.zombies\)[\s\S]*drawCompleteZombieBodyFrame\(ctx, z,/);
+  assert.match(source, /width=\{108\} height=\{168\} className="battle-zombie-shared-preview"/);
+  assert.match(css, /\.battle-enemy-shared-model[^}]*width: 108px[^}]*height: 184px/);
+  assert.match(css, /\.battle-unit-shared-model[^}]*width: 108px[^}]*height: 184px/);
+});
+
+test("adds manual reward claims, member growth and reusable exploration support items", async () => {
+  const source = await readFile(new URL("../app/DeadRoadGame.tsx", import.meta.url), "utf8");
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  assert.match(source, /const claimExplorationDailyTask = useCallback/);
+  assert.match(source, /const claimExplorationAchievement = useCallback/);
+  assert.match(source, /claimedTaskIds/);
+  assert.match(source, /hasUnclaimedExplorationReward/);
+  assert.match(source, /task-unclaimed-dot/);
+  assert.match(source, /className="task-claim-button"/);
+  assert.doesNotMatch(source, /const newlyCompleted = EXPLORATION_DAILY_TASKS/);
+  assert.match(css, /\.task-unclaimed-dot/);
+
+  assert.match(source, /id: "civilian"[\s\S]*hpPerLevel: 5,[\s\S]*damagePerLevel: 1/);
+  assert.match(source, /id: "farmer"[\s\S]*hpPerLevel: 3,[\s\S]*damagePerLevel: 2/);
+  assert.match(source, /id: "combatSoldier"[\s\S]*hpPerLevel: 5,[\s\S]*damagePerLevel: 2/);
+  assert.match(source, /function explorationMemberStatsAtLevel/);
+  assert.match(source, /hp: stats\.hp,[\s\S]*damage: stats\.damage/);
+
+  assert.match(source, /armySupport: \{ name: "军队支援", price: 500/);
+  assert.match(source, /armoredSupport: \{ name: "装甲车支援", price: 700/);
+  assert.match(source, /airSupport: \{ name: "空中支援", price: 1000/);
+  assert.match(source, /EXPLORATION_CONSUMABLE_COOLDOWN_MS = 30000/);
+  assert.match(source, /EXPLORATION_SUPPORT_DURATION_MS = 10000/);
+  assert.match(source, /EXPLORATION_SUPPORT_ARRIVAL_MS = 550/);
+  assert.match(source, /recordExplorationDailyMetric\("consumablesPurchased"\)/);
+  assert.match(source, /测试阶段免费/);
+  assert.match(source, /5名M16士兵支援/);
+  assert.match(source, /ExplorationMemberPreview member=\{EXPLORATION_SUPPORT_SOLDIER\}/);
+  assert.match(source, /armySupportPhase\.reloading \? "reloading" : "attacking"/);
+  assert.match(source, /support-soldier-model[\s\S]*battle-ejected-casing[\s\S]*battle-dropped-magazine/);
+  assert.match(source, /重机枪装甲车支援/);
+  assert.match(source, /function ExplorationArmoredSupportModel/);
+  assert.match(source, /drawLevel8ArmoredVehicle\(ctx/);
+  assert.match(source, /LEVEL8_HMG_FIRE_MS[\s\S]*LEVEL8_HMG_PENETRATION/);
+  assert.match(source, /armoredSupportNextShotAt \+= LEVEL8_HMG_FIRE_MS/);
+  assert.match(source, /armySupportNextShotAt \+= WEAPONS\.m16\.fireRate/);
+  assert.match(source, /zombie\.hp -= weaponDamage\("m16"\)/);
+  assert.match(source, /weaponDamage\(member\.weapon\) \+ \(unit\.damage - member\.damage\) \/ pellets/);
+  assert.match(source, /sound\.airstrike\(\)/);
+  assert.match(source, /impactAt: now \+ 550[\s\S]*impacted: false/);
+  assert.match(source, /hp: zombie\.hp - 500 \* hitCount/);
+  assert.match(source, /battle-airstrike-blast/);
+  assert.match(css, /\.consumable-shop-page[^}]*top: 200%/);
+  assert.match(css, /\.battle-consumable-bar/);
 });
