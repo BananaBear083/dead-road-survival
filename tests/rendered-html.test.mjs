@@ -1481,7 +1481,7 @@ test("adds the exploration six-slot team roster with shared character and weapon
   assert.match(source, /<ExplorationMemberPreview member=\{member\} battleScale/);
   assert.match(source, /className="battle-zombie-shared-preview" fillHeight/);
   assert.match(source, /const referenceRadius = fillHeight \? z\.radius : 36/);
-  assert.match(source, /const scale = battleScale \? 2\.8 : 1\.9/);
+  assert.match(source, /const scale = battleScale \? EXPLORATION_BATTLE_MEMBER_SCALE : 1\.9/);
   assert.match(source, /function ExplorationMemberPreview/);
   assert.match(source, /function drawSurvivalHumanHeadAndFace/);
   assert.match(source, /drawSurvivalHumanHeadAndFace\(ctx, facing, farmer \? "farmerHat" : police \? "policeCap" : soldier \? "combatHelmet" : "cap"\)/);
@@ -1618,9 +1618,15 @@ test("keeps exploration zombies full-size and complete while attacking", async (
   assert.match(source, /function drawCompleteZombieBodyFrame\(/);
   assert.match(source, /function ZombieKindPreview[\s\S]*drawCompleteZombieBodyFrame\(ctx, z,/);
   assert.match(source, /for \(const z of g\.zombies\)[\s\S]*drawCompleteZombieBodyFrame\(ctx, z,/);
-  assert.match(source, /width=\{large \? 144 : 108\} height=\{large \? 220 : 168\} className="battle-zombie-shared-preview"/);
+  assert.match(source, /const previewLength = knockedDown \? width - 18 : height - 14/);
+  assert.match(source, /ctx\.translate\(knockedDown \? canvas\.width - 8 : canvas\.width \/ 2/);
+  assert.match(source, /className=\{`battle-enemy battle-enemy-shared-model \$\{large \? "large" : ""\} \$\{knockedDown \? "knocked-down" : ""\}`\}/);
+  assert.match(source, /width=\{knockedDown \? 184 : large \? 144 : 108\} height=\{knockedDown \? 108 : large \? 220 : 168\}/);
   assert.match(css, /\.battle-enemy-shared-model[^}]*width: 108px[^}]*height: 184px/);
+  assert.match(css, /\.battle-enemy-shared-model\.knocked-down[^}]*width:\s*184px[^}]*height:\s*124px/);
   assert.match(css, /\.battle-unit-shared-model[^}]*width: 108px[^}]*height: 184px/);
+  assert.match(source, /const EXPLORATION_BATTLE_MEMBER_SCALE = 3\.05/);
+  assert.match(source, /const scale = battleScale \? EXPLORATION_BATTLE_MEMBER_SCALE : 1\.9/);
 });
 
 test("adds manual reward claims, member growth and reusable exploration support items", async () => {
@@ -1747,7 +1753,7 @@ test("recruits a rare police officer through the task two roadside cinematic", a
   assert.match(source, /id: "police"[\s\S]*?rarity: "rare"[\s\S]*?trait: "无"[\s\S]*?faction: "警察"/);
   assert.match(source, /id: "police"[\s\S]*?hp: 70[\s\S]*?damage: weaponDamage\("glock17"\)/);
   assert.match(source, /id: "police"[\s\S]*?hpPerLevel: 3[\s\S]*?damagePerLevel: 2/);
-  assert.match(source, /id: "police"[\s\S]*?speed: "中等"[\s\S]*?courageCost: 17/);
+  assert.match(source, /id: "police"[\s\S]*?speed: "中等"[\s\S]*?courageCost: 20/);
   assert.match(source, /const EXPLORATION_TASK2_NORMAL_ZOMBIE_COUNT = 5/);
   assert.match(source, /const EXPLORATION_TASK2_RUNNER_ZOMBIE_COUNT = 2/);
   assert.match(source, /const EXPLORATION_TASK2_COINS = 1641/);
@@ -1761,10 +1767,10 @@ test("recruits a rare police officer through the task two roadside cinematic", a
   assert.match(source, /setExplorationCoins\(\(coins\) => coins \+ taskConfig\.rewardCoins\)/);
   assert.match(source, /setExplorationExperience\(\(experience\) => experience \+ taskConfig\.rewardExperience\)/);
   assert.match(source, /recordExplorationDailyEarnings\(taskConfig\.rewardCoins, taskConfig\.rewardExperience\)/);
-  assert.match(source, /setExplorationRecruitRewardEligible\(explorationBattle\.rewardEligible\)/);
-  assert.match(source, /explorationRecruitRewardEligible \? \([\s\S]*?EXPLORATION_TASK2_COINS[\s\S]*?EXPLORATION_TASK2_EXPERIENCE[\s\S]*?首次通关奖励已领取/);
+  assert.match(source, /!explorationBattle\.rewardEligible \|\| taskConfig\.reward !== "police"/);
+  assert.doesNotMatch(source, /explorationRecruitRewardEligible/);
   assert.match(source, /\+\{EXPLORATION_TASK2_COINS\} 金币[\s\S]*\+\{EXPLORATION_TASK2_EXPERIENCE\} 经验点数/);
-  assert.match(source, /!explorationBattle\.completed \|\| taskConfig\.reward !== "police"/);
+  assert.match(source, /!explorationBattle\.completed \|\| !explorationBattle\.rewardEligible \|\| taskConfig\.reward !== "police"/);
   assert.match(source, /changeScreen\("explorationRecruit"\)/);
   assert.match(source, /setExplorationMemberLevels\([\s\S]*police: levels\.police \?\? 1/);
   assert.match(source, /平民[\s\S]*你可以加入我们/);

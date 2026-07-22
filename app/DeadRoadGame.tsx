@@ -834,6 +834,7 @@ const EXPLORATION_DAILY_ACTIVITY_REWARD_VOUCHERS = 100;
 const EXPLORATION_SUPPORT_DURATION_MS = 10000;
 const EXPLORATION_SUPPORT_ARRIVAL_MS = 550;
 const EXPLORATION_CONSUMABLE_COOLDOWN_MS = 30000;
+const EXPLORATION_BATTLE_MEMBER_SCALE = 3.05;
 // 支援车从巡逻线直接赶来，首个 200 发弹箱已有消耗，确保 10 秒支援窗口内能展示一次完整换箱动作。
 const EXPLORATION_ARMORED_SUPPORT_INITIAL_AMMO = 46;
 const EMPTY_EXPLORATION_CONSUMABLES = (): ExplorationConsumableInventory => ({ armySupport: 0, armoredSupport: 0, airSupport: 0 });
@@ -977,7 +978,7 @@ const EXPLORATION_MEMBERS: ExplorationMemberDefinition[] = [
     damagePerLevel: 2,
     speed: "中等",
     speedFactor: 1,
-    courageCost: 17,
+    courageCost: 20,
     purchaseCost: 0,
     levelSkills: [{ level: 5, name: "无" }, { level: 10, name: "无" }, { level: 15, name: "无" }],
   },
@@ -8733,14 +8734,16 @@ function ZombieKindPreview({ kind, width = 150, height = 200, className = "spawn
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       // 统一缩放：按最大体型（radius 36）自动校准到画布高度，种类间保留相对体型差。
       const referenceRadius = fillHeight ? z.radius : 36;
-      const fit = (height - 14) / (BASE_HUMAN_HEIGHT * (referenceRadius / 25) * CHARACTER_SCALE);
+      // 倒地姿势横向展开，按画布宽度适配并把锚点移到右侧，避免腿部受击倒地后整个身体被竖幅画布裁掉。
+      const previewLength = knockedDown ? width - 18 : height - 14;
+      const fit = previewLength / (BASE_HUMAN_HEIGHT * (referenceRadius / 25) * CHARACTER_SCALE);
       const scale = (z.radius / 25) * CHARACTER_SCALE * fit;
       const gaitCycle = (now / 300) % 1;
       const attackProgress = motion === "attacking" ? (now % 560) / 560 : 0;
       const rearLeg = motion === "walking" ? gaitLegPose((gaitCycle + .5) % 1, -1, -5, 7, 3.5) : standingLegPose(-1, -5);
       const frontLeg = motion === "walking" ? gaitLegPose(gaitCycle, -1, 5, 7, 3.5) : standingLegPose(-1, 5);
       ctx.save();
-      ctx.translate(knockedDown ? canvas.width * .2 : canvas.width / 2, knockedDown ? canvas.height * .73 : canvas.height - 6 + (motion === "walking" ? Math.sin(gaitCycle * Math.PI * 4) : 0));
+      ctx.translate(knockedDown ? canvas.width - 8 : canvas.width / 2, knockedDown ? canvas.height * .72 : canvas.height - 6 + (motion === "walking" ? Math.sin(gaitCycle * Math.PI * 4) : 0));
       if (knockedDown) ctx.rotate(-Math.PI * .46);
       drawCompleteZombieBodyFrame(ctx, z, scale, -1, now, rearLeg, frontLeg, zombieSmashArmPose(attackProgress, -1, -1), zombieSmashArmPose(Math.max(0, attackProgress - .035), -1, 1));
       ctx.restore();
@@ -8874,7 +8877,7 @@ function ExplorationMemberPreview({ member, motion = "standing", reloadProgress 
       const renderMotion = automaticPhase ? (automaticPhase.reloading ? "reloading" : "attacking") : motion;
       const renderReloadProgress = automaticPhase?.reloadProgress ?? reloadProgress;
       const facing = 1;
-      const scale = battleScale ? 2.8 : 1.9;
+      const scale = battleScale ? EXPLORATION_BATTLE_MEMBER_SCALE : 1.9;
       const farmer = member.id === "farmer";
       const police = member.faction === "警察";
       const soldier = member.faction === "军队";
@@ -9136,7 +9139,6 @@ export function DeadRoadGame() {
   const [starterPackPurchased, setStarterPackPurchased] = useState(false);
   const [explorationBattle, setExplorationBattle] = useState<ExplorationBattleState>(() => freshExplorationBattle(200, 1));
   const [explorationRecruitPhase, setExplorationRecruitPhase] = useState<ExplorationRecruitPhase>("approach");
-  const [explorationRecruitRewardEligible, setExplorationRecruitRewardEligible] = useState(false);
   const [explorationSupportClock, setExplorationSupportClock] = useState(0);
   const [lotteryPhase, setLotteryPhase] = useState<LotteryPhase>("idle");
   const [lotteryZombieDamage, setLotteryZombieDamage] = useState<ExplorationZombieDamageState[]>(freshLotteryZombieDamage);
@@ -9879,10 +9881,9 @@ export function DeadRoadGame() {
 
   useEffect(() => {
     const taskConfig = explorationBattleTaskConfig(explorationBattle.taskOrder);
-    if (screen !== "explorationBattle" || !explorationBattle.completed || taskConfig.reward !== "police") return;
-    // 招募剧情在每次通关任务二后都可重看；人物奖励仍由首次通关逻辑去重。
+    if (screen !== "explorationBattle" || !explorationBattle.completed || !explorationBattle.rewardEligible || taskConfig.reward !== "police") return;
+    // 任务二的落单警察事件只在首次通关时播放，重复通关直接停留在普通结算界面。
     const timer = window.setTimeout(() => {
-      setExplorationRecruitRewardEligible(explorationBattle.rewardEligible);
       setExplorationRecruitPhase("approach");
       changeScreen("explorationRecruit");
     }, 240);
@@ -14237,17 +14238,13 @@ export function DeadRoadGame() {
 
             {explorationRecruitPhase === "reward" && (
               <div className="recruit-reward" role="dialog" aria-modal="true">
-                <p>{explorationRecruitRewardEligible ? "新成员加入" : "招募事件回顾"}</p><h2>{explorationRecruitRewardEligible ? "获得稀有人员 · 警察" : "稀有人员 · 警察"}</h2>
+                <p>新成员加入</p><h2>获得稀有人员 · 警察</h2>
                 <div className="recruit-reward-card rarity-rare">
                   <ExplorationMemberPreview member={policeRecruitMember} />
-                  <div><strong>警察</strong><span>稀有 · 警察</span><small>Glock 17 · 70 HP · 17 勇气</small></div>
+                  <div><strong>警察</strong><span>稀有 · 警察</span><small>Glock 17 · 70 HP · 20 勇气</small></div>
                 </div>
-                {explorationRecruitRewardEligible ? (
-                  <div className="recruit-resource-rewards"><b>+{EXPLORATION_TASK2_COINS} 金币</b><b>+{EXPLORATION_TASK2_EXPERIENCE} 经验点数</b></div>
-                ) : (
-                  <div className="recruit-resource-rewards recruit-resource-rewards-claimed"><b>首次通关奖励已领取</b></div>
-                )}
-                <button type="button" onClick={finishPoliceRecruitEvent}>{explorationRecruitRewardEligible ? "确认加入并返回农田" : "返回农田"}</button>
+                <div className="recruit-resource-rewards"><b>+{EXPLORATION_TASK2_COINS} 金币</b><b>+{EXPLORATION_TASK2_EXPERIENCE} 经验点数</b></div>
+                <button type="button" onClick={finishPoliceRecruitEvent}>确认加入并返回农田</button>
               </div>
             )}
           </div>
@@ -14562,9 +14559,10 @@ export function DeadRoadGame() {
               })}
               {explorationBattle.zombies.map((zombie) => {
                 const large = isLargeExplorationZombie(zombie.kind);
+                const knockedDown = zombie.knockedDownRemaining > 0;
                 return (
-                  <div key={zombie.id} className={`battle-enemy battle-enemy-shared-model ${large ? "large" : ""}`} style={{ left: `${zombie.x}%`, bottom: `${zombie.y}%`, zIndex: 50 + Math.round(60 - zombie.y) }} aria-label={`进攻僵尸，HP ${Math.ceil(zombie.hp)}`}>
-                    <ZombieKindPreview kind={zombie.kind} width={large ? 144 : 108} height={large ? 220 : 168} className="battle-zombie-shared-preview" fillHeight={!large} motion={zombie.action === "attack" ? "attacking" : zombie.action === "walk" ? "walking" : "standing"} hpRatio={zombie.hp / zombie.maxHp} wounds={zombie.wounds} missingLimbs={zombie.missingLimbs} knockedDown={zombie.knockedDownRemaining > 0} />
+                  <div key={zombie.id} className={`battle-enemy battle-enemy-shared-model ${large ? "large" : ""} ${knockedDown ? "knocked-down" : ""}`} style={{ left: `${zombie.x}%`, bottom: `${zombie.y}%`, zIndex: 50 + Math.round(60 - zombie.y) }} aria-label={`进攻僵尸，HP ${Math.ceil(zombie.hp)}`}>
+                    <ZombieKindPreview kind={zombie.kind} width={knockedDown ? 184 : large ? 144 : 108} height={knockedDown ? 108 : large ? 220 : 168} className="battle-zombie-shared-preview" fillHeight={!large} motion={zombie.action === "attack" ? "attacking" : zombie.action === "walk" ? "walking" : "standing"} hpRatio={zombie.hp / zombie.maxHp} wounds={zombie.wounds} missingLimbs={zombie.missingLimbs} knockedDown={knockedDown} />
                     {zombie.hp < zombie.maxHp && <span key={`${zombie.id}-${Math.ceil(zombie.hp)}`} className="battle-zombie-blood" />}
                     <i className="battle-entity-hp"><b style={{ width: `${zombie.hp / zombie.maxHp * 100}%` }} /></i>
                   </div>
