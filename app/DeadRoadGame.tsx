@@ -6,7 +6,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AccountControl } from "./account/AccountControl";
 import { notifyLocalSaveChanged } from "./account/saveData";
-import { soundManager as sound } from "./sound";
+import { firearmReloadInsertionTimeline, soundManager as sound } from "./sound";
+import type { FirearmSoundKey } from "./sound";
 
 // 世界高度恒定 720 单位；世界宽度动态化：画布位图跟随舞台实际宽高比（宽 = 720 × 实际比例），
 // 位图比例与容器恒等 → 任何屏幕比例下满屏、无黑边、无拉伸（不夹取，极端窄屏改由 HUD 缩放兜底）。
@@ -21,7 +22,6 @@ const ZOMBIE_RECOVER_MS = 860;
 const ZOMBIE_DEATH_FALL_MS = 1050;
 const ZOMBIE_CORPSE_MS = 10000;
 const GROUND_PROP_MS = 10000;
-const MAX_GROUND_PROPS = 60;
 const BLOOD_STAIN_MS = 10000;
 const MAX_BLOOD_STAINS = 60;
 const KICK_COOLDOWN_MS = 760;
@@ -46,10 +46,16 @@ type ExplorationMemberRarity = "common" | "rare" | "epic" | "legendary";
 type ExplorationMemberSpeed = "慢" | "中等" | "快";
 type ExplorationVehicleKind = "van" | "truck" | "bus";
 type ExplorationBattleAction = "guard" | "walk" | "attack" | "reload" | "kick" | "throw";
-type ExplorationBattleUnit = { id: string; memberId: string; label: string; level: number; hp: number; maxHp: number; damage: number; speedFactor: number; x: number; y: number; cooldown: number; ammo: number; reloadRemaining: number; attacksPerformed: number; skillCooldown: number; actionRemaining: number; action: ExplorationBattleAction; shotTarget: { x: number; y: number } | null; shotSerial: number };
-type ExplorationBattleZombie = { id: number; kind: ZombieKind; hp: number; maxHp: number; x: number; y: number; cooldown: number; damage: number; speed: number; action: "guard" | "walk" | "attack"; wounds: Wound[]; missingLimbs: ZombieLimb[]; legDamage: number; knockedDownRemaining: number };
-type ExplorationBattleCorpse = { id: number; kind: ZombieKind; x: number; y: number; wounds: Wound[]; missingLimbs: ZombieLimb[]; diedAt: number; removeAt: number };
+type ExplorationBattleUnit = { id: string; memberId: string; label: string; level: number; hp: number; maxHp: number; damage: number; speedFactor: number; x: number; y: number; cooldown: number; ammo: number; reloadRemaining: number; reloadStartedAt: number; attacksPerformed: number; skillCooldown: number; actionRemaining: number; actionStartedAt: number; action: ExplorationBattleAction; shotTarget: { x: number; y: number } | null; shotSerial: number };
+type ExplorationBattleZombie = { id: number; kind: ZombieKind; hp: number; maxHp: number; x: number; y: number; cooldown: number; cooldownUntil: number; damage: number; speed: number; action: "guard" | "walk" | "attack"; attackWindupRemaining: number; attackAnimationRemaining: number; attackStartedAt: number; attackImpactAt: number; attackAnimationUntil: number; attackTargetUnitId: string | null; wounds: Wound[]; missingLimbs: ZombieLimb[]; legDamage: number; knockedDownRemaining: number; shieldHp: number; shieldIntact: boolean; shieldDents: Array<{ x: number; y: number }>; ignited: boolean };
+type ExplorationBattleCorpse = { id: number; kind: ZombieKind; x: number; y: number; wounds: Wound[]; missingLimbs: ZombieLimb[]; shieldIntact: boolean; shieldDents: Array<{ x: number; y: number }>; diedAt: number; removeAt: number };
+type ExplorationBattleGroundProp = { id: string; kind: "casing" | "mag" | "shield"; weapon?: WeaponKey; x: number; y: number; rotation: number; createdAt: number; removeAt: number };
+type ExplorationBattleBloodEffect = { id: string; x: number; y: number; angle: number; createdAt: number; removeAt: number; tint?: "blood" | "vomit"; droplets?: Array<{ x: number; y: number; size: number; duration: number }>; stainDrops?: Array<{ x: number; y: number; rx: number }> };
+type ExplorationBattleDetachedLimb = { id: string; kind: "arm" | "leg"; x: number; y: number; vx: number; vy: number; rotation: number; angularVelocity: number; scale: number; tint: string; skin: string; shoe: string; createdAt: number; removeAt: number };
+type ExplorationBattleMetalShard = { id: string; x: number; y: number; vx: number; vy: number; rotation: number; angularVelocity: number; points: Array<[number, number]>; color: string; createdAt: number; removeAt: number };
 type ExplorationBattleKnife = { id: number; fromX: number; fromY: number; toX: number; toY: number; life: number };
+type ExplorationBattleSpit = { id: string; fromX: number; fromY: number; toX: number; toY: number; createdAt: number; launchAt: number; impactAt: number; targetUnitId: string; damage: number };
+type ExplorationBattlePendingMeleeHit = { id: string; targetId: number; weapon: WeaponKey; damage: number; impactAt: number };
 type ExplorationBattlePendingKick = { id: number; targetId: number; impactAt: number };
 type ExplorationAirstrikeEffect = { id: number; x: number; impactAt: number; until: number; impacted: boolean };
 type ExplorationZombieDamageState = { hp: number; wounds: Wound[]; missingLimbs: ZombieLimb[]; legDamage: number; knockedDownRemaining: number };
@@ -63,7 +69,13 @@ type ExplorationBattleState = {
   units: ExplorationBattleUnit[];
   zombies: ExplorationBattleZombie[];
   corpses: ExplorationBattleCorpse[];
+  groundProps: ExplorationBattleGroundProp[];
+  bloodEffects: ExplorationBattleBloodEffect[];
+  detachedLimbs: ExplorationBattleDetachedLimb[];
+  metalShards: ExplorationBattleMetalShard[];
   knives: ExplorationBattleKnife[];
+  spits: ExplorationBattleSpit[];
+  pendingMeleeHits: ExplorationBattlePendingMeleeHit[];
   pendingKicks: ExplorationBattlePendingKick[];
   nextZombieId: number;
   nextUnitId: number;
@@ -80,12 +92,10 @@ type ExplorationBattleState = {
   failed: boolean;
   completed: boolean;
 };
-type WeaponKey =
-  | "glock17" | "m1911" | "pkm" | "fruitknife" | "combatknife" | "crowbar"
-  | "hammer" | "fireaxe" | "baseballbat" | "sawedoff"
-  | "mac11" | "mp5k" | "ak47" | "m4" | "m16" | "scarh"
-  | "saiga12" | "rem870" | "awm" | "m107" | "flint66" | "m240l" | "mg42"
-  | "rpg7" | "m32" | "gatling" | "fists";
+type WeaponKey = FirearmSoundKey
+  | "fruitknife" | "combatknife" | "crowbar"
+  | "hammer" | "fireaxe" | "baseballbat"
+  | "fists";
 
 type ExplorationMemberDefinition = {
   id: string;
@@ -332,6 +342,9 @@ const WEAPONS: Record<WeaponKey, Weapon> = {
 const KNIFE_WEAPONS = new Set<WeaponKey>(["fruitknife", "combatknife"]);
 const HEAVY_MELEE_WEAPONS = new Set<WeaponKey>(["baseballbat", "crowbar", "hammer", "fireaxe"]);
 const MELEE_WEAPONS = new Set<WeaponKey>([...KNIFE_WEAPONS, ...HEAVY_MELEE_WEAPONS, "fists"]);
+function isFirearmWeapon(key: WeaponKey): key is FirearmSoundKey {
+  return !MELEE_WEAPONS.has(key);
+}
 // 近战攻击全动作时长（重型武器上举蓄力更久；绘制与伤害判定共用，避免两处不一致）
 function meleeAttackDuration(key: WeaponKey) {
   return key === "fireaxe" ? 760 : key === "hammer" ? 700 : HEAVY_MELEE_WEAPONS.has(key) ? 620 : 430;
@@ -685,6 +698,22 @@ function isJuggernautChestWeakHit(region: HitRegion, localX: number, localY: num
   const weakY = (localY - centerY) / halfHeight;
   return weakX * weakX + weakY * weakY <= 1;
 }
+
+type ZombieProjectileBlockKind = "helmet" | "shield" | "juggernaut" | null;
+
+/**
+ * 经典与探索模式共用的实弹格挡几何。命中点必须来自僵尸局部坐标，禁止用概率近似头盔眼缝、盾牌观察窗或重甲胸口弱点。
+ */
+function zombieProjectileBlockKind(kind: ZombieKind, region: HitRegion, localX: number, localY: number, faceDir: number, shieldIntact: boolean): ZombieProjectileBlockKind {
+  if ((kind === "helmet" || kind === "helmetRunner") && region === "head") {
+    return Math.hypot(localX - faceDir * 6, localY + 117) > 4.5 ? "helmet" : null;
+  }
+  if (kind === "shield" && shieldIntact) {
+    return Math.hypot(localX - faceDir * 22, localY + 117) > 6 ? "shield" : null;
+  }
+  if (kind === "juggernaut") return isJuggernautChestWeakHit(region, localX, localY) ? null : "juggernaut";
+  return null;
+}
 /** 盾兵僵尸金属盾的独立 HP：子弹/爆炸震伤盾牌，归零后碎裂（永久消失，此后按无盾处理） */
 const SHIELD_HP = 500;
 // 靶场"僵尸生成"页签的信息表：展示名 / 生存模式解锁天数 / 第 1 天基数 HP / 速度档位 / 关键特性
@@ -861,6 +890,7 @@ function explorationAutomaticWeaponPhase(weaponKey: WeaponKey, startedAt: number
     reloading,
     reloadProgress: reloading ? Math.min(1, (cycleElapsed - fireDuration) / weapon.reload) : 0,
     shotSerial: Math.floor(elapsed / Math.max(1, weapon.fireRate)),
+    cycleSerial: cycleDuration > 0 ? Math.floor(elapsed / cycleDuration) : 0,
   };
 }
 type ExplorationDailyMetric = "mainlineCompletions" | "recruitDraws" | "consumablesPurchased" | "coinsEarned" | "experienceEarned";
@@ -1106,6 +1136,18 @@ function isLargeExplorationZombie(kind: ZombieKind) {
   return kind === "brute" || kind === "largeSpitter" || kind === "juggernaut";
 }
 
+function explorationZombieArmorDamageFactor(kind: ZombieKind, weapon: WeaponKey) {
+  if (kind === "normal" || kind === "brute" || kind === "runner" || kind === "zombieDog" || kind === "spitter" || kind === "largeSpitter" || kind === "helmet" || kind === "helmetRunner" || kind === "mutant") return 1;
+  const reduction = ZOMBIE_KIND_SPECS[kind].damageReduction ?? 0;
+  return 1 - reduction * (1 - armorPenBypass(weapon));
+}
+
+function explorationZombieLocalHit(region: HitRegion): { localX: number; localY: number } {
+  if (region === "head") return { localX: (Math.random() - .5) * 60, localY: -121 + (Math.random() - .5) * 20 };
+  if (region === "legs") return { localX: (Math.random() - .5) * 22, localY: -42 + Math.random() * 24 };
+  return { localX: (Math.random() - .5) * 60, localY: -104 + Math.random() * 54 };
+}
+
 function moveExplorationEntityToward(entity: { x: number; y: number }, target: { x: number; y: number }, distance: number, step: number) {
   if (distance <= 0) return;
   entity.x += (target.x - entity.x) / distance * step;
@@ -1127,13 +1169,24 @@ function freshExplorationBattle(vehicleHp: number, taskOrder: number, rewardElig
       x: point.x,
       y: point.y,
       cooldown: index * .25,
+      cooldownUntil: 0,
       damage: 8,
       speed: 2.4 * (spec?.speedFactor ?? 1),
       action: "guard",
+      attackWindupRemaining: 0,
+      attackAnimationRemaining: 0,
+      attackStartedAt: 0,
+      attackImpactAt: 0,
+      attackAnimationUntil: 0,
+      attackTargetUnitId: null,
       wounds: [],
       missingLimbs: [],
       legDamage: 0,
       knockedDownRemaining: 0,
+      shieldHp: kind === "shield" ? SHIELD_HP : 0,
+      shieldIntact: kind === "shield",
+      shieldDents: [],
+      ignited: false,
     };
   });
   return {
@@ -1146,7 +1199,13 @@ function freshExplorationBattle(vehicleHp: number, taskOrder: number, rewardElig
     units: [],
     zombies,
     corpses: [],
+    groundProps: [],
+    bloodEffects: [],
+    detachedLimbs: [],
+    metalShards: [],
     knives: [],
+    spits: [],
+    pendingMeleeHits: [],
     pendingKicks: [],
     nextZombieId: zombies.length + 1,
     nextUnitId: 1,
@@ -7955,7 +8014,7 @@ const REAL_BARREL_MM: Record<WeaponKey, number> = {
 // grip = 后手握把点，fore = 前手护木点，magWell = 弹匣井，charge = 拉机柄/枪机位置与拉动行程，
 // feed = 装填口（管状弹仓/转轮/筒口）。左右手由两段 IK 按这些实际点位求解。
 type WeaponStance = "pistol" | "rifle" | "rpg" | "melee1h" | "melee2h";
-type ReloadKind = "none" | "mag" | "shells" | "cylinder" | "rocket";
+type ReloadKind = "none" | "mag" | "shells" | "cylinder" | "rocket" | "belt" | "box";
 type WeaponHold = {
   stance: WeaponStance;
   grip: [number, number];
@@ -7964,6 +8023,7 @@ type WeaponHold = {
   magWell?: [number, number];
   charge?: { x: number; y: number; pull: [number, number] };
   feed?: [number, number];
+  shellCount?: number;
 };
 
 const WEAPON_HOLD: Record<WeaponKey, WeaponHold> = {
@@ -7984,13 +8044,13 @@ const WEAPON_HOLD: Record<WeaponKey, WeaponHold> = {
   // 燧石66：半自动反器材步枪，长枪管 + 两脚架，前手握持点相应前移
   flint66: { stance: "rifle", grip: [4, 12], fore: [56, 2], reloadKind: "mag", magWell: [18, 14], charge: { x: 26, y: -3, pull: [-13, 0] } },
   // 霰弹枪：管状弹仓逐发装填 + 泵动上膛
-  rem870: { stance: "rifle", grip: [4, 10], fore: [47, 2], reloadKind: "shells", feed: [14, 9] },
-  sawedoff: { stance: "rifle", grip: [4, 12], fore: [40, 0], reloadKind: "shells", feed: [12, 9] },
+  rem870: { stance: "rifle", grip: [4, 10], fore: [47, 2], reloadKind: "shells", feed: [14, 9], shellCount: 7 },
+  sawedoff: { stance: "rifle", grip: [4, 12], fore: [40, 0], reloadKind: "shells", feed: [12, 9], shellCount: 2 },
   // 机枪：弹箱/弹鼓挂于机匣下方，右侧拉机柄
-  m240l: { stance: "rifle", grip: [4, 12], fore: [58, 3], reloadKind: "mag", magWell: [20, 20], charge: { x: 26, y: 3, pull: [-21, 0] } },
-  mg42: { stance: "rifle", grip: [4, 12], fore: [60, 3], reloadKind: "mag", magWell: [23, 20], charge: { x: 31, y: 3, pull: [-22, 0] } },
-  pkm: { stance: "rifle", grip: [4, 12], fore: [57, 3], reloadKind: "mag", magWell: [22, 20], charge: { x: 28, y: 3, pull: [-21, 0] } },
-  gatling: { stance: "rifle", grip: [-21, 18], fore: [22, 13], reloadKind: "mag", magWell: [-2, 18] },
+  m240l: { stance: "rifle", grip: [4, 12], fore: [58, 3], reloadKind: "belt", magWell: [20, 20], charge: { x: 26, y: 3, pull: [-21, 0] } },
+  mg42: { stance: "rifle", grip: [4, 12], fore: [60, 3], reloadKind: "belt", magWell: [23, 20], charge: { x: 31, y: 3, pull: [-22, 0] } },
+  pkm: { stance: "rifle", grip: [4, 12], fore: [57, 3], reloadKind: "belt", magWell: [22, 20], charge: { x: 28, y: 3, pull: [-21, 0] } },
+  gatling: { stance: "rifle", grip: [-21, 18], fore: [22, 13], reloadKind: "box", magWell: [-2, 18] },
   // RPG-7：肩扛式，弹头从筒口塞入
   rpg7: { stance: "rpg", grip: [5, 16], fore: [42, -3], reloadKind: "rocket", feed: [104, 0] },
   // M32：逐发按入转轮后合膛
@@ -8115,8 +8175,8 @@ const EMPTY_RELOAD_VISUAL = (): ReloadVisual => ({
 });
 
 // 弹匣式（手枪/冲锋枪/步枪/机枪）：①拔下旧弹匣（可见下落）②探向腰间取新匣 ③插入并按/拍到位 ④拉栓上膛（各枪拉机柄行程不同）。
-// 管状弹仓（870/短截）：逐发按入装填口 ×3，随后泵动滑套后拉前推上膛。
-// 转轮（M32）：逐发按入弹巢 ×3，转轮分度旋转，最后合膛。RPG-7：弹头从筒口塞入后待发。
+// 管状弹仓（870/短截）：按实际容量逐发压壳，随后泵动滑套上膛。
+// 转轮（M32）：6 发逐发压入并分度旋转；弹链机枪开盖换弹箱/压弹链；RPG-7 从筒口装入火箭弹。
 function computeReloadVisual(
   key: WeaponKey,
   progress: number,
@@ -8157,16 +8217,20 @@ function computeReloadVisual(
 
   if (hold.reloadKind === "shells") {
     const feed = hold.feed ?? hold.grip;
-    if (progress < 0.72) {
-      const cycle = Math.min(2, Math.floor(progress / 0.24));
-      const local = (progress - cycle * 0.24) / 0.24;
+    const reloadTimeline = firearmReloadInsertionTimeline(key as FirearmSoundKey);
+    const shellCount = reloadTimeline?.insertions.length ?? hold.shellCount ?? 2;
+    const loadEnd = reloadTimeline?.loadEnd ?? .82;
+    const cycleDuration = loadEnd / shellCount;
+    if (progress < loadEnd) {
+      const cycle = Math.min(shellCount - 1, Math.floor(progress / cycleDuration));
+      const local = (progress - cycle * cycleDuration) / cycleDuration;
       const port = toLocal(feed);
       if (local < 0.38) visual.lead = step(port, belt, local / 0.38);
       else if (local < 0.72) visual.lead = step(belt, port, (local - 0.38) / 0.34);
       else visual.lead = step(port, toLocal([feed[0], feed[1] - 3]), (local - 0.72) / 0.28);
       if (local > 0.6) visual.shell = { x: feed[0], y: feed[1] - (local - 0.6) * 8, alpha: 1 };
-    } else if (progress < 0.94) {
-      const t = (progress - 0.72) / 0.22;
+    } else if (progress < 0.96) {
+      const t = (progress - loadEnd) / (0.96 - loadEnd);
       visual.bolt = t < 0.5 ? easeInOut(t / 0.5) : 1 - easeInOut((t - 0.5) / 0.5);
       visual.lead = toLocal([hold.fore[0] - visual.bolt * 9, hold.fore[1]]);
     } else {
@@ -8177,9 +8241,13 @@ function computeReloadVisual(
 
   if (hold.reloadKind === "cylinder") {
     const feed = hold.feed ?? [17, -10];
-    if (progress < 0.68) {
-      const cycle = Math.min(2, Math.floor(progress / 0.2266));
-      const local = (progress - cycle * 0.2266) / 0.2266;
+    const reloadTimeline = firearmReloadInsertionTimeline(key as FirearmSoundKey);
+    const shellCount = reloadTimeline?.insertions.length ?? 6;
+    const loadEnd = reloadTimeline?.loadEnd ?? .72;
+    const cycleDuration = loadEnd / shellCount;
+    if (progress < loadEnd) {
+      const cycle = Math.min(shellCount - 1, Math.floor(progress / cycleDuration));
+      const local = (progress - cycle * cycleDuration) / cycleDuration;
       const port = toLocal(feed);
       if (local < 0.4) visual.lead = step(port, belt, local / 0.4);
       else if (local < 0.75) visual.lead = step(belt, port, (local - 0.4) / 0.35);
@@ -8187,9 +8255,30 @@ function computeReloadVisual(
       if (local > 0.55) visual.shell = { x: feed[0], y: feed[1] - (local - 0.55) * 6, alpha: 1 };
       visual.cylinderSpin = (cycle + easeInOut(Math.max(0, (local - 0.75) / 0.25))) * (Math.PI / 3);
     } else {
-      visual.cylinderSpin = Math.PI * (1 - easeInOut((progress - 0.68) / 0.2));
-      visual.lead = step(toLocal(feed), toLocal(hold.fore), (progress - 0.68) / 0.26);
+      visual.cylinderSpin = Math.PI * 2 * (1 - easeInOut((progress - loadEnd) / 0.2));
+      visual.lead = step(toLocal(feed), toLocal(hold.fore), (progress - loadEnd) / (1 - loadEnd));
     }
+    return visual;
+  }
+
+  if (hold.reloadKind === "belt" || hold.reloadKind === "box") {
+    const feed = hold.magWell ?? hold.grip;
+    const feedPoint = toLocal(feed);
+    const coverPoint = toLocal([feed[0] + 5, feed[1] - 17]);
+    const chargePoint = hold.charge ? toLocal([hold.charge.x + hold.charge.pull[0] * .45, hold.charge.y]) : toLocal(hold.fore);
+    visual.hideMag = progress > .07 && progress < .68;
+    if (progress < .16) visual.lead = step(toLocal(hold.fore), coverPoint, progress / .16);
+    else if (progress < .31) visual.lead = step(coverPoint, feedPoint, (progress - .16) / .15);
+    else if (progress < .5) visual.lead = step(feedPoint, belt, (progress - .31) / .19);
+    else if (progress < .68) {
+      const t = (progress - .5) / .18;
+      visual.lead = step(belt, feedPoint, t);
+      visual.newMag = { x: feed[0], y: feed[1] + (1 - easeInOut(t)) * 28, rot: 0, alpha: 1 };
+    } else if (progress < .82) visual.lead = step(feedPoint, coverPoint, (progress - .68) / .14);
+    else if (progress < .94) {
+      visual.lead = chargePoint;
+      visual.bolt = progress < .88 ? easeInOut((progress - .82) / .06) : 1 - easeInOut((progress - .88) / .06);
+    } else visual.lead = step(chargePoint, toLocal(hold.fore), (progress - .94) / .06);
     return visual;
   }
 
@@ -8301,6 +8390,88 @@ function drawGroundProp(ctx: CanvasRenderingContext2D, prop: GroundProp) {
     ctx.beginPath(); ctx.moveTo(-5, -6); ctx.lineTo(8, -6); ctx.lineTo(10, 20); ctx.lineTo(-3, 22); ctx.closePath(); ctx.fill();
   }
   ctx.restore();
+}
+
+/** 经典与探索模式共用的路面血泊绘制。 */
+function drawBloodStain(ctx: CanvasRenderingContext2D, stain: BloodStain, now: number) {
+  const fade = Math.min(1, Math.max(0, (stain.removeAt - now) / 2000));
+  const vomit = stain.tint === "vomit";
+  ctx.fillStyle = vomit ? `rgba(94,142,44,${(0.55 * fade).toFixed(3)})` : `rgba(94,13,20,${(0.55 * fade).toFixed(3)})`;
+  ctx.beginPath();
+  ctx.ellipse(stain.x, stain.y, stain.rx, stain.rx * .32, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = vomit ? `rgba(56,94,24,${(0.4 * fade).toFixed(3)})` : `rgba(60,8,12,${(0.4 * fade).toFixed(3)})`;
+  ctx.beginPath();
+  ctx.ellipse(stain.x - stain.rx * .2, stain.y, stain.rx * .45, stain.rx * .16, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function ExplorationGroundPropView({ prop, fade }: { prop: ExplorationBattleGroundProp; fade: number }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const canvas = ref.current;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    drawGroundProp(ctx, {
+      id: 0, kind: prop.kind, x: 0, y: 0, vx: 0, vy: 0, groundY: 0, rotation: 0, angularVelocity: 0,
+      visibleAt: prop.createdAt, removeAt: prop.removeAt, weapon: prop.weapon, settled: true,
+    });
+    ctx.restore();
+  }, [prop]);
+  const canvasSize = prop.kind === "shield" ? 180 : 72;
+  return <span className={`battle-ground-prop battle-ground-${prop.kind}`} data-weapon={prop.weapon} style={{ left: `${prop.x}%`, bottom: `${prop.y}%`, opacity: fade, transform: `translateX(-50%) rotate(${prop.rotation}deg)` }} aria-label={prop.kind === "casing" ? "落地弹壳" : prop.kind === "shield" ? "脱手盾牌" : "落地弹匣"}><canvas ref={ref} width={canvasSize} height={canvasSize} /></span>;
+}
+
+function ExplorationBloodEffectView({ effect, now }: { effect: ExplorationBattleBloodEffect; now: number }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const canvas = ref.current;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const stainDrops = effect.stainDrops ?? (effect.tint === "vomit" ? [{ x: 0, y: 0, rx: 15 }] : []);
+    stainDrops.forEach((stain, index) => drawBloodStain(ctx, { id: index, x: canvas.width / 2 + stain.x, y: canvas.height / 2 + stain.y, rx: stain.rx, removeAt: effect.removeAt, tint: effect.tint }, now));
+  }, [effect, now]);
+  const fresh = now - effect.createdAt < 650;
+  const fade = Math.max(0, Math.min(1, (effect.removeAt - now) / 1800));
+  return <span className="battle-blood-splatter" style={{ left: `${effect.x}%`, bottom: `${effect.y}%`, opacity: fade }} aria-hidden="true"><canvas ref={ref} width={160} height={60} />{fresh && (effect.droplets ?? []).map((drop, index) => <i key={index} style={{ "--blood-x": `${drop.x}px`, "--blood-y": `${drop.y}px`, width: `${drop.size}px`, height: `${drop.size}px`, animationDuration: `${drop.duration}ms` } as React.CSSProperties} />)}</span>;
+}
+
+function ExplorationDetachedLimbView({ limb, now }: { limb: ExplorationBattleDetachedLimb; now: number }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  const elapsed = Math.max(0, (now - limb.createdAt) / 1000);
+  useEffect(() => {
+    const ctx = ref.current?.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, 240, 180);
+    ctx.save();
+    ctx.translate(120, 90);
+    drawDetachedLimb(ctx, { id: 0, kind: limb.kind, x: 0, y: 0, vx: 0, vy: 0, rotation: 0, angularVelocity: 0, scale: limb.scale, tint: limb.tint, skin: limb.skin, shoe: limb.shoe, until: limb.removeAt });
+    ctx.restore();
+  }, [limb]);
+  const left = limb.x + limb.vx * elapsed;
+  const bottom = Math.max(2, limb.y + limb.vy * elapsed - 14 * elapsed * elapsed);
+  return <canvas ref={ref} className="battle-detached-limb" width={240} height={180} style={{ left: `${left}%`, bottom: `${bottom}%`, opacity: Math.min(1, (limb.removeAt - now) / 300), transform: `translate(-50%, 50%) rotate(${limb.rotation + limb.angularVelocity * elapsed}rad)` }} aria-hidden="true" />;
+}
+
+function ExplorationMetalShardView({ shard, now }: { shard: ExplorationBattleMetalShard; now: number }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  const elapsed = Math.max(0, (now - shard.createdAt) / 1000);
+  useEffect(() => {
+    const ctx = ref.current?.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, 36, 36);
+    ctx.save();
+    ctx.translate(18, 18);
+    drawMetalShard(ctx, { x: 0, y: 0, vx: 0, vy: 0, rotation: 0, angularVelocity: 0, points: shard.points, color: shard.color, until: shard.removeAt }, now);
+    ctx.restore();
+  }, [now, shard]);
+  const left = shard.x + shard.vx * elapsed;
+  const bottom = Math.max(2, shard.y + shard.vy * elapsed - 14 * elapsed * elapsed);
+  return <canvas ref={ref} className="battle-metal-shard" width={36} height={36} style={{ left: `${left}%`, bottom: `${bottom}%`, transform: `translate(-50%, 50%) rotate(${shard.rotation + shard.angularVelocity * elapsed}rad)` }} aria-hidden="true" />;
 }
 
 // 武器模型实际像素包围盒缓存：按各枪模型真实长宽自适应预览区域（含 RPG 弹头、弹鼓等突出件），完整可见且不拉伸
@@ -8723,7 +8894,7 @@ function drawCompleteZombieBodyFrame(
   if (zombie.kind === "shield" && zombie.shieldIntact) drawZombieShield(ctx, zombie, scale, facing);
 }
 
-function ZombieKindPreview({ kind, width = 150, height = 200, className = "spawn-preview", motion = "standing", hpRatio = 1, wounds = [], missingLimbs = [], knockedDown = false, fillHeight = false }: { kind: ZombieKind; width?: number; height?: number; className?: string; motion?: "standing" | "walking" | "attacking"; hpRatio?: number; wounds?: Wound[]; missingLimbs?: ZombieLimb[]; knockedDown?: boolean; fillHeight?: boolean }) {
+function ZombieKindPreview({ kind, width = 150, height = 200, className = "spawn-preview", motion = "standing", actionStartedAt, hpRatio = 1, wounds = [], missingLimbs = [], knockedDown = false, fillHeight = false, shieldIntact, shieldDents = [], ignited = false }: { kind: ZombieKind; width?: number; height?: number; className?: string; motion?: "standing" | "walking" | "attacking"; actionStartedAt?: number; hpRatio?: number; wounds?: Wound[]; missingLimbs?: ZombieLimb[]; knockedDown?: boolean; fillHeight?: boolean; shieldIntact?: boolean; shieldDents?: Array<{ x: number; y: number }>; ignited?: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const canvas = ref.current;
@@ -8732,7 +8903,11 @@ function ZombieKindPreview({ kind, width = 150, height = 200, className = "spawn
     const z = previewZombie(kind);
     z.wounds = wounds.length > 0 ? wounds : hpRatio < .82 ? [{ x: 5, y: -85, region: "body", size: 3.5 }] : [];
     z.missingLimbs = new Set(missingLimbs);
+    if (shieldIntact !== undefined) z.shieldIntact = shieldIntact;
+    z.shieldDents = shieldDents;
+    z.ignitedAt = ignited ? performance.now() : 0;
     let animationFrame = 0;
+    const motionStartedAt = performance.now();
     const draw = (now: number) => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       // 统一缩放：按最大体型（radius 36）自动校准到画布高度，种类间保留相对体型差。
@@ -8742,7 +8917,8 @@ function ZombieKindPreview({ kind, width = 150, height = 200, className = "spawn
       const fit = previewLength / (BASE_HUMAN_HEIGHT * (referenceRadius / 25) * CHARACTER_SCALE);
       const scale = (z.radius / 25) * CHARACTER_SCALE * fit;
       const gaitCycle = (now / 300) % 1;
-      const attackProgress = motion === "attacking" ? (now % 560) / 560 : 0;
+      const attackElapsed = now - (actionStartedAt ?? motionStartedAt);
+      const attackProgress = motion === "attacking" ? actionStartedAt === undefined ? (attackElapsed % 560) / 560 : Math.min(1, Math.max(0, attackElapsed / 560)) : 0;
       const rearLeg = motion === "walking" ? gaitLegPose((gaitCycle + .5) % 1, -1, -5, 7, 3.5) : standingLegPose(-1, -5);
       const frontLeg = motion === "walking" ? gaitLegPose(gaitCycle, -1, 5, 7, 3.5) : standingLegPose(-1, 5);
       ctx.save();
@@ -8754,7 +8930,7 @@ function ZombieKindPreview({ kind, width = 150, height = 200, className = "spawn
     };
     draw(performance.now());
     return () => window.cancelAnimationFrame(animationFrame);
-  }, [fillHeight, hpRatio, kind, width, height, missingLimbs, motion, knockedDown, wounds]);
+  }, [actionStartedAt, fillHeight, hpRatio, ignited, kind, width, height, missingLimbs, motion, knockedDown, shieldDents, shieldIntact, wounds]);
   return <canvas ref={ref} className={className} width={width} height={height} aria-hidden="true" />;
 }
 
@@ -8866,7 +9042,7 @@ function drawSurvivalHumanHeadAndFace(ctx: CanvasRenderingContext2D, facing: num
 }
 
 /** 探索队伍详情与战斗复用生存模式的人体骨架、步态、枪焰和真实武器模型。 */
-function ExplorationMemberPreview({ member, motion = "standing", reloadProgress = 0, battleScale = false, automaticWeaponStartedAt }: { member: ExplorationMemberDefinition; motion?: "standing" | "moving" | "attacking" | "reloading" | "kicking" | "throwing"; reloadProgress?: number; battleScale?: boolean; automaticWeaponStartedAt?: number }) {
+function ExplorationMemberPreview({ member, motion = "standing", reloadProgress = 0, reloadStartedAt, actionStartedAt, battleScale = false, automaticWeaponStartedAt }: { member: ExplorationMemberDefinition; motion?: "standing" | "moving" | "attacking" | "reloading" | "kicking" | "throwing"; reloadProgress?: number; reloadStartedAt?: number; actionStartedAt?: number; battleScale?: boolean; automaticWeaponStartedAt?: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const canvas = ref.current;
@@ -8878,7 +9054,10 @@ function ExplorationMemberPreview({ member, motion = "standing", reloadProgress 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       const automaticPhase = automaticWeaponStartedAt === undefined || now < automaticWeaponStartedAt ? null : explorationAutomaticWeaponPhase(member.weapon, automaticWeaponStartedAt, now);
       const renderMotion = automaticPhase ? (automaticPhase.reloading ? "reloading" : "attacking") : motion;
-      const renderReloadProgress = automaticPhase?.reloadProgress ?? reloadProgress;
+      const renderReloadProgress = automaticPhase?.reloadProgress
+        ?? (renderMotion === "reloading" && reloadStartedAt !== undefined
+          ? Math.min(1, (now - reloadStartedAt) / Math.max(1, WEAPONS[member.weapon].reload))
+          : reloadProgress);
       const facing = 1;
       const scale = battleScale ? EXPLORATION_BATTLE_MEMBER_SCALE : 1.9;
       const farmer = member.id === "farmer";
@@ -8892,7 +9071,8 @@ function ExplorationMemberPreview({ member, motion = "standing", reloadProgress 
       const moving = renderMotion === "moving";
       const kickProgress = Math.min(1, Math.max(0, (now - motionStartedAt) / KICK_ANIMATION_MS));
       const attackCycle = automaticPhase ? WEAPONS[member.weapon].fireRate : Math.max(360, WEAPONS[member.weapon].fireRate);
-      const attackPhase = renderMotion === "attacking" ? ((now - (automaticWeaponStartedAt ?? 0)) % attackCycle) / attackCycle : renderMotion === "throwing" ? .48 : 0;
+      const attackStartedAt = automaticWeaponStartedAt ?? actionStartedAt ?? motionStartedAt;
+      const attackPhase = renderMotion === "attacking" ? ((now - attackStartedAt) % attackCycle) / attackCycle : renderMotion === "throwing" ? .48 : 0;
       ctx.save();
       ctx.translate(canvas.width * .43, canvas.height * (battleScale ? .94 : .88) + (moving ? Math.sin(gaitCycle * Math.PI * 4) * 1.1 : 0));
       ctx.scale(scale, scale);
@@ -8944,7 +9124,12 @@ function ExplorationMemberPreview({ member, motion = "standing", reloadProgress 
       ctx.save();
       ctx.translate(gunX, gunY);
       ctx.rotate(weaponAngle);
-      drawWeaponModel(ctx, member.weapon, gunScale, reloadVisual?.hideMag ?? false, reloadVisual?.bolt ?? 0, reloadVisual?.cylinderSpin ?? 0);
+      const cycleBolt = renderMotion === "attacking" && ["rem870", "awm", "flint66"].includes(member.weapon)
+        ? Math.sin(Math.min(1, attackPhase * 2) * Math.PI)
+        : 0;
+      const pumpCycle = member.weapon === "rem870" ? cycleBolt : 0;
+      const boltActionCycle = BOLT_ACTION_WEAPONS.has(member.weapon) ? cycleBolt : 0;
+      drawWeaponModel(ctx, member.weapon, gunScale, reloadVisual?.hideMag ?? false, Math.max(reloadVisual?.bolt ?? 0, pumpCycle), reloadVisual?.cylinderSpin ?? 0, boltActionCycle);
       if (reloadVisual) {
         ctx.save();
         ctx.scale(gunScale, gunScale);
@@ -8958,7 +9143,7 @@ function ExplorationMemberPreview({ member, motion = "standing", reloadProgress 
     };
     draw(performance.now());
     return () => window.cancelAnimationFrame(animationFrame);
-  }, [automaticWeaponStartedAt, battleScale, member, motion, reloadProgress]);
+  }, [actionStartedAt, automaticWeaponStartedAt, battleScale, member, motion, reloadProgress, reloadStartedAt]);
   return <canvas ref={ref} className="team-member-preview" width={330} height={430} aria-label={`${member.name}与${WEAPONS[member.weapon].name}建模预览`} />;
 }
 
@@ -9095,7 +9280,6 @@ function dropLevel8AmmoBox(g: GameState, level: LevelRunState, now: number) {
     vx: -35, vy: -55, groundY: level.truckY + 4, rotation: -.2, angularVelocity: -3,
     visibleAt: now + 260, removeAt: now + GROUND_PROP_MS, weapon: "m240l", settled: false,
   });
-  if (g.groundProps.length > MAX_GROUND_PROPS) g.groundProps.splice(0, g.groundProps.length - MAX_GROUND_PROPS);
 }
 
 export function DeadRoadGame() {
@@ -9529,9 +9713,11 @@ export function DeadRoadGame() {
           cooldown: 0,
           ammo: MELEE_WEAPONS.has(member.weapon) ? 1 : WEAPONS[member.weapon].magazine,
           reloadRemaining: 0,
+          reloadStartedAt: 0,
           attacksPerformed: 0,
           skillCooldown: member.combatSkills?.thrownKnifeInterval ?? 0,
           actionRemaining: 0,
+          actionStartedAt: 0,
           action: "guard",
           shotTarget: null,
           shotSerial: 0,
@@ -9566,13 +9752,24 @@ export function DeadRoadGame() {
             x: point.x,
             y: point.y,
             cooldown: .35 * index,
+            cooldownUntil: 0,
             damage: 8 + tier * 2,
             speed: 2.4 + Math.min(2.2, tier * .16),
             action: "guard",
+            attackWindupRemaining: 0,
+            attackAnimationRemaining: 0,
+            attackStartedAt: 0,
+            attackImpactAt: 0,
+            attackAnimationUntil: 0,
+            attackTargetUnitId: null,
             wounds: [],
             missingLimbs: [],
             legDamage: 0,
             knockedDownRemaining: 0,
+            shieldHp: 0,
+            shieldIntact: false,
+            shieldDents: [],
+            ignited: false,
           };
         });
         return { ...battle, zombies: [...battle.zombies, ...spawned], nextZombieId: battle.nextZombieId + count };
@@ -9599,18 +9796,259 @@ export function DeadRoadGame() {
             actionRemaining,
             reloadRemaining,
             ammo: unit.reloadRemaining > 0 && reloadRemaining === 0 && member ? WEAPONS[member.weapon].magazine : unit.ammo,
+            reloadStartedAt: reloadRemaining === 0 ? 0 : unit.reloadStartedAt,
             action: reloadRemaining > 0 ? "reload" : actionRemaining > 0 ? unit.action : "guard",
             shotTarget: null,
           };
         });
-        let zombies = battle.zombies.map((zombie): ExplorationBattleZombie => ({
-          ...zombie,
-          cooldown: Math.max(0, zombie.cooldown - .25),
-          knockedDownRemaining: Math.max(0, zombie.knockedDownRemaining - .25),
-          action: "guard",
-        }));
+        let vehicleHp = battle.vehicleHp;
+        let zombies = battle.zombies.map((zombie): ExplorationBattleZombie => {
+          const attackImpactDue = zombie.attackImpactAt > 0 && zombie.attackImpactAt <= supportNow;
+          const attackWindupRemaining = Math.max(0, (zombie.attackImpactAt - supportNow) / 1000);
+          const attackAnimationRemaining = Math.max(0, (zombie.attackAnimationUntil - supportNow) / 1000);
+          if (attackImpactDue && zombie.attackTargetUnitId) {
+            const missingArms = Number(zombie.missingLimbs.includes("leftArm")) + Number(zombie.missingLimbs.includes("rightArm"));
+            const limbAttackFactor = missingArms === 2 ? .25 : missingArms === 1 ? .65 : 1;
+            if (zombie.attackTargetUnitId === "vehicle") {
+              vehicleHp -= zombie.damage * limbAttackFactor;
+              sound.armorClank({ volume: .55 });
+            } else {
+              const target = units.find((unit) => unit.id === zombie.attackTargetUnitId && unit.hp > 0);
+              if (target) {
+                target.hp -= zombie.damage * limbAttackFactor;
+                sound.playerHurt({ volume: .62 });
+              }
+            }
+          }
+          return {
+            ...zombie,
+            hp: zombie.hp - (zombie.ignited ? IGNITE_DPS * .25 : 0),
+            cooldown: Math.max(0, (zombie.cooldownUntil - supportNow) / 1000),
+            knockedDownRemaining: Math.max(0, zombie.knockedDownRemaining - .25),
+            attackWindupRemaining,
+            attackAnimationRemaining,
+            attackImpactAt: attackImpactDue ? 0 : zombie.attackImpactAt,
+            attackTargetUnitId: attackImpactDue ? null : zombie.attackTargetUnitId,
+            action: attackAnimationRemaining > 0 ? "attack" : "guard",
+          };
+        });
         let corpses = battle.corpses.filter((corpse) => supportNow < corpse.removeAt);
+        let groundProps = battle.groundProps.filter((prop) => supportNow < prop.removeAt);
+        let bloodEffects = battle.bloodEffects.filter((effect) => supportNow < effect.removeAt);
+        let detachedLimbs = battle.detachedLimbs.filter((limb) => supportNow < limb.removeAt);
+        let metalShards = battle.metalShards.filter((shard) => supportNow < shard.removeAt);
+        const impactingSpits = battle.spits.filter((spit) => spit.impactAt <= supportNow);
+        let spits = battle.spits.filter((spit) => spit.impactAt > supportNow);
+        impactingSpits.forEach((spit) => {
+          bloodEffects = [...bloodEffects, { id: `vomit-${spit.id}`, x: spit.toX, y: spit.toY, angle: 0, createdAt: supportNow, removeAt: supportNow + BLOOD_STAIN_MS, tint: "vomit" }];
+          if (spit.targetUnitId === "vehicle") {
+            vehicleHp -= spit.damage;
+            sound.armorClank({ volume: .5 });
+            return;
+          }
+          const target = units.find((unit) => unit.id === spit.targetUnitId && unit.hp > 0);
+          if (!target || explorationPlaneDistance(target, { x: spit.toX, y: spit.toY }) > 3.5) return;
+          target.hp -= spit.damage;
+          sound.playerHurt({ volume: .5 });
+        });
+        const addGroundProp = (id: string, kind: ExplorationBattleGroundProp["kind"], weapon: WeaponKey | undefined, x: number, y: number) => {
+          if (groundProps.some((prop) => prop.id === id)) return;
+          groundProps = [...groundProps, {
+            id,
+            kind,
+            weapon,
+            x,
+            y,
+            rotation: (Math.random() - .5) * 72,
+            createdAt: supportNow,
+            removeAt: supportNow + GROUND_PROP_MS,
+          }];
+        };
+        const addBloodEffect = (id: string, zombie: ExplorationBattleZombie, angle = 0, originX = zombie.x, originY = zombie.y, dropletCount = 13, projectStains = true) => {
+          if (bloodEffects.some((effect) => effect.id === id)) return;
+          const droplets = Array.from({ length: dropletCount }, () => {
+            const sprayAngle = angle + Math.PI + (Math.random() - .5) * 1.2;
+            const speed = 22 + Math.random() * 48;
+            return { x: Math.cos(sprayAngle) * speed, y: Math.sin(sprayAngle) * speed - 18, size: 2 + Math.random() * 5.5, duration: 300 + Math.random() * 300 };
+          });
+          const stainCount = projectStains && Math.random() < .7 ? (Math.random() < .3 ? 2 : 1) : 0;
+          const stainDrops = Array.from({ length: stainCount }, () => {
+            const dripAngle = angle + Math.PI + (Math.random() - .5) * .9;
+            const travel = 14 + Math.random() * 52;
+            return { x: Math.cos(dripAngle) * travel, y: 16 + Math.random() * 7, rx: 3.5 + Math.random() * 6 };
+          });
+          bloodEffects = [...bloodEffects, {
+            id,
+            x: originX,
+            y: originY,
+            angle,
+            createdAt: supportNow,
+            removeAt: supportNow + BLOOD_STAIN_MS,
+            droplets,
+            stainDrops,
+          }];
+        };
+        const shatterExplorationShield = (zombie: ExplorationBattleZombie, effectId: string) => {
+          zombie.shieldIntact = false;
+          zombie.shieldHp = 0;
+          zombie.shieldDents = [];
+          const shieldColors = ["#7d8b9b", "#6b7887", "#4a545e", "#333a43", "#9aa8b5"];
+          const shieldShards = Array.from({ length: 12 }, (_, index): ExplorationBattleMetalShard => {
+            const corners = 3 + Math.floor(Math.random() * 2);
+            const size = 3 + Math.random() * 6;
+            return {
+              id: `${effectId}-shield-${index}`,
+              x: zombie.x,
+              y: zombie.y + 7,
+              vx: (Math.random() - .5) * 10,
+              vy: 8 + Math.random() * 13,
+              rotation: Math.random() * Math.PI,
+              angularVelocity: (Math.random() - .5) * 26,
+              points: Array.from({ length: corners }, (_, pointIndex): [number, number] => {
+                const pointAngle = pointIndex / corners * Math.PI * 2 + (Math.random() - .5) * .9;
+                return [Math.cos(pointAngle) * size, Math.sin(pointAngle) * size * .55];
+              }),
+              color: shieldColors[index % shieldColors.length],
+              createdAt: supportNow,
+              removeAt: supportNow + 750 + Math.random() * 550,
+            };
+          });
+          // 同经典模式：12 块盾片之外，再产生一组金色火花与 90ms 白色闪点。
+          const shieldSparks = Array.from({ length: 8 }, (_, index): ExplorationBattleMetalShard => ({
+            id: `${effectId}-shield-spark-${index}`,
+            x: zombie.x,
+            y: zombie.y + 7,
+            vx: (Math.random() - .5) * 14,
+            vy: 10 + Math.random() * 12,
+            rotation: 0,
+            angularVelocity: 0,
+            points: index === 0 ? [[-6, -6], [6, -6], [6, 6], [-6, 6]] : [[-2, -1], [5, 0], [-2, 1]],
+            color: index === 0 ? "#ffffff" : index % 2 ? "#ffd47a" : "#f6f0d0",
+            createdAt: supportNow,
+            removeAt: supportNow + (index === 0 ? 90 : 220 + Math.random() * 180),
+          }));
+          metalShards = [...metalShards, ...shieldShards, ...shieldSparks];
+          sound.shieldShatter({ volume: .55 });
+        };
+        const resolveExplorationProjectileHit = (
+          zombie: ExplorationBattleZombie,
+          weaponKey: FirearmSoundKey,
+          rawDamage: number,
+          region: HitRegion,
+          bloodId: string,
+          localHit = explorationZombieLocalHit(region),
+        ) => {
+          const faceDir = -1;
+          const blockKind = zombieProjectileBlockKind(zombie.kind, region, localHit.localX, localHit.localY, faceDir, zombie.shieldIntact);
+          if (blockKind) {
+            if (WEAPONS[weaponKey].ignite) zombie.ignited = true;
+            if (blockKind === "shield") {
+              zombie.shieldHp -= rawDamage;
+              zombie.shieldDents = [...zombie.shieldDents.slice(-13), {
+                x: Math.max(-8.4, Math.min(8.4, localHit.localX - faceDir * 22)),
+                y: Math.max(-70, Math.min(70, localHit.localY + 70)),
+              }];
+              if (zombie.shieldHp <= 0) {
+                shatterExplorationShield(zombie, bloodId);
+              } else sound.armorClank({ volume: .38 });
+            } else sound.armorClank({ volume: .38 });
+            return false;
+          }
+          const regionMultiplier = region === "head" ? 2.4 : region === "legs" ? .72 : 1;
+          const inflictedDamage = rawDamage * regionMultiplier * explorationZombieArmorDamageFactor(zombie.kind, weaponKey);
+          zombie.hp -= inflictedDamage;
+          if (WEAPONS[weaponKey].ignite) zombie.ignited = true;
+          zombie.x = Math.min(97, zombie.x + .18 + WEAPON_HANDLING[weaponKey].stopping * .72);
+          zombie.wounds = [...zombie.wounds.slice(-7), {
+            x: localHit.localX,
+            y: localHit.localY,
+            region,
+            size: region === "head" ? 3.8 : region === "legs" ? 4 : 4.6,
+            bone: zombie.wounds.filter((wound) => wound.region === region).length >= 2,
+          }];
+          addBloodEffect(bloodId, zombie, 0);
+          if (region === "legs") {
+            zombie.legDamage += inflictedDamage;
+            if (zombie.kind !== "juggernaut" && Math.random() < .5) {
+              zombie.knockedDownRemaining = Math.max(zombie.knockedDownRemaining, 3);
+              sound.zombieFall({ volume: .46 });
+            }
+          }
+          return true;
+        };
+        const damageExplorationZombieFromExplosion = (
+          zombie: ExplorationBattleZombie,
+          damage: number,
+          blastX: number,
+          blastY: number,
+          radius: number,
+          kind: BlastKind,
+          bloodId: string,
+        ) => {
+          const distance = explorationPlaneDistance(zombie, { x: blastX, y: blastY });
+          // 与经典模式 damageZombieFromExplosion 一致：爆炸绕过僵尸护甲，但会全额震伤盾牌。
+          zombie.hp -= damage;
+          if (zombie.shieldIntact) {
+            zombie.shieldHp -= damage;
+            zombie.shieldDents = [...zombie.shieldDents.slice(-13), { x: (Math.random() - .5) * 12, y: (Math.random() - .5) * 120 }];
+            if (zombie.shieldHp <= 0) {
+              shatterExplorationShield(zombie, bloodId);
+            }
+          }
+          zombie.wounds = [...zombie.wounds.slice(-7), { x: 0, y: -82, region: "body", size: Math.min(12, 7 + damage / Math.max(1, zombie.maxHp) * 3), bone: true }];
+          addBloodEffect(bloodId, zombie, Math.atan2(zombie.y - blastY, zombie.x - blastX));
+          const proximity = Math.max(0, 1 - distance / Math.max(1, radius));
+          const severity = Math.min(1.6, damage / Math.max(1, zombie.maxHp));
+          const heavyBonus = kind === "airstrike" || kind === "rocket" ? .18 : kind === "grenade" || kind === "frag" ? .08 : 0;
+          const detachChance = Math.min(.94, .08 + proximity * .42 + severity * .3 + heavyBonus);
+          if (Math.random() >= detachChance) return;
+          const available = (["leftArm", "rightArm", "leftLeg", "rightLeg"] as ZombieLimb[]).filter((limb) => !zombie.missingLimbs.includes(limb));
+          const detachCount = severity > 1 && proximity > .45 && Math.random() < .48 ? 2 : 1;
+          for (let index = 0; index < detachCount && available.length > 0; index++) {
+            const [limb] = available.splice(Math.floor(Math.random() * available.length), 1);
+            zombie.missingLimbs = [...zombie.missingLimbs, limb];
+            const arm = limb.endsWith("Arm");
+            const left = limb.startsWith("left");
+            const radius = zombie.kind === "normal" ? 25 : zombie.kind === "brute" ? 33 : (ZOMBIE_KIND_SPECS[zombie.kind].radius ?? 25);
+            const limbScale = radius / 25 * CHARACTER_SCALE;
+            const socketX = zombie.x + (left ? -.8 : .8) * limbScale;
+            const socketY = zombie.y + (arm ? 8 : 4) * limbScale;
+            const forceAngle = Math.atan2(socketY - blastY, socketX - blastX) + (Math.random() - .5) * .65;
+            detachedLimbs = [...detachedLimbs, {
+              id: `${bloodId}-${limb}`,
+              kind: arm ? "arm" : "leg",
+              x: socketX,
+              y: socketY,
+              vx: Math.cos(forceAngle) * (8 + Math.random() * 9),
+              vy: 10 + Math.random() * 12,
+              rotation: forceAngle,
+              angularVelocity: (Math.random() - .5) * 12,
+              scale: limbScale,
+              tint: zombie.kind === "juggernaut" ? "#3d4448" : "#4f5d48",
+              skin: isLargeExplorationZombie(zombie.kind) ? "#6e7c52" : "#7e8c60",
+              shoe: "#211d19",
+              createdAt: supportNow,
+              removeAt: supportNow + 1900,
+            }];
+            addBloodEffect(`${bloodId}-${limb}-spray`, zombie, forceAngle, socketX, socketY, 15, false);
+          }
+          const missingLegs = Number(zombie.missingLimbs.includes("leftLeg")) + Number(zombie.missingLimbs.includes("rightLeg"));
+          if (missingLegs > 0) {
+            zombie.knockedDownRemaining = Math.max(zombie.knockedDownRemaining, 3 + missingLegs * .9);
+            sound.zombieFall({ volume: .52 });
+          }
+        };
         const zombieHpBeforeCombat = new Map(zombies.map((zombie) => [zombie.id, zombie.hp]));
+        const dueMeleeHits = battle.pendingMeleeHits.filter((hit) => hit.impactAt <= supportNow);
+        let pendingMeleeHits = battle.pendingMeleeHits.filter((hit) => hit.impactAt > supportNow);
+        dueMeleeHits.forEach((hit) => {
+          const target = zombies.find((zombie) => zombie.id === hit.targetId && zombie.hp > 0);
+          if (!target) return;
+          target.hp -= hit.damage * explorationZombieArmorDamageFactor(target.kind, hit.weapon);
+          target.wounds = [...target.wounds.slice(-7), { x: 0, y: -84, region: "body", size: 4.2, bone: target.wounds.filter((wound) => wound.region === "body").length >= 2 }];
+          addBloodEffect(`melee-${hit.id}`, target, 0);
+          sound.bodyHit({ volume: .5 });
+        });
         let knives = battle.knives.map((knife) => ({ ...knife, life: knife.life - .25 })).filter((knife) => knife.life > 0);
         let nextKnifeId = battle.nextKnifeId;
         let pendingKicks = battle.pendingKicks;
@@ -9623,12 +10061,12 @@ export function DeadRoadGame() {
         const impactingAirstrikes = airstrikeEffects.filter((effect) => !effect.impacted && effect.impactAt <= supportNow);
         if (impactingAirstrikes.length > 0) {
           zombies = zombies.map((zombie) => {
-            const hitCount = impactingAirstrikes.filter((effect) => Math.abs(zombie.x - effect.x) <= 11).length;
-            return hitCount > 0 ? {
-              ...zombie,
-              hp: zombie.hp - 500 * hitCount,
-              wounds: [...zombie.wounds.slice(-6), { x: 0, y: -82, region: "body" as HitRegion, size: 8 + hitCount * 2 }],
-            } : zombie;
+            const matchingAirstrikes = impactingAirstrikes.filter((effect) => Math.abs(zombie.x - effect.x) <= 11);
+            const hitCount = matchingAirstrikes.length;
+            if (hitCount === 0) return zombie;
+            const nearestBlast = matchingAirstrikes.reduce((nearest, effect) => Math.abs(zombie.x - effect.x) < Math.abs(zombie.x - nearest.x) ? effect : nearest);
+            damageExplorationZombieFromExplosion(zombie, 500 * hitCount, nearestBlast.x, zombie.y, 11, "airstrike", `airstrike-${zombie.id}-${Math.floor(supportNow)}`);
+            return zombie;
           });
           airstrikeEffects = airstrikeEffects.map((effect) => effect.impactAt <= supportNow
             ? { ...effect, impactAt: supportNow, until: supportNow + ITEMS.airstrike.blastDuration, impacted: true }
@@ -9642,11 +10080,16 @@ export function DeadRoadGame() {
             const shotPhase = explorationAutomaticWeaponPhase("m16", armySupportStartedAt, armySupportNextShotAt);
             if (!shotPhase.reloading) {
               // 五名士兵分别锁定道路上最近的五个目标，每发沿用生存模式 M16 的伤害与射速。
-              zombies.filter((zombie) => zombie.hp > 0).sort((a, b) => a.x - b.x).slice(0, 5).forEach((zombie) => {
-                zombie.hp -= weaponDamage("m16");
-                zombie.wounds = [...zombie.wounds.slice(-7), { x: 0, y: -86, region: "body", size: 3 }];
+              zombies.filter((zombie) => zombie.hp > 0).sort((a, b) => a.x - b.x).slice(0, 5).forEach((zombie, index) => {
+                addGroundProp(`army-casing-${shotPhase.shotSerial}-${index}`, "casing", "m16", 31 + index * .7, 30 - index * 3.5);
+                resolveExplorationProjectileHit(zombie, "m16", weaponDamage("m16"), "body", `army-blood-${shotPhase.shotSerial}-${zombie.id}`);
               });
               sound.gunshot("m16", { fireRateMs: WEAPONS.m16.fireRate, volume: .28 });
+            } else {
+              const reloadId = `army-mag-${shotPhase.cycleSerial}`;
+              const newlyReloading = !groundProps.some((prop) => prop.id === `${reloadId}-0`);
+              for (let index = 0; index < 5; index++) addGroundProp(`${reloadId}-${index}`, "mag", "m16", 30 + index * .8, 30 - index * 3.5);
+              if (newlyReloading) sound.reload("m16", WEAPONS.m16.reload);
             }
             armySupportNextShotAt += WEAPONS.m16.fireRate;
           }
@@ -9664,13 +10107,17 @@ export function DeadRoadGame() {
             if (armoredSupportAmmo <= 0) {
               armoredSupportReloadUntil = armoredSupportNextShotAt + LEVEL8_HMG_RELOAD_MS;
               armoredSupportNextShotAt = armoredSupportReloadUntil;
-              sound.reload(LEVEL8_HMG_RELOAD_MS);
+              addGroundProp(`armored-box-${Math.floor(armoredSupportReloadUntil)}`, "mag", "m240l", 26, 38);
+              sound.reload("m240l", LEVEL8_HMG_RELOAD_MS);
               break;
             }
-            zombies.filter((zombie) => zombie.hp > 0).sort((a, b) => a.x - b.x).slice(0, LEVEL8_HMG_PENETRATION).forEach((zombie) => {
-              zombie.hp -= LEVEL8_HMG_DAMAGE;
-              zombie.wounds = [...zombie.wounds.slice(-7), { x: 4, y: -82, region: "body", size: 4 }];
-            });
+            const armoredShotId = Math.floor(armoredSupportNextShotAt);
+            const armoredTargets = zombies.filter((zombie) => zombie.hp > 0).sort((a, b) => a.x - b.x).slice(0, LEVEL8_HMG_PENETRATION);
+            for (const zombie of armoredTargets) {
+              const penetrated = resolveExplorationProjectileHit(zombie, "m240l", LEVEL8_HMG_DAMAGE, "body", `armored-blood-${armoredShotId}-${zombie.id}`);
+              if (!penetrated) break;
+            }
+            addGroundProp(`armored-casing-${armoredShotId}`, "casing", "m240l", 29, 39);
             armoredSupportAmmo -= 1;
             armoredSupportNextShotAt += LEVEL8_HMG_FIRE_MS;
             sound.gunshot("m240l", { fireRateMs: LEVEL8_HMG_FIRE_MS, volume: .42 });
@@ -9681,6 +10128,8 @@ export function DeadRoadGame() {
           const member = EXPLORATION_MEMBERS.find((candidate) => candidate.id === unit.memberId);
           if (!member) return;
           const weapon = WEAPONS[member.weapon];
+          const firearm = isFirearmWeapon(member.weapon);
+          const firearmWeapon = firearm ? member.weapon as FirearmSoundKey : null;
           const combatSkills = member.combatSkills;
           const livingZombies = zombies.filter((zombie) => zombie.hp > 0);
           const nearestZombie = livingZombies.reduce<ExplorationBattleZombie | null>((nearest, zombie) => (
@@ -9688,12 +10137,13 @@ export function DeadRoadGame() {
           ), null);
           if (!nearestZombie) { unit.action = "guard"; return; } // 没有敌人时，队员将在原地警戒。
           if (unit.reloadRemaining > 0) { unit.action = "reload"; return; }
-          if (unit.actionRemaining > 0 && (unit.action === "kick" || unit.action === "throw")) return;
+          if (unit.actionRemaining > 0 && (unit.action === "attack" || unit.action === "kick" || unit.action === "throw")) return;
           if (combatSkills && unit.level >= 15 && unit.skillCooldown <= 0) {
             const target = zombies.find((zombie) => zombie.id === nearestZombie.id);
             if (target) {
               target.hp -= combatSkills.thrownKnifeDamage;
-              target.wounds = [...target.wounds.slice(-7), { x: 0, y: -88, region: "body", size: 4.5 }];
+              target.wounds = [...target.wounds.slice(-7), { x: 0, y: -88, region: "body", size: 4.5, bone: target.wounds.filter((wound) => wound.region === "body").length >= 2 }];
+              addBloodEffect(`${unit.id}-knife-blood-${nextKnifeId}`, target, 0);
               knives = [...knives, { id: nextKnifeId, fromX: unit.x, fromY: unit.y, toX: target.x, toY: target.y, life: .5 }];
               nextKnifeId += 1;
               unit.skillCooldown = combatSkills.thrownKnifeInterval;
@@ -9705,15 +10155,19 @@ export function DeadRoadGame() {
             }
           }
           const distance = explorationPlaneDistance(unit, nearestZombie);
-          const attackDistance = MELEE_WEAPONS.has(member.weapon) ? 4.5 : Math.min(22, weapon.range / 35);
+          const attackDistance = firearm ? Math.min(22, weapon.range / 35) : 4.5;
           if (distance > attackDistance) {
             moveExplorationEntityToward(unit, nearestZombie, distance, 1.15 * unit.speedFactor);
             unit.action = "walk";
           } else if (unit.cooldown <= 0) {
-            if (!MELEE_WEAPONS.has(member.weapon) && unit.ammo <= 0) {
+            if (firearm && unit.ammo <= 0) {
               unit.reloadRemaining = weapon.reload / 1000;
+              unit.reloadStartedAt = supportNow;
               unit.action = "reload";
-              sound.reload(weapon.reload);
+              if (["mag", "belt", "box"].includes(WEAPON_HOLD[member.weapon].reloadKind)) {
+                addGroundProp(`${unit.id}-mag-${unit.shotSerial}`, "mag", member.weapon, unit.x + .5, unit.y);
+              }
+              sound.reload(firearmWeapon!, weapon.reload);
               return;
             }
             const target = zombies.find((zombie) => zombie.id === nearestZombie.id);
@@ -9721,7 +10175,16 @@ export function DeadRoadGame() {
             if (target) {
               // 与生存模式同源：霰弹枪按弹丸数与散布逐颗结算；每次命中记录部位伤口，腿部累计伤害会触发倒地。
               const pellets = weapon.pellets ?? 1;
-              for (let pellet = 0; pellet < pellets; pellet++) {
+              let connectedHit = false;
+              if (!firearm) {
+                pendingMeleeHits = [...pendingMeleeHits, {
+                  id: `${unit.id}-${unit.attacksPerformed}-${Math.floor(supportNow)}`,
+                  targetId: target.id,
+                  weapon: member.weapon,
+                  damage: unit.damage,
+                  impactAt: supportNow + Math.min(320, Math.max(170, weapon.fireRate * .45)),
+                }];
+              } else for (let pellet = 0; pellet < pellets; pellet++) {
                 const normalizedDistance = Math.min(1, distance / Math.max(1, weapon.range / 35));
                 const pelletHitChance = weapon.pellets ? Math.max(.28, 1 - normalizedDistance * (1.15 + (weapon.spread ?? 0) * 2.4)) : 1;
                 if (Math.random() > pelletHitChance) continue;
@@ -9730,22 +10193,40 @@ export function DeadRoadGame() {
                 const pelletDamage = weapon.pellets
                   ? weaponDamage(member.weapon) + (unit.damage - member.damage) / pellets
                   : unit.damage;
-                target.hp -= pelletDamage;
-                const wound: Wound = region === "head"
-                  ? { x: (Math.random() - .5) * 10, y: -118 + (Math.random() - .5) * 10, region, size: 2.4 + Math.random() * 2 }
-                  : region === "legs"
-                    ? { x: (Math.random() - .5) * 14, y: -42 + Math.random() * 22, region, size: 2.5 + Math.random() * 2.4 }
-                    : { x: (Math.random() - .5) * 15, y: -94 + Math.random() * 27, region, size: 2.8 + Math.random() * 2.8 };
-                target.wounds = [...target.wounds.slice(-7), wound];
-                if (region === "legs") target.legDamage += pelletDamage;
+                if (weapon.blastKind && weapon.explosionRadius) {
+                    const blastRadius = Math.max(5, weapon.explosionRadius / 18);
+                    zombies.filter((candidate) => candidate.hp > 0 && explorationPlaneDistance(candidate, target) <= blastRadius).forEach((candidate) => {
+                      const falloff = .45 + .55 * Math.max(0, 1 - explorationPlaneDistance(candidate, target) / blastRadius);
+                      damageExplorationZombieFromExplosion(candidate, pelletDamage * falloff, target.x, target.y, blastRadius, weapon.blastKind!, `${unit.id}-blast-${unit.attacksPerformed}-${candidate.id}`);
+                    });
+                    connectedHit = true;
+                    sound.explosion(weapon.blastKind, { volume: .62 });
+                } else {
+                    const penetration = Math.max(1, weapon.penetration ?? 1);
+                    const shotTargets = [target, ...zombies
+                      .filter((candidate) => candidate.id !== target.id && candidate.hp > 0 && candidate.x > target.x && Math.abs(candidate.y - target.y) < 4.5)
+                      .sort((a, b) => a.x - b.x)
+                      .slice(0, penetration - 1)];
+                    for (let penetrationIndex = 0; penetrationIndex < shotTargets.length; penetrationIndex++) {
+                      const candidate = shotTargets[penetrationIndex];
+                      const penetratedDamage = pelletDamage * Math.max(.1, 1 - penetrationIndex * .2);
+                      const penetrated = resolveExplorationProjectileHit(candidate, firearmWeapon!, penetratedDamage, region, `${unit.id}-blood-${unit.attacksPerformed}-${pellet}-${candidate.id}`);
+                      connectedHit = penetrated || connectedHit;
+                      if (!penetrated) break;
+                    }
+                }
               }
-              sound.bodyHit({ volume: .5 });
+              if (connectedHit) sound.bodyHit({ volume: .5 });
               unit.attacksPerformed += 1;
               if (combatSkills && unit.level >= 10 && Math.random() < combatSkills.comboChance) {
-                target.hp -= unit.damage;
-                target.wounds = [...target.wounds.slice(-7), { x: 5, y: -82, region: "body", size: 3.8 }];
+                pendingMeleeHits = [...pendingMeleeHits, {
+                  id: `${unit.id}-combo-${unit.attacksPerformed}-${Math.floor(supportNow)}`,
+                  targetId: target.id,
+                  weapon: member.weapon,
+                  damage: unit.damage,
+                  impactAt: supportNow + Math.min(430, Math.max(260, weapon.fireRate * .65)),
+                }];
                 sound.meleeSwing("slash");
-                sound.bodyHit({ volume: .52 });
               }
               if (combatSkills && unit.level >= 5 && unit.attacksPerformed % combatSkills.kickEvery === 0) {
                 pendingKicks = [...pendingKicks, {
@@ -9758,18 +10239,21 @@ export function DeadRoadGame() {
                 unit.actionRemaining = KICK_ANIMATION_MS / 1000;
                 sound.kick();
               }
-              if (target.legDamage >= target.maxHp * .22) target.knockedDownRemaining = Math.max(target.knockedDownRemaining, 3);
-              if (!MELEE_WEAPONS.has(member.weapon)) {
+              if (firearm) {
                 unit.shotTarget = { x: target.x, y: target.y };
                 unit.shotSerial += 1;
               }
             }
             unit.cooldown = weapon.fireRate / 1000 * (combatSkills?.attackIntervalFactor ?? 1);
+            if (!performedKick) unit.actionRemaining = Math.max(firearm ? .14 : .36, Math.min(.7, weapon.fireRate / 1000));
+            unit.actionStartedAt = supportNow;
             unit.action = performedKick ? "kick" : "attack";
-            if (MELEE_WEAPONS.has(member.weapon)) sound.meleeSwing("heavy");
+            if (!firearm) sound.meleeSwing("heavy");
             else {
               unit.ammo -= 1;
+              if (!weapon.explosionRadius) addGroundProp(`${unit.id}-casing-${unit.shotSerial}`, "casing", member.weapon, unit.x + 1.2, unit.y + 1.5);
               sound.gunshot(member.weapon, { fireRateMs: weapon.fireRate, volume: .48 });
+              if (BOLT_ACTION_WEAPONS.has(member.weapon)) sound.boltAction(boltCycleMs(member.weapon));
             }
           }
         });
@@ -9779,6 +10263,9 @@ export function DeadRoadGame() {
         const killedZombies = zombies.filter((zombie) => zombie.hp <= 0);
         const killedThisTick = killedZombies.length;
         if (killedZombies.length > 0) {
+          killedZombies.forEach((zombie) => {
+            if (zombie.kind === "shield" && zombie.shieldIntact) addGroundProp(`shield-corpse-${zombie.id}`, "shield", undefined, zombie.x, zombie.y);
+          });
           corpses = [...corpses, ...killedZombies.map((zombie): ExplorationBattleCorpse => ({
             id: zombie.id,
             kind: zombie.kind,
@@ -9786,64 +10273,125 @@ export function DeadRoadGame() {
             y: zombie.y,
             wounds: zombie.wounds,
             missingLimbs: zombie.missingLimbs,
+            shieldIntact: false,
+            shieldDents: zombie.shieldDents,
             diedAt: supportNow,
             removeAt: supportNow + ZOMBIE_CORPSE_MS,
-          }))].slice(-80);
+          }))];
         }
         zombies = zombies.filter((zombie) => zombie.hp > 0);
         const completed = explorationBattleTaskConfig(battle.taskOrder).finite && hadZombies && zombies.length === 0;
 
-        let vehicleHp = battle.vehicleHp;
         zombies.forEach((zombie) => {
           if (!zombiesAlerted) { zombie.action = "guard"; return; }
           if (zombie.knockedDownRemaining > 0) { zombie.action = "guard"; return; }
+          if (zombie.attackAnimationRemaining > 0) { zombie.action = "attack"; return; }
+          const missingLegs = Number(zombie.missingLimbs.includes("leftLeg")) + Number(zombie.missingLimbs.includes("rightLeg"));
+          const limbMovementFactor = missingLegs === 2 ? .18 : missingLegs === 1 ? .58 : 1;
           const livingUnits = units.filter((unit) => unit.hp > 0);
           const nearestUnit = livingUnits.reduce<ExplorationBattleUnit | null>((nearest, unit) => (
             nearest === null || explorationPlaneDistance(zombie, unit) < explorationPlaneDistance(zombie, nearest) ? unit : nearest
           ), null);
+          if (zombie.kind === "spitter" || zombie.kind === "largeSpitter") {
+            const spitTarget = nearestUnit ?? { id: "vehicle", x: 9, y: 12 };
+            const distance = explorationPlaneDistance(zombie, spitTarget);
+            if (distance > 20) {
+              moveExplorationEntityToward(zombie, spitTarget, distance, zombie.speed * .25 * limbMovementFactor);
+              zombie.action = "walk";
+            } else if (zombie.cooldown <= 0) {
+              const burstCount = zombie.kind === "largeSpitter" ? 3 : 1;
+              spits = [...spits, ...Array.from({ length: burstCount }, (_, burstIndex): ExplorationBattleSpit => ({
+                id: `${zombie.id}-${Math.floor(supportNow)}-${burstIndex}`,
+                fromX: zombie.x,
+                fromY: zombie.y + 7,
+                toX: spitTarget.x,
+                toY: spitTarget.y + (burstIndex - (burstCount - 1) / 2) * 1.2,
+                createdAt: supportNow,
+                launchAt: supportNow + 360 + burstIndex * 150,
+                impactAt: supportNow + 840 + burstIndex * 150,
+                targetUnitId: spitTarget.id,
+                damage: 20,
+              }))];
+              zombie.attackStartedAt = supportNow;
+              zombie.attackImpactAt = 0;
+              zombie.attackAnimationUntil = supportNow + 600;
+              zombie.attackWindupRemaining = 0;
+              zombie.attackAnimationRemaining = .6;
+              zombie.attackTargetUnitId = null;
+              zombie.cooldown = zombie.kind === "largeSpitter" ? 3.2 : 2.4;
+              zombie.cooldownUntil = supportNow + zombie.cooldown * 1000;
+              zombie.action = "attack";
+              sound.vomit({ volume: .62 });
+            }
+            return;
+          }
           if (nearestUnit) {
             const distance = explorationPlaneDistance(zombie, nearestUnit);
             if (distance > 4.5) {
-              moveExplorationEntityToward(zombie, nearestUnit, distance, zombie.speed * .25);
+              moveExplorationEntityToward(zombie, nearestUnit, distance, zombie.speed * .25 * limbMovementFactor);
               zombie.action = "walk";
             }
             else if (zombie.cooldown <= 0) {
-              const target = units.find((unit) => unit.id === nearestUnit.id);
-              if (target) {
-                target.hp -= zombie.damage;
-                sound.playerHurt({ volume: .62 });
-              }
-              zombie.cooldown = 1;
+              zombie.attackStartedAt = supportNow;
+              zombie.attackImpactAt = supportNow + 235;
+              zombie.attackAnimationUntil = supportNow + 560;
+              zombie.attackWindupRemaining = .235;
+              zombie.attackAnimationRemaining = .56;
+              zombie.attackTargetUnitId = nearestUnit.id;
+              zombie.cooldown = .72;
+              zombie.cooldownUntil = supportNow + 720;
               zombie.action = "attack";
             }
           } else if (explorationPlaneDistance(zombie, { x: 9, y: 12 }) > 4.5) {
-            moveExplorationEntityToward(zombie, { x: 9, y: 12 }, explorationPlaneDistance(zombie, { x: 9, y: 12 }), zombie.speed * .25);
+            moveExplorationEntityToward(zombie, { x: 9, y: 12 }, explorationPlaneDistance(zombie, { x: 9, y: 12 }), zombie.speed * .25 * limbMovementFactor);
             zombie.action = "walk";
           } else if (zombie.cooldown <= 0) {
-            vehicleHp -= zombie.damage;
-            sound.armorClank({ volume: .55 });
-            zombie.cooldown = 1;
+            zombie.attackStartedAt = supportNow;
+            zombie.attackImpactAt = supportNow + 235;
+            zombie.attackAnimationUntil = supportNow + 560;
+            zombie.attackWindupRemaining = .235;
+            zombie.attackAnimationRemaining = .56;
+            zombie.attackTargetUnitId = "vehicle";
+            zombie.cooldown = .72;
+            zombie.cooldownUntil = supportNow + 720;
             zombie.action = "attack";
           }
         });
         units = units.filter((unit) => unit.hp > 0);
         vehicleHp = Math.max(0, vehicleHp);
-        return { ...battle, zombiesAlerted, units, zombies, corpses, knives, pendingKicks, airstrikeEffects, armySupportNextShotAt, armoredSupportNextShotAt, armoredSupportAmmo, armoredSupportReloadUntil, nextKnifeId, nextKickId, kills: battle.kills + killedThisTick, vehicleHp, completed, failed: !completed && vehicleHp <= 0 };
+        return { ...battle, zombiesAlerted, units, zombies, corpses, groundProps, bloodEffects, detachedLimbs, metalShards, knives, spits, pendingMeleeHits, pendingKicks, airstrikeEffects, armySupportNextShotAt, armoredSupportNextShotAt, armoredSupportAmmo, armoredSupportReloadUntil, nextKnifeId, nextKickId, kills: battle.kills + killedThisTick, vehicleHp, completed, failed: !completed && vehicleHp <= 0 };
       });
     }, 250);
     return () => window.clearInterval(combatTimer);
   }, [explorationBattle.completed, explorationBattle.failed, screen]);
 
   useEffect(() => {
-    if (screen !== "explorationBattle" || (!explorationBattle.completed && !explorationBattle.failed) || explorationBattle.corpses.length === 0) return;
-    const nextRemoval = Math.min(...explorationBattle.corpses.map((corpse) => corpse.removeAt));
+    if (screen !== "explorationBattle" || (!explorationBattle.completed && !explorationBattle.failed)) return;
+    const removalTimes = [
+      ...explorationBattle.corpses.map((corpse) => corpse.removeAt),
+      ...explorationBattle.groundProps.map((prop) => prop.removeAt),
+      ...explorationBattle.bloodEffects.map((effect) => effect.removeAt),
+      ...explorationBattle.detachedLimbs.map((limb) => limb.removeAt),
+      ...explorationBattle.metalShards.map((shard) => shard.removeAt),
+      ...explorationBattle.spits.map((spit) => spit.impactAt),
+    ];
+    if (removalTimes.length === 0) return;
+    const nextRemoval = Math.min(...removalTimes);
     const timer = window.setTimeout(() => {
       const now = performance.now();
       setExplorationSupportClock(now);
-      setExplorationBattle((battle) => ({ ...battle, corpses: battle.corpses.filter((corpse) => now < corpse.removeAt) }));
+      setExplorationBattle((battle) => ({
+        ...battle,
+        corpses: battle.corpses.filter((corpse) => now < corpse.removeAt),
+        groundProps: battle.groundProps.filter((prop) => now < prop.removeAt),
+        bloodEffects: battle.bloodEffects.filter((effect) => now < effect.removeAt),
+        detachedLimbs: battle.detachedLimbs.filter((limb) => now < limb.removeAt),
+        metalShards: battle.metalShards.filter((shard) => now < shard.removeAt),
+        spits: battle.spits.filter((spit) => now < spit.impactAt),
+      }));
     }, Math.max(0, nextRemoval - performance.now()));
     return () => window.clearTimeout(timer);
-  }, [explorationBattle.completed, explorationBattle.corpses, explorationBattle.failed, screen]);
+  }, [explorationBattle.bloodEffects, explorationBattle.completed, explorationBattle.corpses, explorationBattle.detachedLimbs, explorationBattle.failed, explorationBattle.groundProps, explorationBattle.metalShards, explorationBattle.spits, screen]);
 
   useEffect(() => {
     if (screen !== "explorationBattle" || explorationBattle.failed || explorationBattle.completed || explorationBattle.pendingKicks.length === 0) return;
@@ -9853,6 +10401,8 @@ export function DeadRoadGame() {
         const now = performance.now();
         const dueImpacts = battle.pendingKicks.filter((impact) => impact.impactAt <= now + 1);
         if (dueImpacts.length === 0) return battle;
+        const kickedShieldIds = new Set(dueImpacts.map((impact) => impact.targetId));
+        const droppedShields = battle.zombies.filter((zombie) => kickedShieldIds.has(zombie.id) && zombie.kind === "shield" && zombie.shieldIntact);
         const zombies = battle.zombies.map((zombie): ExplorationBattleZombie => {
           const impactCount = dueImpacts.filter((impact) => impact.targetId === zombie.id).length;
           if (impactCount === 0 || zombie.hp <= 0) return zombie;
@@ -9862,10 +10412,21 @@ export function DeadRoadGame() {
             hp: zombie.hp - survivalKickDamage(1) * impactCount,
             x: zombie.x + explorationKickKnockbackPercent() * impactCount,
             wounds: [...zombie.wounds.slice(-7), { x: 0, y: -40, region: "legs", size: 4.5 }],
+            shieldIntact: zombie.kind === "shield" ? false : zombie.shieldIntact,
+            shieldDents: zombie.kind === "shield" ? [] : zombie.shieldDents,
           };
         });
         const resolvedIds = new Set(dueImpacts.map((impact) => impact.id));
-        return { ...battle, zombies, pendingKicks: battle.pendingKicks.filter((impact) => !resolvedIds.has(impact.id)) };
+        const groundProps = [...battle.groundProps, ...droppedShields.map((zombie): ExplorationBattleGroundProp => ({
+          id: `shield-kick-${zombie.id}-${Math.floor(now)}`,
+          kind: "shield",
+          x: zombie.x,
+          y: zombie.y,
+          rotation: -90,
+          createdAt: now,
+          removeAt: now + GROUND_PROP_MS,
+        }))];
+        return { ...battle, zombies, groundProps, pendingKicks: battle.pendingKicks.filter((impact) => !resolvedIds.has(impact.id)) };
       });
     }, Math.max(0, nextImpact.impactAt - performance.now()));
     return () => window.clearTimeout(timer);
@@ -11111,8 +11672,8 @@ export function DeadRoadGame() {
       if (g.loadout[0] === w && g.loadout[1] === w) {
         g.loadout = ["fists", "fists"];
       } else {
-        const droppedSlot = g.loadout[0] === w ? 0 : g.loadout[1] === w ? 1 : -1;
-        if (droppedSlot >= 0) g.loadout[droppedSlot] = "fists";
+        if (g.loadout[0] === w) g.loadout[0] = "fists";
+        else if (g.loadout[1] === w) g.loadout[1] = "fists";
       }
       p.weapon = g.loadout.find((weapon) => weapon !== "fists") ?? (g.melee !== "fists" ? g.melee : "fists");
     }
@@ -11147,7 +11708,7 @@ export function DeadRoadGame() {
         ? (g.loadout[0] === p.weapon ? 0 : g.loadout[1] === p.weapon ? 1 : -1)
         : -1;
       const emptySlot = g.loadout[0] === "fists" ? 0 : g.loadout[1] === "fists" ? 1 : -1;
-      const pickupSlot = currentSlot >= 0 ? currentSlot : emptySlot >= 0 ? emptySlot : 0;
+      const pickupSlot: 0 | 1 = currentSlot === 1 || (currentSlot < 0 && emptySlot === 1) ? 1 : 0;
       const prev = g.loadout[pickupSlot];
       if (prev !== "fists" && g.loadout[0] === prev && g.loadout[1] === prev) g.loadout = [w, w];
       else g.loadout[pickupSlot] = w;
@@ -11658,7 +12219,6 @@ export function DeadRoadGame() {
               removeAt: hitTime + GROUND_PROP_MS,
               settled: false,
             });
-            if (g.groundProps.length > MAX_GROUND_PROPS) g.groundProps.splice(0, g.groundProps.length - MAX_GROUND_PROPS);
             sound.armorClank({ volume: distanceVolume(z.x, p.x) });
           }
           connected = true;
@@ -11691,21 +12251,13 @@ export function DeadRoadGame() {
     // 摩托头盔只露眼缝可爆头；盾兵只有观察窗能命中；重甲只有胸口能造成伤害——被挡下时冒金属火花、无伤害
     if (hit && (sourceOverride || (sourceWeapon && !MELEE_WEAPONS.has(sourceWeapon))) && z.hp > 0) {
       const faceDir = g.player.x < z.x ? -1 : 1;
-      let blocked = false;
-      if ((z.kind === "helmet" || z.kind === "helmetRunner") && region === "head") {
-        blocked = Math.hypot(hit.localX - faceDir * 6, hit.localY + 117) > 4.5;
-      } else if (z.kind === "shield" && z.shieldIntact) {
-        // 全身金属盾：仅眼平观察窗 (faceDir*22, -117) 可命中，判定窗与盾面玻璃窗一致
-        blocked = Math.hypot(hit.localX - faceDir * 22, hit.localY + 117) > 6;
-      } else if (z.kind === "juggernaut") {
-        blocked = !isJuggernautChestWeakHit(region, hit.localX, hit.localY);
-      }
-      if (blocked) {
+      const blockKind = zombieProjectileBlockKind(z.kind, region, hit.localX, hit.localY, faceDir, z.shieldIntact);
+      if (blockKind) {
         // 燧石66 磷燃弹：格挡只挡直接伤害，挡不住点燃——被头盔/盾牌/重甲挡下同样灼烧致死
         if (sourceWeapon && WEAPONS[sourceWeapon].ignite) z.ignitedAt = now;
         emitArmorSpark(g, hit.x, hit.y, now, angle);
         g.stats.shotsHit += 1;
-        if (z.kind === "shield" && z.shieldIntact) {
+        if (blockKind === "shield" && z.shieldIntact) {
           // 盾牌独立承伤：吃武器单发原始伤害（不吃部位倍率与僵尸减免；穿透豁免针对身穿护甲、不削盾），
           // 弹孔按真实命中点累积（盾牌局部坐标，供裂纹/凹陷渲染），HP 归零 → 盾牌碎裂
           z.shieldHp -= damage;
@@ -11864,7 +12416,7 @@ export function DeadRoadGame() {
       if (level.vehicleAmmo <= 0) {
         level.vehicleReloadUntil = now + LEVEL8_HMG_RELOAD_MS;
         dropLevel8AmmoBox(g, level, now);
-        sound.reload(LEVEL8_HMG_RELOAD_MS);
+        sound.reload("m240l", LEVEL8_HMG_RELOAD_MS);
         return;
       }
       level.vehicleAmmo -= 1;
@@ -11898,7 +12450,6 @@ export function DeadRoadGame() {
         groundY: level.truckY + 4, rotation: Math.random() * Math.PI, angularVelocity: -12 - Math.random() * 10,
         visibleAt: now, removeAt: now + GROUND_PROP_MS, weapon: "m240l", settled: false,
       });
-      if (g.groundProps.length > MAX_GROUND_PROPS) g.groundProps.splice(0, g.groundProps.length - MAX_GROUND_PROPS);
       g.screenShakeUntil = now + 95;
       sound.gunshot("m240l", { fireRateMs: LEVEL8_HMG_FIRE_MS });
       return;
@@ -11975,7 +12526,6 @@ export function DeadRoadGame() {
         weapon: p.weapon,
         settled: false,
       });
-      if (g.groundProps.length > MAX_GROUND_PROPS) g.groundProps.splice(0, g.groundProps.length - MAX_GROUND_PROPS);
     }
     if (weapon.explosionRadius) {
       const blastKind = weapon.blastKind ?? "grenade";
@@ -12075,7 +12625,7 @@ export function DeadRoadGame() {
       if (g.level.vehicleAmmo >= LEVEL8_HMG_MAGAZINE || now < g.level.vehicleReloadUntil) return;
       g.level.vehicleReloadUntil = now + LEVEL8_HMG_RELOAD_MS;
       dropLevel8AmmoBox(g, g.level, now);
-      sound.reload(LEVEL8_HMG_RELOAD_MS);
+      sound.reload("m240l", LEVEL8_HMG_RELOAD_MS);
       return;
     }
     const p = g.player;
@@ -12083,10 +12633,10 @@ export function DeadRoadGame() {
     if (MELEE_WEAPONS.has(p.weapon) || p.ammo[p.weapon] === weapon.magazine || now < p.reloadingUntil) return;
     p.reloadStartedAt = now;
     p.reloadingUntil = now + weapon.reload;
-    sound.reload(weapon.reload);
+    sound.reload(p.weapon as FirearmSoundKey, weapon.reload);
     // 旧弹匣被拔下后抛落到路面，弹跳后静置留存一段时间（与编舞中 0.06 进度拔匣时机对应）。
     const hold = WEAPON_HOLD[p.weapon];
-    if (hold.reloadKind === "mag") {
+    if (["mag", "belt", "box"].includes(hold.reloadKind)) {
       const origin = playerGunOrigin(p);
       const a = p.angle;
       const gs = playerWeaponScale(p.weapon) * CHARACTER_SCALE;
@@ -12108,7 +12658,6 @@ export function DeadRoadGame() {
         weapon: p.weapon,
         settled: false,
       });
-      if (g.groundProps.length > MAX_GROUND_PROPS) g.groundProps.splice(0, g.groundProps.length - MAX_GROUND_PROPS);
     }
   }, []);
   useEffect(() => { reloadRef.current = reload; }, [reload]);
@@ -12219,7 +12768,7 @@ export function DeadRoadGame() {
         f.reloading = true;
         f.reloadStartedAt = now;
         f.reloadingUntil = now + WEAPONS.m1911.reload;
-        sound.reload(WEAPONS.m1911.reload);
+        sound.reload("m1911", WEAPONS.m1911.reload);
         return;
       }
       f.attackAt = now;
@@ -12259,7 +12808,11 @@ export function DeadRoadGame() {
     f.y += (hoverY - f.y) * follow;
     f.x = Math.max(30, Math.min(g.worldW - 30, f.x));
     f.moving = Math.hypot(hoverX - f.x, hoverY - f.y) > 8;
-    if (!f.reloading && now - f.cycleAt >= DRONE_FIRE_MS) { f.reloading = true; f.cycleAt = now; }
+    if (!f.reloading && now - f.cycleAt >= DRONE_FIRE_MS) {
+      f.reloading = true;
+      f.cycleAt = now;
+      sound.reload("m16", DRONE_RELOAD_MS);
+    }
     else if (f.reloading && now - f.cycleAt >= DRONE_RELOAD_MS) { f.reloading = false; f.cycleAt = now; }
     const target = nearestZombie(900);
     if (!target) return;
@@ -12368,7 +12921,7 @@ export function DeadRoadGame() {
             f.reloading = true;
             f.reloadStartedAt = now;
             f.reloadingUntil = now + wspec.reload;
-            sound.reload(wspec.reload);
+            sound.reload(wkey as FirearmSoundKey, wspec.reload);
             continue;
           }
           // 射速节奏：M16 点射 1.6×、PKM 全自动压制 1.15×、燧石66 栓动 1.4×（射击+拉栓循环）
@@ -12516,7 +13069,7 @@ export function DeadRoadGame() {
         const itemIndex = Number(key) - 1;
         if (!event.repeat && itemIndex >= 0 && itemIndex < ITEM_KEYS.length) {
           const itemKey = ITEM_KEYS[itemIndex];
-          if (ITEMS[itemKey].delivery === "auto") callAirstrike(performance.now());
+          if (itemKey === "airstrike") callAirstrike(performance.now());
           else selectItem(itemKey);
         }
       }
@@ -13101,18 +13654,7 @@ export function DeadRoadGame() {
     }
 
     // 路面血迹：暗红椭圆血泊，最后 2 秒渐隐
-    for (const stain of g.bloodStains) {
-      const fade = Math.min(1, Math.max(0, (stain.removeAt - now) / 2000));
-      const vomit = stain.tint === "vomit";
-      ctx.fillStyle = vomit ? `rgba(94,142,44,${(0.55 * fade).toFixed(3)})` : `rgba(94,13,20,${(0.55 * fade).toFixed(3)})`;
-      ctx.beginPath();
-      ctx.ellipse(stain.x, stain.y, stain.rx, stain.rx * 0.32, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = vomit ? `rgba(56,94,24,${(0.4 * fade).toFixed(3)})` : `rgba(60,8,12,${(0.4 * fade).toFixed(3)})`;
-      ctx.beginPath();
-      ctx.ellipse(stain.x - stain.rx * 0.2, stain.y, stain.rx * 0.45, stain.rx * 0.16, 0, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    for (const stain of g.bloodStains) drawBloodStain(ctx, stain, now);
 
     for (const corpse of g.corpses) drawZombieCorpse(ctx, corpse, now);
 
@@ -13770,7 +14312,6 @@ export function DeadRoadGame() {
                 removeAt: now + GROUND_PROP_MS,
                 settled: false,
               });
-              if (g.groundProps.length > MAX_GROUND_PROPS) g.groundProps.splice(0, g.groundProps.length - MAX_GROUND_PROPS);
             }
             g.corpses.push({
               zombie: z,
@@ -14584,6 +15125,22 @@ export function DeadRoadGame() {
               )}
               {armoredSupportActive && <div className={`armored-support-vehicle ${armoredSupportRemaining < 700 ? "leaving" : ""}`} aria-label="重机枪装甲车支援"><ExplorationArmoredSupportModel firingStartedAt={armoredSupportFiring ? armoredSupportStartedAt : undefined} reloadUntil={explorationBattle.armoredSupportReloadUntil} />{armoredSupportFiring && <><i key={`armored-tracer-${Math.floor(explorationSupportClock / LEVEL8_HMG_FIRE_MS)}`} className="armored-support-tracer" /><i key={`armored-case-${Math.floor(explorationSupportClock / LEVEL8_HMG_FIRE_MS)}`} className="armored-ejected-casing" /></>}{armoredSupportReloading && <i className="armored-dropped-ammo-box" />}</div>}
               {explorationBattle.airstrikeEffects.map((effect) => <ExplorationAirstrikeEffectView key={effect.id} effect={effect} />)}
+              {explorationBattle.groundProps.map((prop) => {
+                const fade = Math.max(0, Math.min(1, (prop.removeAt - explorationSupportClock) / 2000));
+                return <ExplorationGroundPropView key={prop.id} prop={prop} fade={fade} />;
+              })}
+              {explorationBattle.bloodEffects.map((effect) => <ExplorationBloodEffectView key={effect.id} effect={effect} now={explorationSupportClock} />)}
+              {explorationBattle.detachedLimbs.map((limb) => <ExplorationDetachedLimbView key={limb.id} limb={limb} now={explorationSupportClock} />)}
+              {explorationBattle.metalShards.map((shard) => <ExplorationMetalShardView key={shard.id} shard={shard} now={explorationSupportClock} />)}
+              <svg className="battle-spit-projectiles" viewBox="0 0 100 60" preserveAspectRatio="none" aria-hidden="true">
+                {explorationBattle.spits.map((spit) => {
+                  if (explorationSupportClock < spit.launchAt) return null;
+                  const progress = Math.max(0, Math.min(1, (explorationSupportClock - spit.launchAt) / Math.max(1, spit.impactAt - spit.launchAt)));
+                  const x = spit.fromX + (spit.toX - spit.fromX) * progress;
+                  const y = 60 - (spit.fromY + (spit.toY - spit.fromY) * progress + Math.sin(progress * Math.PI) * 6);
+                  return <g key={spit.id}><circle className="battle-spit-glow" cx={x} cy={y} r={1.1} /><circle className="battle-spit-core" cx={x} cy={y} r={.55} /></g>;
+                })}
+              </svg>
               <svg className="battle-unit-bullet-tracers" viewBox="0 0 100 60" preserveAspectRatio="none" aria-hidden="true">
                 {explorationBattle.units.map((unit) => {
                   if (!unit.shotTarget) return null;
@@ -14600,9 +15157,9 @@ export function DeadRoadGame() {
                 const member = EXPLORATION_MEMBERS.find((candidate) => candidate.id === unit.memberId) ?? EXPLORATION_MEMBERS[0];
                 return (
                   <div key={unit.id} className={`battle-unit battle-unit-shared-model ${explorationBattleHasLivingZombies ? "advancing" : "guarding"}`} style={{ left: `${unit.x}%`, bottom: `${unit.y}%`, zIndex: 50 + Math.round(60 - unit.y) }} aria-label={`${unit.label}，HP ${Math.ceil(unit.hp)}`}>
-                    <ExplorationMemberPreview member={member} battleScale motion={unit.action === "walk" ? "moving" : unit.action === "attack" ? "attacking" : unit.action === "reload" ? "reloading" : unit.action === "kick" ? "kicking" : unit.action === "throw" ? "throwing" : "standing"} reloadProgress={unit.action === "reload" ? 1 - unit.reloadRemaining / Math.max(.001, WEAPONS[member.weapon].reload / 1000) : 0} />
-                    {unit.action === "attack" && !MELEE_WEAPONS.has(member.weapon) && <span className="battle-ejected-casing" />}
-                    {unit.action === "reload" && WEAPON_HOLD[member.weapon].reloadKind === "mag" && <span className="battle-dropped-magazine" />}
+                    <ExplorationMemberPreview member={member} battleScale motion={unit.action === "walk" ? "moving" : unit.action === "attack" ? "attacking" : unit.action === "reload" ? "reloading" : unit.action === "kick" ? "kicking" : unit.action === "throw" ? "throwing" : "standing"} reloadProgress={unit.action === "reload" ? 1 - unit.reloadRemaining / Math.max(.001, WEAPONS[member.weapon].reload / 1000) : 0} reloadStartedAt={unit.action === "reload" ? unit.reloadStartedAt : undefined} actionStartedAt={unit.action === "attack" ? unit.actionStartedAt : undefined} />
+                    {unit.action === "attack" && !MELEE_WEAPONS.has(member.weapon) && !WEAPONS[member.weapon].explosionRadius && <span className="battle-ejected-casing" />}
+                    {unit.action === "reload" && ["mag", "belt", "box"].includes(WEAPON_HOLD[member.weapon].reloadKind) && <span className="battle-dropped-magazine" />}
                     <i className="battle-entity-hp"><b style={{ width: `${unit.hp / unit.maxHp * 100}%` }} /></i>
                   </div>
                 );
@@ -14612,7 +15169,7 @@ export function DeadRoadGame() {
                 const fade = Math.max(0, Math.min(1, (corpse.removeAt - explorationSupportClock) / 2000));
                 return (
                   <div key={`corpse-${corpse.id}-${corpse.diedAt}`} className="battle-enemy battle-enemy-shared-model knocked-down battle-corpse" style={{ left: `${corpse.x}%`, bottom: `${corpse.y}%`, zIndex: 38 + Math.round(60 - corpse.y), opacity: fade }} aria-label="倒地僵尸尸体">
-                    <ZombieKindPreview kind={corpse.kind} width={184} height={108} className="battle-zombie-shared-preview" fillHeight={!large} hpRatio={0} wounds={corpse.wounds} missingLimbs={corpse.missingLimbs} knockedDown />
+                    <ZombieKindPreview kind={corpse.kind} width={184} height={108} className="battle-zombie-shared-preview" fillHeight={!large} hpRatio={0} wounds={corpse.wounds} missingLimbs={corpse.missingLimbs} shieldIntact={corpse.shieldIntact} shieldDents={corpse.shieldDents} knockedDown />
                   </div>
                 );
               })}
@@ -14621,7 +15178,7 @@ export function DeadRoadGame() {
                 const knockedDown = zombie.knockedDownRemaining > 0;
                 return (
                   <div key={zombie.id} className={`battle-enemy battle-enemy-shared-model ${large ? "large" : ""} ${knockedDown ? "knocked-down" : ""}`} style={{ left: `${zombie.x}%`, bottom: `${zombie.y}%`, zIndex: 50 + Math.round(60 - zombie.y) }} aria-label={`进攻僵尸，HP ${Math.ceil(zombie.hp)}`}>
-                    <ZombieKindPreview kind={zombie.kind} width={knockedDown ? 184 : large ? 144 : 108} height={knockedDown ? 108 : large ? 220 : 168} className="battle-zombie-shared-preview" fillHeight={!large} motion={zombie.action === "attack" ? "attacking" : zombie.action === "walk" ? "walking" : "standing"} hpRatio={zombie.hp / zombie.maxHp} wounds={zombie.wounds} missingLimbs={zombie.missingLimbs} knockedDown={knockedDown} />
+                    <ZombieKindPreview kind={zombie.kind} width={knockedDown ? 184 : large ? 144 : 108} height={knockedDown ? 108 : large ? 220 : 168} className="battle-zombie-shared-preview" fillHeight={!large} motion={zombie.action === "attack" ? "attacking" : zombie.action === "walk" ? "walking" : "standing"} actionStartedAt={zombie.action === "attack" ? zombie.attackStartedAt : undefined} hpRatio={zombie.hp / zombie.maxHp} wounds={zombie.wounds} missingLimbs={zombie.missingLimbs} shieldIntact={zombie.shieldIntact} shieldDents={zombie.shieldDents} ignited={zombie.ignited} knockedDown={knockedDown} />
                     {zombie.hp < zombie.maxHp && <span key={`${zombie.id}-${Math.ceil(zombie.hp)}`} className="battle-zombie-blood" />}
                     <i className="battle-entity-hp"><b style={{ width: `${zombie.hp / zombie.maxHp * 100}%` }} /></i>
                   </div>

@@ -111,9 +111,9 @@ test("mixes unlockable zombie variants into the spawn pool with armor and shield
   assert.match(source, /sourceWeapon \? armorPenBypass\(sourceWeapon\) : 0/);
   assert.match(source, /仅胸口可伤 · 减免 70% · 高穿透武器可削弱减伤/);
   // 格挡判定：头盔眼缝 / 盾牌眼平观察窗（全身金属盾）/ 重甲胸口；重甲免疫打腿倒地
-  assert.match(source, /z\.kind === "helmet" \|\| z\.kind === "helmetRunner"/);
-  assert.match(source, /z\.kind === "shield" && z\.shieldIntact/);
-  assert.match(source, /Math\.hypot\(hit\.localX - faceDir \* 22, hit\.localY \+ 117\) > 6/);
+  assert.match(source, /kind === "helmet" \|\| kind === "helmetRunner"/);
+  assert.match(source, /kind === "shield" && shieldIntact/);
+  assert.match(source, /Math\.hypot\(localX - faceDir \* 22, localY \+ 117\) > 6/);
   assert.match(source, /const JUGGERNAUT_CHEST_WEAK_HALF_WIDTH = 15/);
   assert.match(source, /const JUGGERNAUT_CHEST_WEAK_TOP_Y = -100/);
   assert.match(source, /const JUGGERNAUT_CHEST_WEAK_BOTTOM_Y = -76/);
@@ -125,7 +125,7 @@ test("mixes unlockable zombie variants into the spawn pool with armor and shield
   assert.match(source, /t: orderT/);
   assert.match(source, /function isJuggernautChestWeakHit\(/);
   assert.match(source, /weakX \* weakX \+ weakY \* weakY <= 1/);
-  assert.match(source, /!isJuggernautChestWeakHit\(region, hit\.localX, hit\.localY\)/);
+  assert.match(source, /isJuggernautChestWeakHit\(region, localX, localY\) \? null : "juggernaut"/);
   assert.match(source, /腹部装甲板完全覆盖/);
   assert.match(source, /z\.kind !== "juggernaut" && z\.bossKind !== "giantMutant" && Math\.random\(\) < \.5/);
   assert.match(source, /emitArmorSpark/);
@@ -205,7 +205,7 @@ test("replaces M1922 with a full-scale PKM", async () => {
   const source = await readFile(new URL("../app/DeadRoadGame.tsx", import.meta.url), "utf8");
 
   assert.doesNotMatch(source, /m1922|M1922/);
-  assert.match(source, /\| "glock17" \| "m1911" \| "pkm"/);
+  assert.match(source, /type WeaponKey = FirearmSoundKey/);
   assert.match(source, /pkm: \{\s*key: "pkm", name: "PKM", price: 23200/);
   assert.match(source, /caliber: "7\.62×54mmR · 100 发"/);
   assert.match(source, /glock17: 17, m1911: 7, pkm: 100/);
@@ -567,8 +567,8 @@ test("level mode: playable escape-home level with scenes, tasks, camera and pick
   assert.match(source, /sceneIndex: g\.level\?\.sceneIndex \?\? 0/);
   assert.match(source, /pk\.sceneIndex !== g\.level\?\.sceneIndex/);
   assert.match(source, /不同槽位时只丢掉手里这一把，另一把仍保留/);
-  assert.match(source, /if \(droppedSlot >= 0\) g\.loadout\[droppedSlot\] = "fists"/);
-  assert.match(source, /const pickupSlot = currentSlot >= 0 \? currentSlot : emptySlot >= 0 \? emptySlot : 0/);
+  assert.match(source, /if \(g\.loadout\[0\] === w\) g\.loadout\[0\] = "fists"/);
+  assert.match(source, /const pickupSlot: 0 \| 1 = currentSlot === 1/);
   // startLevel 初始化：空手出门、无尸潮
   assert.match(source, /const startLevel = useCallback/);
   assert.match(source, /g\.waveTotal = 0/);
@@ -1467,15 +1467,19 @@ test("adds the exploration six-slot team roster with shared character and weapon
   assert.match(source, /setExplorationExperience\(\(experience\) => experience - upgradeCost\)/);
   assert.match(source, /recruitedMemberIds\.includes\(member\.id\)/);
   assert.match(source, /deployedMemberIds\.map\(\(memberId\) =>/);
-  assert.match(source, /target\.hp -= pelletDamage/);
+  assert.match(source, /resolveExplorationProjectileHit\(candidate, firearmWeapon!, penetratedDamage/);
+  assert.match(source, /type ExplorationBattlePendingMeleeHit =/);
+  assert.match(source, /impactAt: supportNow \+ Math\.min\(320/);
+  assert.match(source, /target\.hp -= hit\.damage \* explorationZombieArmorDamageFactor/);
   assert.match(source, /unit\.cooldown = weapon\.fireRate \/ 1000/);
   assert.match(source, /unit\.reloadRemaining = weapon\.reload \/ 1000/);
   assert.match(source, /sound\.gunshot\(member\.weapon/);
   assert.match(source, /const pellets = weapon\.pellets \?\? 1/);
   assert.match(source, /const pelletHitChance = weapon\.pellets/);
   assert.match(source, /if \(Math\.random\(\) > pelletHitChance\) continue/);
-  assert.match(source, /target\.legDamage >= target\.maxHp \* \.22/);
-  assert.match(source, /target\.knockedDownRemaining = Math\.max/);
+  assert.match(source, /if \(region === "legs"\)[\s\S]*zombie\.kind !== "juggernaut" && Math\.random\(\) < \.5/);
+  assert.match(source, /zombie\.knockedDownRemaining = Math\.max/);
+  assert.match(source, /bone: zombie\.wounds\.filter\(\(wound\) => wound\.region === region\)\.length >= 2/);
   assert.match(source, /battle-unit-shared-model[\s\S]*<ExplorationMemberPreview member=\{member\}/);
   assert.match(source, /battle-enemy-shared-model[\s\S]*<ZombieKindPreview kind=\{zombie\.kind\}/);
   assert.match(source, /<ExplorationMemberPreview member=\{member\} battleScale/);
@@ -1629,11 +1633,69 @@ test("keeps exploration zombies full-size and complete while attacking", async (
   assert.match(source, /const scale = battleScale \? EXPLORATION_BATTLE_MEMBER_SCALE : 1\.9/);
   assert.match(source, /type ExplorationBattleCorpse = \{/);
   assert.match(source, /corpses: ExplorationBattleCorpse\[\]/);
+  assert.match(source, /type ExplorationBattleGroundProp = \{/);
+  assert.match(source, /groundProps: ExplorationBattleGroundProp\[\]/);
+  assert.match(source, /removeAt: supportNow \+ GROUND_PROP_MS/);
+  assert.match(source, /battle\.groundProps\.filter\(\(prop\) => supportNow < prop\.removeAt\)/);
+  assert.match(source, /explorationBattle\.groundProps\.map\(\(prop\)/);
+  assert.match(source, /className=\{`battle-ground-prop battle-ground-\$\{prop\.kind\}`\}/);
+  assert.match(source, /type ExplorationBattleBloodEffect = \{/);
+  assert.match(source, /bloodEffects: ExplorationBattleBloodEffect\[\]/);
+  assert.match(source, /className="battle-blood-splatter"/);
   assert.match(source, /removeAt: supportNow \+ ZOMBIE_CORPSE_MS/);
   assert.match(source, /battle\.corpses\.filter\(\(corpse\) => supportNow < corpse\.removeAt\)/);
   assert.match(source, /explorationBattle\.corpses\.map\(\(corpse\)/);
   assert.match(source, /className="battle-enemy battle-enemy-shared-model knocked-down battle-corpse"/);
   assert.match(css, /\.battle-corpse[^}]*pointer-events:\s*none/);
+  assert.match(css, /\.battle-ground-prop/);
+  assert.match(css, /\.battle-blood-splatter/);
+});
+
+test("uses weapon-specific reload audio and ten-second dropped firearm props in every mode", async () => {
+  const source = await readFile(new URL("../app/DeadRoadGame.tsx", import.meta.url), "utf8");
+  const soundSource = await readFile(new URL("../app/sound.ts", import.meta.url), "utf8");
+
+  assert.match(soundSource, /type ReloadTimbre =/);
+  assert.match(soundSource, /export type FirearmSoundKey =/);
+  assert.match(soundSource, /const RELOAD_TIMBRE: Record<FirearmSoundKey, ReloadTimbre>/);
+  for (const weapon of ["glock17", "m1911", "mac11", "mp5k", "ak47", "m4", "m16", "scarh", "saiga12", "rem870", "sawedoff", "awm", "m107", "flint66", "m240l", "mg42", "pkm", "gatling", "rpg7", "m32"]) {
+    assert.match(soundSource, new RegExp(`\\b${weapon}: \\{`));
+  }
+  assert.match(soundSource, /reload\(weaponKey: FirearmSoundKey, durationMs: number\)/);
+  assert.match(source, /sound\.reload\(firearmWeapon!, weapon\.reload\)/);
+  assert.match(source, /sound\.reload\(p\.weapon as FirearmSoundKey, weapon\.reload\)/);
+  assert.match(source, /sound\.reload\("m1911", WEAPONS\.m1911\.reload\)/);
+  assert.match(source, /sound\.reload\("m16", DRONE_RELOAD_MS\)/);
+  assert.match(soundSource, /function firearmReloadInsertionTimeline/);
+  assert.match(soundSource, /for \(const insertionProgress of timeline\.insertions\)/);
+  assert.match(source, /firearmReloadInsertionTimeline\(key as FirearmSoundKey\)/);
+  assert.match(soundSource, /rem870: \{ mechanism: "shells"[^}]*rounds: 7/);
+  assert.match(source, /rem870: \{[^}]*reloadKind: "shells"[^}]*shellCount: 7/);
+  assert.match(source, /m240l: \{[^}]*reloadKind: "belt"/);
+  assert.match(source, /gatling: \{[^}]*reloadKind: "box"/);
+  assert.match(source, /removeAt: now \+ GROUND_PROP_MS/);
+  assert.match(source, /removeAt: supportNow \+ GROUND_PROP_MS/);
+  assert.doesNotMatch(source, /MAX_GROUND_PROPS/);
+  assert.doesNotMatch(source, /corpses = \[[\s\S]*?\]\.slice\(-80\)/);
+  assert.match(source, /function zombieProjectileBlockKind/);
+  assert.doesNotMatch(source, /explorationZombieShotBlocked/);
+  assert.match(source, /function ExplorationGroundPropView[\s\S]*drawGroundProp\(ctx/);
+  assert.match(source, /function ExplorationBloodEffectView[\s\S]*drawBloodStain\(ctx/);
+  assert.match(source, /type ExplorationBattleSpit =/);
+  assert.match(source, /launchAt: supportNow \+ 360 \+ burstIndex \* 150/);
+  assert.match(source, /impactAt: supportNow \+ 840 \+ burstIndex \* 150/);
+  assert.match(source, /damage: 20/);
+  assert.match(source, /attackWindupRemaining = \.235/);
+  assert.match(source, /weapon\.blastKind && weapon\.explosionRadius/);
+  assert.match(source, /const penetration = Math\.max\(1, weapon\.penetration \?\? 1\)/);
+  assert.match(source, /if \(WEAPONS\[weaponKey\]\.ignite\) zombie\.ignited = true/);
+  assert.match(source, /kind: "shield"[\s\S]*removeAt: now \+ GROUND_PROP_MS/);
+  assert.match(source, /const spitTarget = nearestUnit \?\? \{ id: "vehicle", x: 9, y: 12 \}/);
+  assert.match(source, /explorationPlaneDistance\(target, \{ x: spit\.toX, y: spit\.toY \}\) > 3\.5/);
+  assert.match(source, /if \(!weapon\.explosionRadius\) addGroundProp/);
+  assert.match(source, /if \(BOLT_ACTION_WEAPONS\.has\(member\.weapon\)\) sound\.boltAction/);
+  assert.match(source, /Math\.max\(\.1, 1 - penetrationIndex \* \.2\)/);
+  assert.match(source, /if \(!penetrated\) break/);
 });
 
 test("adds manual reward claims, member growth and reusable exploration support items", async () => {
@@ -1673,11 +1735,32 @@ test("adds manual reward claims, member growth and reusable exploration support 
   assert.match(source, /LEVEL8_HMG_FIRE_MS[\s\S]*LEVEL8_HMG_PENETRATION/);
   assert.match(source, /armoredSupportNextShotAt \+= LEVEL8_HMG_FIRE_MS/);
   assert.match(source, /armySupportNextShotAt \+= WEAPONS\.m16\.fireRate/);
-  assert.match(source, /zombie\.hp -= weaponDamage\("m16"\)/);
+  assert.match(source, /resolveExplorationProjectileHit\(zombie, "m16", weaponDamage\("m16"\)/);
   assert.match(source, /weaponDamage\(member\.weapon\) \+ \(unit\.damage - member\.damage\) \/ pellets/);
   assert.match(source, /sound\.airstrike\(\)/);
   assert.match(source, /impactAt: now \+ 550[\s\S]*impacted: false/);
-  assert.match(source, /hp: zombie\.hp - 500 \* hitCount/);
+  assert.match(source, /damageExplorationZombieFromExplosion\(zombie, 500 \* hitCount/);
+  assert.match(source, /zombie\.shieldHp -= damage/);
+  assert.match(source, /const detachChance = Math\.min\(\.94/);
+  assert.match(source, /zombie\.knockedDownRemaining = Math\.max/);
+  assert.match(source, /dropletCount = 13/);
+  assert.match(source, /if \(!penetrated\) break/);
+  assert.match(source, /!WEAPONS\[member\.weapon\]\.explosionRadius/);
+  assert.match(source, /zombie\.attackWindupRemaining = \.235/);
+  assert.match(source, /zombie\.attackAnimationRemaining = \.56/);
+  assert.match(source, /zombie\.attackImpactAt = supportNow \+ 235/);
+  assert.match(source, /zombie\.attackAnimationUntil = supportNow \+ 560/);
+  assert.match(source, /actionStartedAt=\{zombie\.action === "attack" \? zombie\.attackStartedAt : undefined\}/);
+  assert.match(source, /zombie\.cooldown = \.72/);
+  assert.match(source, /type ExplorationBattleDetachedLimb =/);
+  assert.match(source, /type ExplorationBattleMetalShard =/);
+  assert.match(source, /ExplorationDetachedLimbView/);
+  assert.match(source, /ExplorationMetalShardView/);
+  assert.match(source, /const stainCount = projectStains && Math\.random\(\) < \.7/);
+  assert.match(source, /const falloff = \.45 \+ \.55 \* Math\.max/);
+  assert.match(source, /const limbScale = radius \/ 25 \* CHARACTER_SCALE/);
+  assert.match(source, /socketX, socketY, 15, false/);
+  assert.match(source, /const shieldShards = Array\.from\(\{ length: 12 \}/);
   assert.match(source, /ExplorationAirstrikeEffectView/);
   assert.match(source, /battle-classic-blast/);
   assert.match(css, /\.consumable-shop-page[^}]*top: 200%/);

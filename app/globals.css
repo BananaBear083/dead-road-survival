@@ -773,6 +773,22 @@ button { -webkit-tap-highlight-color: transparent; }
 .battle-enemy-shared-model.large { width: 144px; height: 236px; }
 .battle-enemy-shared-model.knocked-down { width: 184px; height: 124px; }
 .battle-corpse { pointer-events:none; animation:none; transition:opacity .25s linear; filter:drop-shadow(4px 5px 2px rgba(0,0,0,.45)) grayscale(.12); }
+.battle-ground-prop { position:absolute; z-index:42; display:block; width:1px; height:1px; pointer-events:none; transition:opacity .2s linear; transform-origin:center; filter:drop-shadow(1px 2px 1px rgba(0,0,0,.65)); }
+.battle-ground-prop > canvas { position:absolute; left:-36px; top:-36px; display:block; width:72px; height:72px; }
+.battle-ground-shield > canvas { left:-90px; top:-90px; width:180px; height:180px; }
+.battle-ground-casing { animation:battle-persistent-casing-drop .62s cubic-bezier(.2,.7,.4,1) both; }
+.battle-ground-mag { animation:battle-persistent-mag-drop .82s cubic-bezier(.18,.64,.38,1) both; }
+@keyframes battle-persistent-casing-drop { 0%{margin-bottom:62px;translate:18px 0;rotate:-50deg} 45%{margin-bottom:7px;translate:35px 0;rotate:260deg} 68%{margin-bottom:16px;translate:39px 0;rotate:390deg} 100%{margin-bottom:0;translate:44px 0;rotate:520deg} }
+@keyframes battle-persistent-mag-drop { 0%{margin-bottom:58px;translate:0 0;rotate:0deg} 58%{margin-bottom:0;translate:-10px 0;rotate:-74deg} 74%{margin-bottom:10px;translate:-14px 0;rotate:-102deg} 100%{margin-bottom:0;translate:-18px 0;rotate:-88deg} }
+.battle-blood-splatter { position:absolute; z-index:41; width:1px; height:1px; pointer-events:none; transition:opacity .2s linear; }
+.battle-blood-splatter > canvas { position:absolute; left:-80px; top:-10px; width:160px; height:60px; }
+.battle-detached-limb,.battle-metal-shard { position:absolute; z-index:43; pointer-events:none; }
+.battle-spit-projectiles { position:absolute; inset:0; z-index:57; width:100%; height:100%; overflow:visible; pointer-events:none; }
+.battle-spit-glow { fill:rgba(130,205,67,.38); filter:drop-shadow(0 0 3px #80cb43); }
+.battle-spit-core { fill:#a8df62; }
+.battle-blood-splatter i { position:absolute; left:0; top:-78px; width:5px; height:5px; border-radius:50% 45% 50% 20%; background:#a91620; box-shadow:0 0 0 1px rgba(70,7,11,.25); animation:battle-blood-flight .58s cubic-bezier(.15,.55,.38,1) both; }
+.battle-blood-splatter i:nth-of-type(2){--blood-x:-31px;--blood-y:-17px;width:3px;height:3px}.battle-blood-splatter i:nth-of-type(3){--blood-x:-18px;--blood-y:24px}.battle-blood-splatter i:nth-of-type(4){--blood-x:22px;--blood-y:-26px;width:4px;height:4px}.battle-blood-splatter i:nth-of-type(5){--blood-x:37px;--blood-y:13px;width:3px;height:3px}.battle-blood-splatter i:nth-of-type(6){--blood-x:13px;--blood-y:35px}.battle-blood-splatter i:nth-of-type(7){--blood-x:-39px;--blood-y:34px;width:2px;height:2px}
+@keyframes battle-blood-flight { 0%{opacity:1;transform:translate(0,0) scale(1.2)} 72%{opacity:.9;transform:translate(var(--blood-x,28px),var(--blood-y,8px)) scale(.85)} 100%{opacity:0;transform:translate(var(--blood-x,28px),calc(var(--blood-y,8px) + 42px)) scale(.65)} }
 .battle-zombie-shared-preview { display: block; width: 100%; height: calc(100% - 16px); object-fit: contain; filter: drop-shadow(4px 6px 3px rgba(0,0,0,.58)); }
 .battle-throwing-knife { position: absolute; z-index: 10; bottom: 24%; width: 42px; height: 14px; object-fit: contain; filter: drop-shadow(0 0 3px rgba(238,242,221,.7)); animation: battle-knife-flight .42s linear both; }
 @keyframes battle-knife-flight { to { left: var(--knife-target); bottom: var(--knife-target-y); transform: rotate(540deg); } }

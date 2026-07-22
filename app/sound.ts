@@ -17,6 +17,9 @@
 
 export type MeleeKind = "slash" | "stab" | "heavy";
 export type PlayOptions = { volume?: number };
+export type FirearmSoundKey =
+  | "glock17" | "m1911" | "pkm" | "sawedoff" | "mac11" | "mp5k" | "ak47" | "m4" | "m16" | "scarh"
+  | "saiga12" | "rem870" | "awm" | "m107" | "flint66" | "m240l" | "mg42" | "rpg7" | "m32" | "gatling";
 
 const MUTE_KEY = "dead-road-muted";
 const VOLUME_KEY = "dead-road-volume";
@@ -427,6 +430,79 @@ const GUN_TIMBRE: Record<string, GunTimbre> = {
     critical: true,
   },
 };
+
+type ReloadMechanism = "mag" | "shells" | "cylinder" | "rocket" | "belt" | "box";
+type ReloadTimbre = {
+  mechanism: ReloadMechanism;
+  pitch: number;
+  weight: number;
+  releaseAt: number;
+  seatAt: number;
+  chargeAt?: number;
+  rounds?: number;
+};
+
+/**
+ * 逐枪换弹机械音配方。时间点使用整段换弹时长的比例：手枪突出弹匣释放和套筒复位，
+ * 步枪按各自枪机/拉机柄位置收尾，机枪使用上盖、弹链和拉机柄，霰弹枪逐发压壳，
+ * M32 使用转轮开合，RPG-7 使用弹体沿发射筒装入的长摩擦声。
+ */
+const RELOAD_TIMBRE: Record<FirearmSoundKey, ReloadTimbre> = {
+  glock17: { mechanism: "mag", pitch: 1850, weight: .72, releaseAt: .05, seatAt: .68, chargeAt: .88 },
+  m1911: { mechanism: "mag", pitch: 1540, weight: .92, releaseAt: .06, seatAt: .64, chargeAt: .86 },
+  mac11: { mechanism: "mag", pitch: 2050, weight: .66, releaseAt: .05, seatAt: .62, chargeAt: .84 },
+  mp5k: { mechanism: "mag", pitch: 1720, weight: .78, releaseAt: .07, seatAt: .57, chargeAt: .82 },
+  ak47: { mechanism: "mag", pitch: 1260, weight: 1.16, releaseAt: .08, seatAt: .58, chargeAt: .84 },
+  m4: { mechanism: "mag", pitch: 1920, weight: .78, releaseAt: .06, seatAt: .6, chargeAt: .87 },
+  m16: { mechanism: "mag", pitch: 1810, weight: .84, releaseAt: .07, seatAt: .61, chargeAt: .88 },
+  scarh: { mechanism: "mag", pitch: 1370, weight: 1.08, releaseAt: .08, seatAt: .6, chargeAt: .86 },
+  saiga12: { mechanism: "mag", pitch: 1190, weight: 1.12, releaseAt: .08, seatAt: .62, chargeAt: .87 },
+  rem870: { mechanism: "shells", pitch: 1180, weight: 1.04, releaseAt: .08, seatAt: .86, rounds: 7 },
+  sawedoff: { mechanism: "shells", pitch: 1420, weight: .9, releaseAt: .05, seatAt: .84, rounds: 2 },
+  awm: { mechanism: "mag", pitch: 1080, weight: 1.2, releaseAt: .08, seatAt: .58, chargeAt: .84 },
+  m107: { mechanism: "mag", pitch: 860, weight: 1.42, releaseAt: .09, seatAt: .6, chargeAt: .87 },
+  flint66: { mechanism: "mag", pitch: 910, weight: 1.34, releaseAt: .09, seatAt: .6, chargeAt: .86 },
+  m240l: { mechanism: "belt", pitch: 820, weight: 1.42, releaseAt: .08, seatAt: .58, chargeAt: .89 },
+  mg42: { mechanism: "belt", pitch: 960, weight: 1.3, releaseAt: .07, seatAt: .56, chargeAt: .87 },
+  pkm: { mechanism: "belt", pitch: 780, weight: 1.48, releaseAt: .08, seatAt: .57, chargeAt: .9 },
+  gatling: { mechanism: "box", pitch: 720, weight: 1.55, releaseAt: .08, seatAt: .67, chargeAt: .9 },
+  rpg7: { mechanism: "rocket", pitch: 690, weight: 1.5, releaseAt: .08, seatAt: .77, chargeAt: .91 },
+  m32: { mechanism: "cylinder", pitch: 930, weight: 1.2, releaseAt: .08, seatAt: .78, rounds: 6 },
+};
+
+/** 逐发装填的共享时间轴；画面与声音都必须从这里读取相同的压壳时刻。 */
+export function firearmReloadInsertionTimeline(weaponKey: FirearmSoundKey): { loadEnd: number; insertions: number[] } | null {
+  const profile = RELOAD_TIMBRE[weaponKey];
+  if (profile.mechanism !== "shells" && profile.mechanism !== "cylinder") return null;
+  const count = profile.rounds ?? 1;
+  const loadEnd = profile.mechanism === "shells" ? .82 : .72;
+  return {
+    loadEnd,
+    insertions: Array.from({ length: count }, (_, index) => (index + .72) * loadEnd / count),
+  };
+}
+
+function reloadClick(at: number, pitch: number, weight: number, rising = false) {
+  tone({
+    type: "square",
+    from: rising ? pitch * .68 : pitch,
+    to: rising ? pitch : pitch * .62,
+    duration: .035 + weight * .018,
+    volume: .1 + weight * .075,
+    delay: at,
+    filter: { type: "bandpass", frequency: pitch, q: 2.4 },
+  });
+}
+
+function reloadHandling(at: number, pitch: number, weight: number, duration = .07) {
+  noise({
+    duration,
+    volume: .08 + weight * .07,
+    delay: at,
+    playbackRate: 1.5 / Math.max(.72, weight),
+    filter: { type: "bandpass", from: pitch, q: 1.2 },
+  });
+}
 
 /** 按每把枪的音色配方渲染枪声；fireRateMs <70 时自动精简分层并略降音量，连发不糊。 */
 function gunshot(weaponKey: string, options: PlayOptions & { fireRateMs?: number } = {}) {
@@ -877,13 +953,67 @@ export const soundManager = {
     tone({ type: "square", from: 1500, duration: 0.02, volume: 0.14, delay: 0.045 });
   },
 
-  /** 换弹：立即卸弹匣，接近结束时装弹匣。 */
-  reload(durationMs: number) {
-    tone({ type: "square", from: 900, to: 500, duration: 0.05, volume: 0.2, filter: { type: "bandpass", frequency: 1200, q: 2 } });
-    noise({ duration: 0.05, volume: 0.14, filter: { type: "bandpass", from: 2400, q: 1.4 } });
-    const inDelay = Math.max(0.25, durationMs / 1000 - 0.3);
-    noise({ duration: 0.06, volume: 0.2, delay: inDelay, filter: { type: "bandpass", from: 1800, q: 1.2 } });
-    tone({ type: "square", from: 620, to: 980, duration: 0.06, volume: 0.18, delay: inDelay + 0.05, filter: { type: "bandpass", frequency: 1500, q: 2 } });
+  /** 每把枪独立的真实机械换弹层：弹匣、逐发装填、转轮、火箭弹与弹链均使用不同节奏。 */
+  reload(weaponKey: FirearmSoundKey, durationMs: number) {
+    const profile = RELOAD_TIMBRE[weaponKey];
+    const duration = Math.max(.35, durationMs / 1000);
+    const at = (ratio: number) => Math.max(0, duration * ratio);
+
+    if (profile.mechanism === "shells") {
+      reloadClick(at(profile.releaseAt), profile.pitch * .9, profile.weight);
+      reloadHandling(at(.12), profile.pitch * .7, profile.weight, .11);
+      const timeline = firearmReloadInsertionTimeline(weaponKey)!;
+      for (const insertionProgress of timeline.insertions) {
+        const insertAt = at(insertionProgress);
+        reloadHandling(insertAt, profile.pitch * 1.15, profile.weight, .045);
+        reloadClick(insertAt + .035, profile.pitch * 1.35, profile.weight * .72, true);
+      }
+      reloadClick(at(profile.seatAt), profile.pitch, profile.weight, true);
+      return;
+    }
+
+    if (profile.mechanism === "cylinder") {
+      reloadClick(at(profile.releaseAt), profile.pitch, profile.weight);
+      reloadHandling(at(.14), profile.pitch * .72, profile.weight, .16);
+      const timeline = firearmReloadInsertionTimeline(weaponKey)!;
+      for (let group = 0; group < timeline.insertions.length; group++) {
+        const insertAt = at(timeline.insertions[group]);
+        reloadHandling(insertAt, profile.pitch * 1.22, profile.weight * .8, .065);
+        reloadClick(insertAt + .04, profile.pitch * (1.1 + group * .07), profile.weight * .76, true);
+      }
+      reloadHandling(at(.69), profile.pitch * .8, profile.weight, .13);
+      reloadClick(at(profile.seatAt), profile.pitch * 1.08, profile.weight * 1.08, true);
+      return;
+    }
+
+    if (profile.mechanism === "rocket") {
+      reloadClick(at(profile.releaseAt), profile.pitch * .8, profile.weight);
+      reloadHandling(at(.16), profile.pitch * .42, profile.weight * 1.08, duration * .43);
+      tone({ type: "triangle", from: profile.pitch * .32, to: profile.pitch * .52, duration: duration * .38, volume: .13, delay: at(.2), filter: { type: "lowpass", frequency: 520 } });
+      reloadClick(at(profile.seatAt), profile.pitch, profile.weight * 1.16, true);
+      reloadClick(at(profile.chargeAt ?? .91), profile.pitch * 1.18, profile.weight, true);
+      return;
+    }
+
+    if (profile.mechanism === "belt" || profile.mechanism === "box") {
+      reloadClick(at(profile.releaseAt), profile.pitch, profile.weight);
+      reloadHandling(at(.12), profile.pitch * .58, profile.weight, .18);
+      reloadClick(at(.24), profile.pitch * .72, profile.weight * 1.12);
+      reloadHandling(at(.34), profile.pitch * .9, profile.weight, duration * .2);
+      reloadClick(at(profile.seatAt), profile.pitch * .88, profile.weight * 1.2, true);
+      reloadHandling(at(profile.seatAt + .055), profile.pitch * 1.1, profile.weight, .1);
+      reloadClick(at(profile.chargeAt ?? .9), profile.pitch * 1.25, profile.weight * 1.08, true);
+      return;
+    }
+
+    reloadClick(at(profile.releaseAt), profile.pitch, profile.weight);
+    reloadHandling(at(profile.releaseAt + .045), profile.pitch * 1.35, profile.weight, .06);
+    reloadHandling(at(Math.max(.22, profile.seatAt - .14)), profile.pitch * .82, profile.weight, .1);
+    reloadClick(at(profile.seatAt), profile.pitch * .86, profile.weight * 1.12, true);
+    if (profile.chargeAt !== undefined) {
+      reloadHandling(at(profile.chargeAt - .07), profile.pitch * .72, profile.weight, .08);
+      reloadClick(at(profile.chargeAt), profile.pitch * 1.12, profile.weight, true);
+    }
   },
 
   /** 呕吐僵尸喷吐：湿黏的喉音翻涌 + 液体喷出。 */
