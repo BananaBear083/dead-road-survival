@@ -1444,7 +1444,7 @@ test("adds the exploration exchange shop, vehicle upgrades and courage auto-batt
   assert.match(css, /\.exploration-battle-panel/);
   assert.match(css, /\.battle-farm-scenery/);
   assert.match(css, /\.battle-road[^}]*top: 32%/);
-  assert.match(css, /\.battle-vehicle-position[^}]*bottom: 10%[^}]*width: 280px/);
+  assert.match(css, /\.battle-vehicle-position[^}]*bottom: 5%[^}]*width: 390px/);
   assert.match(css, /\.battle-courage/);
   assert.match(css, /\.battle-squad-bar/);
 });
@@ -1477,7 +1477,14 @@ test("adds the exploration six-slot team roster with shared character and weapon
   assert.match(source, /target\.knockedDownRemaining = Math\.max/);
   assert.match(source, /battle-unit-shared-model[\s\S]*<ExplorationMemberPreview member=\{member\}/);
   assert.match(source, /battle-enemy-shared-model[\s\S]*<ZombieKindPreview kind=\{zombie\.kind\}/);
+  assert.match(source, /<ExplorationMemberPreview member=\{member\} battleScale/);
+  assert.match(source, /className="battle-zombie-shared-preview" fillHeight/);
+  assert.match(source, /const referenceRadius = fillHeight \? z\.radius : 36/);
+  assert.match(source, /const scale = battleScale \? 2\.8 : 1\.9/);
   assert.match(source, /function ExplorationMemberPreview/);
+  assert.match(source, /function drawSurvivalHumanHeadAndFace/);
+  assert.match(source, /drawSurvivalHumanHeadAndFace\(ctx, facing, farmer \? "farmerHat" : "cap"\)/);
+  assert.match(source, /if \(armor\.key === "civilian"\) \{\s*drawSurvivalHumanHeadAndFace\(ctx, facing, "cap"\)/);
   assert.match(source, /standingLegPose/);
   assert.match(source, /gaitLegPose/);
   assert.match(source, /drawWeaponModel\(ctx, member\.weapon/);
@@ -1485,8 +1492,10 @@ test("adds the exploration six-slot team roster with shared character and weapon
   assert.match(source, /drawReloadProps\(ctx, member\.weapon/);
   assert.match(source, /lottery-zombie-shared-preview/);
   assert.match(source, /screen === "explorationTeam"/);
+  assert.match(source, /team-member-card[\s\S]*<ExplorationMemberPreview member=\{member\} \/>/);
   assert.match(source, /人员上阵/);
   assert.match(source, /消耗品上阵/);
+  assert.match(source, /Array\.from\(\{ length: 3 \}/);
   assert.match(source, /当前上阵人员/);
   assert.match(source, /未上阵与待购买人员/);
   assert.match(source, /等级不能超过车辆等级/);
@@ -1500,4 +1509,7 @@ test("adds the exploration six-slot team roster with shared character and weapon
   assert.match(css, /\.team-member-card\.rarity-epic/);
   assert.match(css, /\.team-member-card\.rarity-legendary/);
   assert.match(css, /\.team-member-preview/);
+  assert.match(css, /\.team-consumable-grid[^}]*repeat\(3, 1fr\)/);
+  assert.match(css, /\.battle-unit-shared-model[^}]*width: 108px[^}]*height: 184px/);
+  assert.match(css, /\.battle-enemy-shared-model[^}]*width: 102px[^}]*height: 182px/);
 });

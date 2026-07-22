@@ -8195,7 +8195,7 @@ function previewZombie(kind: ZombieKind): Zombie {
   };
 }
 
-function ZombieKindPreview({ kind, width = 150, height = 200, className = "spawn-preview", motion = "standing", hpRatio = 1, wounds = [], missingLimbs = [], knockedDown = false }: { kind: ZombieKind; width?: number; height?: number; className?: string; motion?: "standing" | "walking" | "attacking"; hpRatio?: number; wounds?: Wound[]; missingLimbs?: ZombieLimb[]; knockedDown?: boolean }) {
+function ZombieKindPreview({ kind, width = 150, height = 200, className = "spawn-preview", motion = "standing", hpRatio = 1, wounds = [], missingLimbs = [], knockedDown = false, fillHeight = false }: { kind: ZombieKind; width?: number; height?: number; className?: string; motion?: "standing" | "walking" | "attacking"; hpRatio?: number; wounds?: Wound[]; missingLimbs?: ZombieLimb[]; knockedDown?: boolean; fillHeight?: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const canvas = ref.current;
@@ -8208,7 +8208,8 @@ function ZombieKindPreview({ kind, width = 150, height = 200, className = "spawn
     const draw = (now: number) => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       // 统一缩放：按最大体型（radius 36）自动校准到画布高度，种类间保留相对体型差。
-      const fit = (height - 14) / (BASE_HUMAN_HEIGHT * (36 / 25) * CHARACTER_SCALE);
+      const referenceRadius = fillHeight ? z.radius : 36;
+      const fit = (height - 14) / (BASE_HUMAN_HEIGHT * (referenceRadius / 25) * CHARACTER_SCALE);
       const scale = (z.radius / 25) * CHARACTER_SCALE * fit;
       const skin = z.radius > 29 ? "#6e7c52" : "#7e8c60";
       const gaitCycle = (now / 300) % 1;
@@ -8231,7 +8232,7 @@ function ZombieKindPreview({ kind, width = 150, height = 200, className = "spawn
     };
     draw(performance.now());
     return () => window.cancelAnimationFrame(animationFrame);
-  }, [hpRatio, kind, width, height, missingLimbs, motion, knockedDown, wounds]);
+  }, [fillHeight, hpRatio, kind, width, height, missingLimbs, motion, knockedDown, wounds]);
   return <canvas ref={ref} className={className} width={width} height={height} aria-hidden="true" />;
 }
 
@@ -8252,8 +8253,64 @@ function WeaponPreview({ weapon }: { weapon: WeaponKey }) {
   return <canvas ref={ref} className="weapon-preview" width={220} height={92} aria-hidden="true" />;
 }
 
+/** 生存模式便装人物与探索队员共用的颅形、五官、头发和帽饰细节。 */
+function drawSurvivalHumanHeadAndFace(ctx: CanvasRenderingContext2D, facing: number, headwear: "cap" | "farmerHat" = "cap") {
+  ctx.fillStyle = "#c58e67";
+  ctx.beginPath();
+  ctx.moveTo(-5.5, -102); ctx.lineTo(5.5, -102); ctx.lineTo(4, -112); ctx.lineTo(-4, -112);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "#d0a079";
+  ctx.beginPath();
+  ctx.moveTo(facing * -9, -118); ctx.lineTo(facing * -7.5, -125); ctx.lineTo(facing * -1, -128.5);
+  ctx.lineTo(facing * 5.5, -126.5); ctx.lineTo(facing * 8.5, -121); ctx.lineTo(facing * 9.5, -117.5);
+  ctx.lineTo(facing * 8, -115); ctx.lineTo(facing * 8.5, -113.5); ctx.lineTo(facing * 6.5, -110.5);
+  ctx.lineTo(facing * 1, -108.5); ctx.lineTo(facing * -5, -110); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "#1a1f1d";
+  ctx.beginPath();
+  ctx.moveTo(facing * -9.5, -118); ctx.lineTo(facing * -8, -126); ctx.lineTo(facing * -1, -129.5);
+  ctx.lineTo(facing * 6, -127.5); ctx.lineTo(facing * 8.5, -122); ctx.lineTo(facing * 5, -124.5);
+  ctx.lineTo(facing * -2, -126.5); ctx.lineTo(facing * -7, -122.5); ctx.closePath(); ctx.fill();
+  if (headwear === "cap") {
+    ctx.fillStyle = "#4e5238";
+    ctx.beginPath();
+    ctx.moveTo(facing * -9.5, -119.5);
+    ctx.quadraticCurveTo(facing * -8, -127.5, facing * -1, -129.3);
+    ctx.quadraticCurveTo(facing * 6, -128.5, facing * 8.5, -119.5);
+    ctx.lineTo(facing * -9.5, -119.5); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,.28)"; ctx.lineWidth = .8;
+    ctx.beginPath(); ctx.moveTo(facing * -1, -129); ctx.lineTo(facing * -.5, -119.8); ctx.stroke();
+    ctx.fillStyle = "#3c402c";
+    ctx.beginPath(); ctx.arc(facing * -1, -129.2, 1.1, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(facing * 1.5, -121); ctx.quadraticCurveTo(facing * 13, -121.6, facing * 21.5, -118.4);
+    ctx.quadraticCurveTo(facing * 20.5, -117.6, facing * 18.5, -117.9);
+    ctx.quadraticCurveTo(facing * 12, -118.7, facing * 2.5, -119.2); ctx.closePath(); ctx.fill();
+  } else {
+    ctx.fillStyle = "#9d8136";
+    ctx.beginPath(); ctx.ellipse(0, -127, 18, 3.5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#b79a49";
+    ctx.beginPath(); ctx.ellipse(0, -130, 10.5, 6.5, 0, Math.PI, 0); ctx.fill();
+    ctx.strokeStyle = "rgba(74,55,23,.55)"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(-10, -128); ctx.lineTo(10, -128); ctx.stroke();
+  }
+  ctx.fillStyle = "#1a1f1d";
+  ctx.beginPath();
+  ctx.moveTo(facing * -9, -121); ctx.lineTo(facing * -10.5, -113.5); ctx.lineTo(facing * -6.5, -111.5); ctx.lineTo(facing * -5.5, -117);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "#23282c";
+  ctx.beginPath(); ctx.ellipse(facing * 5, -116.6, 1.7, 1.15, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "rgba(255,255,255,.3)";
+  ctx.beginPath(); ctx.arc(facing * 5.5, -117, .45, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = "#6b4f3c"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(facing * 2.8, -118.6); ctx.lineTo(facing * 7.6, -119); ctx.stroke();
+  ctx.strokeStyle = "#956b51"; ctx.lineWidth = .8;
+  ctx.beginPath(); ctx.moveTo(facing * 6.5, -116.5); ctx.lineTo(facing * 8, -114.5); ctx.stroke();
+  ctx.strokeStyle = "#7d4e3f"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(facing * 3, -112.5); ctx.lineTo(facing * 6, -112.5); ctx.stroke();
+}
+
 /** 探索队伍详情与战斗复用生存模式的人体骨架、步态和真实武器模型。 */
-function ExplorationMemberPreview({ member, motion = "standing", reloadProgress = 0 }: { member: ExplorationMemberDefinition; motion?: "standing" | "moving" | "attacking" | "reloading"; reloadProgress?: number }) {
+function ExplorationMemberPreview({ member, motion = "standing", reloadProgress = 0, battleScale = false }: { member: ExplorationMemberDefinition; motion?: "standing" | "moving" | "attacking" | "reloading"; reloadProgress?: number; battleScale?: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const canvas = ref.current;
@@ -8263,13 +8320,13 @@ function ExplorationMemberPreview({ member, motion = "standing", reloadProgress 
     const draw = (now: number) => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       const facing = 1;
-      const scale = 1.9;
+      const scale = battleScale ? 2.8 : 1.9;
       const farmer = member.id === "farmer";
       const gaitCycle = (now / 230) % 1;
       const moving = motion === "moving";
       const attackPhase = motion === "attacking" ? (now % Math.max(360, WEAPONS[member.weapon].fireRate)) / Math.max(360, WEAPONS[member.weapon].fireRate) : 0;
       ctx.save();
-      ctx.translate(canvas.width * .43, canvas.height * .88 + (moving ? Math.sin(gaitCycle * Math.PI * 4) * 1.1 : 0));
+      ctx.translate(canvas.width * .43, canvas.height * (battleScale ? .94 : .88) + (moving ? Math.sin(gaitCycle * Math.PI * 4) * 1.1 : 0));
       ctx.scale(scale, scale);
       ctx.fillStyle = "rgba(0,0,0,.38)";
       ctx.beginPath(); ctx.ellipse(0, 5, 28, 8, 0, 0, Math.PI * 2); ctx.fill();
@@ -8284,12 +8341,7 @@ function ExplorationMemberPreview({ member, motion = "standing", reloadProgress 
       ctx.moveTo(-15, -102); ctx.lineTo(15, -102); ctx.lineTo(13, -66); ctx.lineTo(-13, -66); ctx.closePath(); ctx.fill();
       ctx.fillStyle = farmer ? "#5c5638" : "#3c4738";
       roundedRect(ctx, -11, -91, 22, 23, 3); ctx.fill();
-      ctx.fillStyle = "#c79068";
-      ctx.fillRect(-5, -111, 10, 12);
-      ctx.beginPath(); ctx.ellipse(1, -119, 10, 11.5, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = farmer ? "#a88b3e" : "#4e5238";
-      ctx.beginPath(); ctx.ellipse(0, -126, 12, 6, 0, Math.PI, 0); ctx.fill();
-      if (farmer) ctx.fillRect(-16, -126, 32, 3);
+      drawSurvivalHumanHeadAndFace(ctx, facing, farmer ? "farmerHat" : "cap");
 
       const melee = MELEE_WEAPONS.has(member.weapon);
       const recoil = !melee && motion === "attacking" ? Math.sin(Math.min(1, attackPhase * 2) * Math.PI) : 0;
@@ -8333,7 +8385,7 @@ function ExplorationMemberPreview({ member, motion = "standing", reloadProgress 
     };
     draw(performance.now());
     return () => window.cancelAnimationFrame(animationFrame);
-  }, [member, motion, reloadProgress]);
+  }, [battleScale, member, motion, reloadProgress]);
   return <canvas ref={ref} className="team-member-preview" width={330} height={430} aria-label={`${member.name}与${WEAPONS[member.weapon].name}建模预览`} />;
 }
 
@@ -8703,7 +8755,7 @@ export function DeadRoadGame() {
           maxHp: member.hp,
           damage: member.damage,
           speedFactor: member.speedFactor,
-          x: 17,
+          x: 30,
           cooldown: 0,
           ammo: MELEE_WEAPONS.has(member.weapon) ? 1 : WEAPONS[member.weapon].magazine,
           reloadRemaining: 0,
@@ -11788,7 +11840,10 @@ export function DeadRoadGame() {
     const headShiftX = hold.stance === "rpg" ? -facing * 3.5 : 0;
     ctx.save();
     ctx.translate(headShiftX, 0);
-    // 颈部：连接躯干与头部的短柱段（明确宽度、有棱角，非圆球接头）
+    if (armor.key === "civilian") {
+      drawSurvivalHumanHeadAndFace(ctx, facing, "cap");
+    } else {
+      // 颈部：连接躯干与头部的短柱段（明确宽度、有棱角，非圆球接头）
     ctx.fillStyle = "#c58e67";
     ctx.beginPath();
     ctx.moveTo(-5.5, -102); ctx.lineTo(5.5, -102); ctx.lineTo(4, -112); ctx.lineTo(-4, -112);
@@ -11822,29 +11877,7 @@ export function DeadRoadGame() {
     ctx.lineTo(facing * -7, -122.5);
     ctx.closePath();
     ctx.fill();
-    if (armor.key === "civilian") {
-      // 鸭舌帽（便装默认）：帽冠贴合颅形 + 前伸弧形帽檐
-      ctx.fillStyle = "#4e5238";
-      ctx.beginPath();
-      ctx.moveTo(facing * -9.5, -119.5);
-      ctx.quadraticCurveTo(facing * -8, -127.5, facing * -1, -129.3);
-      ctx.quadraticCurveTo(facing * 6, -128.5, facing * 8.5, -119.5);
-      ctx.lineTo(facing * -9.5, -119.5);
-      ctx.closePath(); ctx.fill();
-      // 帽冠中缝与顶扣
-      ctx.strokeStyle = "rgba(0,0,0,.28)"; ctx.lineWidth = .8;
-      ctx.beginPath(); ctx.moveTo(facing * -1, -129); ctx.lineTo(facing * -0.5, -119.8); ctx.stroke();
-      ctx.fillStyle = "#3c402c";
-      ctx.beginPath(); ctx.arc(facing * -1, -129.2, 1.1, 0, Math.PI * 2); ctx.fill();
-      // 帽檐：加长加宽的鸭舌——自帽冠前缘向前下方弧出，下缘全程位于眉弓/眼睛之上（眼顶 ≈ -117.75）
-      ctx.fillStyle = "#3c402c";
-      ctx.beginPath();
-      ctx.moveTo(facing * 1.5, -121);
-      ctx.quadraticCurveTo(facing * 13, -121.6, facing * 21.5, -118.4);
-      ctx.quadraticCurveTo(facing * 20.5, -117.6, facing * 18.5, -117.9);
-      ctx.quadraticCurveTo(facing * 12, -118.7, facing * 2.5, -119.2);
-      ctx.closePath(); ctx.fill();
-    } else if (armor.helmet === "cap") {
+    if (armor.helmet === "cap") {
       ctx.fillStyle = "#17283d";
       ctx.beginPath();
       ctx.moveTo(facing * -9.5, -120); ctx.lineTo(facing * -7, -127.5); ctx.lineTo(facing * 0, -130); ctx.lineTo(facing * 7, -127.5); ctx.lineTo(facing * 9, -120);
@@ -11899,6 +11932,7 @@ export function DeadRoadGame() {
       ctx.moveTo(facing * 10.8, -119.2); ctx.lineTo(facing * 9.2, -109.5); ctx.lineTo(facing * 2, -110.5); ctx.lineTo(facing * 2.5, -119.2);
       ctx.closePath(); ctx.fill();
       ctx.strokeStyle = "rgba(190,208,214,.55)"; ctx.lineWidth = .9; ctx.stroke();
+    }
     }
     ctx.restore();
     ctx.save();
@@ -13270,8 +13304,8 @@ export function DeadRoadGame() {
                       if (!member) return <div key={`empty-${index}`} className="team-empty-slot"><b>+</b><small>空栏位</small></div>;
                       const level = explorationMemberLevels[member.id] ?? 1;
                       return (
-                        <button key={member.id} type="button" className={`team-member-card rarity-${member.rarity} ${selectedExplorationMember.id === member.id ? "selected" : ""}`} onClick={() => setSelectedExplorationMemberId(member.id)}>
-                          <i>{member.name.slice(0, 1)}</i><span><strong>{member.name}</strong><small>{WEAPONS[member.weapon].name}</small></span><b>LV.{level}</b>
+                        <button key={member.id} type="button" className={`team-member-card rarity-${member.rarity} ${selectedExplorationMember.id === member.id ? "selected" : ""}`} onClick={() => setSelectedExplorationMemberId(member.id)} aria-label={`${member.name}，等级 ${level}，${WEAPONS[member.weapon].name}`}>
+                          <ExplorationMemberPreview member={member} />
                         </button>
                       );
                     })}
@@ -13285,8 +13319,8 @@ export function DeadRoadGame() {
                       {reserveExplorationMembers.length === 0 ? <p>暂无未上阵或待购买人员</p> : reserveExplorationMembers.map((member) => {
                         const owned = ownedMemberIds.includes(member.id);
                         return (
-                          <button key={member.id} type="button" className={`team-member-card rarity-${member.rarity} ${selectedExplorationMember.id === member.id ? "selected" : ""}`} onClick={() => setSelectedExplorationMemberId(member.id)}>
-                            <i>{member.name.slice(0, 1)}</i><span><strong>{member.name}</strong><small>{owned ? "已拥有 · 未上阵" : `待购买 · ${member.purchaseCost} 金币`}</small></span><b>{EXPLORATION_RARITY_LABELS[member.rarity]}</b>
+                          <button key={member.id} type="button" className={`team-member-card rarity-${member.rarity} ${selectedExplorationMember.id === member.id ? "selected" : ""}`} onClick={() => setSelectedExplorationMemberId(member.id)} aria-label={`${member.name}，${owned ? "已拥有未上阵" : `待购买，${member.purchaseCost} 金币`}`}>
+                            <ExplorationMemberPreview member={member} />
                           </button>
                         );
                       })}
@@ -13331,7 +13365,7 @@ export function DeadRoadGame() {
               <section className="team-consumables-section">
                 <header><span>当前上阵消耗品</span><small>消耗品种类与战斗效果等待后续开放</small></header>
                 <div className="team-consumable-grid">
-                  {Array.from({ length: 6 }, (_, index) => <div key={index} className="team-consumable-slot"><b>+</b><strong>消耗品栏位 {index + 1}</strong><small>尚未配置</small></div>)}
+                  {Array.from({ length: 3 }, (_, index) => <div key={index} className="team-consumable-slot"><b>+</b><strong>消耗品栏位 {index + 1}</strong><small>尚未配置</small></div>)}
                 </div>
                 <p>后续获得消耗品后，可在这里选择携带进入探索任务。</p>
               </section>
@@ -13362,7 +13396,7 @@ export function DeadRoadGame() {
                 const member = EXPLORATION_MEMBERS.find((candidate) => candidate.id === unit.memberId) ?? EXPLORATION_MEMBERS[0];
                 return (
                   <div key={unit.id} className={`battle-unit battle-unit-shared-model ${explorationBattle.zombies.length === 0 ? "guarding" : "advancing"}`} style={{ left: `${unit.x}%` }} aria-label={`${unit.label}，HP ${Math.ceil(unit.hp)}`}>
-                    <ExplorationMemberPreview member={member} motion={unit.action === "walk" ? "moving" : unit.action === "attack" ? "attacking" : unit.action === "reload" ? "reloading" : "standing"} reloadProgress={unit.action === "reload" ? 1 - unit.reloadRemaining / Math.max(.001, WEAPONS[member.weapon].reload / 1000) : 0} />
+                    <ExplorationMemberPreview member={member} battleScale motion={unit.action === "walk" ? "moving" : unit.action === "attack" ? "attacking" : unit.action === "reload" ? "reloading" : "standing"} reloadProgress={unit.action === "reload" ? 1 - unit.reloadRemaining / Math.max(.001, WEAPONS[member.weapon].reload / 1000) : 0} />
                     {unit.action === "attack" && !MELEE_WEAPONS.has(member.weapon) && <><span className="battle-muzzle-flash" /><span className="battle-ejected-casing" /></>}
                     {unit.action === "reload" && WEAPON_HOLD[member.weapon].reloadKind === "mag" && <span className="battle-dropped-magazine" />}
                     <i className="battle-entity-hp"><b style={{ width: `${unit.hp / unit.maxHp * 100}%` }} /></i>
@@ -13371,7 +13405,7 @@ export function DeadRoadGame() {
               })}
               {explorationBattle.zombies.map((zombie) => (
                 <div key={zombie.id} className="battle-enemy battle-enemy-shared-model" style={{ left: `${zombie.x}%`, "--enemy-scale": 1 + Math.min(.4, explorationBattleWave * .035) } as React.CSSProperties} aria-label={`进攻僵尸，HP ${Math.ceil(zombie.hp)}`}>
-                  <ZombieKindPreview kind={zombie.kind} width={140} height={130} className="battle-zombie-shared-preview" motion={zombie.action === "attack" ? "attacking" : zombie.action === "walk" ? "walking" : "standing"} hpRatio={zombie.hp / zombie.maxHp} wounds={zombie.wounds} missingLimbs={zombie.missingLimbs} knockedDown={zombie.knockedDownRemaining > 0} />
+                  <ZombieKindPreview kind={zombie.kind} width={140} height={130} className="battle-zombie-shared-preview" fillHeight motion={zombie.action === "attack" ? "attacking" : zombie.action === "walk" ? "walking" : "standing"} hpRatio={zombie.hp / zombie.maxHp} wounds={zombie.wounds} missingLimbs={zombie.missingLimbs} knockedDown={zombie.knockedDownRemaining > 0} />
                   {zombie.hp < zombie.maxHp && <span key={`${zombie.id}-${Math.ceil(zombie.hp)}`} className="battle-zombie-blood" />}
                   <i className="battle-entity-hp"><b style={{ width: `${zombie.hp / zombie.maxHp * 100}%` }} /></i>
                 </div>
