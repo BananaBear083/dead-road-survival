@@ -1627,6 +1627,13 @@ test("keeps exploration zombies full-size and complete while attacking", async (
   assert.match(css, /\.battle-unit-shared-model[^}]*width: 108px[^}]*height: 184px/);
   assert.match(source, /const EXPLORATION_BATTLE_MEMBER_SCALE = 3\.05/);
   assert.match(source, /const scale = battleScale \? EXPLORATION_BATTLE_MEMBER_SCALE : 1\.9/);
+  assert.match(source, /type ExplorationBattleCorpse = \{/);
+  assert.match(source, /corpses: ExplorationBattleCorpse\[\]/);
+  assert.match(source, /removeAt: supportNow \+ ZOMBIE_CORPSE_MS/);
+  assert.match(source, /battle\.corpses\.filter\(\(corpse\) => supportNow < corpse\.removeAt\)/);
+  assert.match(source, /explorationBattle\.corpses\.map\(\(corpse\)/);
+  assert.match(source, /className="battle-enemy battle-enemy-shared-model knocked-down battle-corpse"/);
+  assert.match(css, /\.battle-corpse[^}]*pointer-events:\s*none/);
 });
 
 test("adds manual reward claims, member growth and reusable exploration support items", async () => {
@@ -1690,6 +1697,14 @@ test("shares consumable icons, classic gunfire and classic airstrike explosions 
   assert.match(source, /function drawSurvivalMuzzleFlash/);
   assert.match(source, /automaticWeaponStartedAt/);
   assert.match(source, /support-bullet-tracer/);
+  assert.match(source, /shotTarget: \{ x: number; y: number \} \| null/);
+  assert.match(source, /shotSerial: number/);
+  assert.match(source, /unit\.shotTarget = \{ x: target\.x, y: target\.y \}/);
+  assert.match(source, /className="battle-unit-bullet-tracers"/);
+  assert.match(source, /key=\{`\$\{unit\.id\}-\$\{unit\.shotSerial\}`\}/);
+  assert.match(source, /className="battle-unit-bullet-tracer"/);
+  assert.match(css, /\.battle-unit-bullet-tracers/);
+  assert.match(css, /\.battle-unit-bullet-tracer/);
   assert.match(source, /armored-support-tracer/);
   assert.match(source, /EXPLORATION_ARMORED_SUPPORT_INITIAL_AMMO = 46/);
   assert.match(source, /armoredSupportAmmo: EXPLORATION_ARMORED_SUPPORT_INITIAL_AMMO/);
@@ -1739,7 +1754,9 @@ test("supports paid supplies, repeat summons and a stable two-dimensional explor
   assert.match(source, /return \{ \.\.\.battle,[^}]*zombiesAlerted,/);
   assert.doesNotMatch(source, /target\.missingLimbs = \[/);
   assert.match(source, /battle-squad-bar[\s\S]*ExplorationMemberPreview member=\{member\}/);
-  assert.match(css, /\.battle-consumable-bar[^}]*top:\s*96px/);
+  assert.match(css, /\.battle-consumable-bar[^}]*top:\s*12px/);
+  assert.match(css, /\.battle-consumable-bar[^}]*left:\s*50%/);
+  assert.match(css, /\.battle-top-hud[^}]*top:\s*78px/);
   assert.match(css, /--battle-entity-width:\s*108px/);
   assert.match(css, /\.battle-squad-bar \.team-member-preview/);
 });
@@ -1752,6 +1769,7 @@ test("recruits a rare police officer through the task two roadside cinematic", a
   assert.match(source, /id: "police"[\s\S]*?name: "警察"[\s\S]*?weapon: "glock17"/);
   assert.match(source, /id: "police"[\s\S]*?rarity: "rare"[\s\S]*?trait: "无"[\s\S]*?faction: "警察"/);
   assert.match(source, /id: "police"[\s\S]*?hp: 70[\s\S]*?damage: weaponDamage\("glock17"\)/);
+  assert.match(source, /id: "police"[\s\S]*?damage: weaponDamage\("glock17"\) \* \.75/);
   assert.match(source, /id: "police"[\s\S]*?hpPerLevel: 3[\s\S]*?damagePerLevel: 2/);
   assert.match(source, /id: "police"[\s\S]*?speed: "中等"[\s\S]*?courageCost: 20/);
   assert.match(source, /const EXPLORATION_TASK2_NORMAL_ZOMBIE_COUNT = 5/);
@@ -1764,6 +1782,8 @@ test("recruits a rare police officer through the task two roadside cinematic", a
   assert.match(source, /2: \{[\s\S]*?reward: "police"[\s\S]*?rewardCoins: EXPLORATION_TASK2_COINS[\s\S]*?rewardExperience: EXPLORATION_TASK2_EXPERIENCE/);
   assert.match(source, /explorationBattleTaskConfig\(battle\.taskOrder\)\.finite/);
   assert.match(source, /taskConfig\.reward === "police"[\s\S]*setOwnedMemberIds[\s\S]*"police"/);
+  assert.match(source, /const recruitDelay = Math\.max\(240, latestCorpseRemoval - performance\.now\(\)\)/);
+  assert.match(source, /changeScreen\("explorationRecruit"\);[\s\S]*}, recruitDelay\)/);
   assert.match(source, /setExplorationCoins\(\(coins\) => coins \+ taskConfig\.rewardCoins\)/);
   assert.match(source, /setExplorationExperience\(\(experience\) => experience \+ taskConfig\.rewardExperience\)/);
   assert.match(source, /recordExplorationDailyEarnings\(taskConfig\.rewardCoins, taskConfig\.rewardExperience\)/);

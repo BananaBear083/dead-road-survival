@@ -46,8 +46,9 @@ type ExplorationMemberRarity = "common" | "rare" | "epic" | "legendary";
 type ExplorationMemberSpeed = "慢" | "中等" | "快";
 type ExplorationVehicleKind = "van" | "truck" | "bus";
 type ExplorationBattleAction = "guard" | "walk" | "attack" | "reload" | "kick" | "throw";
-type ExplorationBattleUnit = { id: string; memberId: string; label: string; level: number; hp: number; maxHp: number; damage: number; speedFactor: number; x: number; y: number; cooldown: number; ammo: number; reloadRemaining: number; attacksPerformed: number; skillCooldown: number; actionRemaining: number; action: ExplorationBattleAction };
+type ExplorationBattleUnit = { id: string; memberId: string; label: string; level: number; hp: number; maxHp: number; damage: number; speedFactor: number; x: number; y: number; cooldown: number; ammo: number; reloadRemaining: number; attacksPerformed: number; skillCooldown: number; actionRemaining: number; action: ExplorationBattleAction; shotTarget: { x: number; y: number } | null; shotSerial: number };
 type ExplorationBattleZombie = { id: number; kind: ZombieKind; hp: number; maxHp: number; x: number; y: number; cooldown: number; damage: number; speed: number; action: "guard" | "walk" | "attack"; wounds: Wound[]; missingLimbs: ZombieLimb[]; legDamage: number; knockedDownRemaining: number };
+type ExplorationBattleCorpse = { id: number; kind: ZombieKind; x: number; y: number; wounds: Wound[]; missingLimbs: ZombieLimb[]; diedAt: number; removeAt: number };
 type ExplorationBattleKnife = { id: number; fromX: number; fromY: number; toX: number; toY: number; life: number };
 type ExplorationBattlePendingKick = { id: number; targetId: number; impactAt: number };
 type ExplorationAirstrikeEffect = { id: number; x: number; impactAt: number; until: number; impacted: boolean };
@@ -61,6 +62,7 @@ type ExplorationBattleState = {
   zombiesAlerted: boolean;
   units: ExplorationBattleUnit[];
   zombies: ExplorationBattleZombie[];
+  corpses: ExplorationBattleCorpse[];
   knives: ExplorationBattleKnife[];
   pendingKicks: ExplorationBattlePendingKick[];
   nextZombieId: number;
@@ -973,7 +975,7 @@ const EXPLORATION_MEMBERS: ExplorationMemberDefinition[] = [
     trait: "无",
     faction: "警察",
     hp: 70,
-    damage: weaponDamage("glock17"),
+    damage: weaponDamage("glock17") * .75,
     hpPerLevel: 3,
     damagePerLevel: 2,
     speed: "中等",
@@ -1143,6 +1145,7 @@ function freshExplorationBattle(vehicleHp: number, taskOrder: number, rewardElig
     zombiesAlerted: false,
     units: [],
     zombies,
+    corpses: [],
     knives: [],
     pendingKicks: [],
     nextZombieId: zombies.length + 1,
@@ -9530,6 +9533,8 @@ export function DeadRoadGame() {
           skillCooldown: member.combatSkills?.thrownKnifeInterval ?? 0,
           actionRemaining: 0,
           action: "guard",
+          shotTarget: null,
+          shotSerial: 0,
         }],
       };
     });
@@ -9582,6 +9587,7 @@ export function DeadRoadGame() {
       setExplorationSupportClock(performance.now());
       setExplorationBattle((battle) => {
         if (battle.failed) return battle;
+        const supportNow = performance.now();
         let units = battle.units.map((unit): ExplorationBattleUnit => {
           const member = EXPLORATION_MEMBERS.find((candidate) => candidate.id === unit.memberId);
           const reloadRemaining = Math.max(0, unit.reloadRemaining - .25);
@@ -9594,6 +9600,7 @@ export function DeadRoadGame() {
             reloadRemaining,
             ammo: unit.reloadRemaining > 0 && reloadRemaining === 0 && member ? WEAPONS[member.weapon].magazine : unit.ammo,
             action: reloadRemaining > 0 ? "reload" : actionRemaining > 0 ? unit.action : "guard",
+            shotTarget: null,
           };
         });
         let zombies = battle.zombies.map((zombie): ExplorationBattleZombie => ({
@@ -9602,6 +9609,7 @@ export function DeadRoadGame() {
           knockedDownRemaining: Math.max(0, zombie.knockedDownRemaining - .25),
           action: "guard",
         }));
+        let corpses = battle.corpses.filter((corpse) => supportNow < corpse.removeAt);
         const zombieHpBeforeCombat = new Map(zombies.map((zombie) => [zombie.id, zombie.hp]));
         let knives = battle.knives.map((knife) => ({ ...knife, life: knife.life - .25 })).filter((knife) => knife.life > 0);
         let nextKnifeId = battle.nextKnifeId;
@@ -9611,7 +9619,6 @@ export function DeadRoadGame() {
         let armoredSupportNextShotAt = battle.armoredSupportNextShotAt;
         let armoredSupportAmmo = battle.armoredSupportAmmo;
         let armoredSupportReloadUntil = battle.armoredSupportReloadUntil;
-        const supportNow = performance.now();
         let airstrikeEffects = battle.airstrikeEffects.filter((effect) => effect.until > supportNow);
         const impactingAirstrikes = airstrikeEffects.filter((effect) => !effect.impacted && effect.impactAt <= supportNow);
         if (impactingAirstrikes.length > 0) {
@@ -9752,6 +9759,10 @@ export function DeadRoadGame() {
                 sound.kick();
               }
               if (target.legDamage >= target.maxHp * .22) target.knockedDownRemaining = Math.max(target.knockedDownRemaining, 3);
+              if (!MELEE_WEAPONS.has(member.weapon)) {
+                unit.shotTarget = { x: target.x, y: target.y };
+                unit.shotSerial += 1;
+              }
             }
             unit.cooldown = weapon.fireRate / 1000 * (combatSkills?.attackIntervalFactor ?? 1);
             unit.action = performedKick ? "kick" : "attack";
@@ -9765,7 +9776,20 @@ export function DeadRoadGame() {
         const zombieWasHit = zombies.some((zombie) => zombie.hp < (zombieHpBeforeCombat.get(zombie.id) ?? zombie.hp));
         const zombiesAlerted = battle.zombiesAlerted || zombieWasHit;
         const hadZombies = zombies.length > 0;
-        const killedThisTick = zombies.filter((zombie) => zombie.hp <= 0).length;
+        const killedZombies = zombies.filter((zombie) => zombie.hp <= 0);
+        const killedThisTick = killedZombies.length;
+        if (killedZombies.length > 0) {
+          corpses = [...corpses, ...killedZombies.map((zombie): ExplorationBattleCorpse => ({
+            id: zombie.id,
+            kind: zombie.kind,
+            x: zombie.x,
+            y: zombie.y,
+            wounds: zombie.wounds,
+            missingLimbs: zombie.missingLimbs,
+            diedAt: supportNow,
+            removeAt: supportNow + ZOMBIE_CORPSE_MS,
+          }))].slice(-80);
+        }
         zombies = zombies.filter((zombie) => zombie.hp > 0);
         const completed = explorationBattleTaskConfig(battle.taskOrder).finite && hadZombies && zombies.length === 0;
 
@@ -9804,11 +9828,22 @@ export function DeadRoadGame() {
         });
         units = units.filter((unit) => unit.hp > 0);
         vehicleHp = Math.max(0, vehicleHp);
-        return { ...battle, zombiesAlerted, units, zombies, knives, pendingKicks, airstrikeEffects, armySupportNextShotAt, armoredSupportNextShotAt, armoredSupportAmmo, armoredSupportReloadUntil, nextKnifeId, nextKickId, kills: battle.kills + killedThisTick, vehicleHp, completed, failed: !completed && vehicleHp <= 0 };
+        return { ...battle, zombiesAlerted, units, zombies, corpses, knives, pendingKicks, airstrikeEffects, armySupportNextShotAt, armoredSupportNextShotAt, armoredSupportAmmo, armoredSupportReloadUntil, nextKnifeId, nextKickId, kills: battle.kills + killedThisTick, vehicleHp, completed, failed: !completed && vehicleHp <= 0 };
       });
     }, 250);
     return () => window.clearInterval(combatTimer);
   }, [explorationBattle.completed, explorationBattle.failed, screen]);
+
+  useEffect(() => {
+    if (screen !== "explorationBattle" || (!explorationBattle.completed && !explorationBattle.failed) || explorationBattle.corpses.length === 0) return;
+    const nextRemoval = Math.min(...explorationBattle.corpses.map((corpse) => corpse.removeAt));
+    const timer = window.setTimeout(() => {
+      const now = performance.now();
+      setExplorationSupportClock(now);
+      setExplorationBattle((battle) => ({ ...battle, corpses: battle.corpses.filter((corpse) => now < corpse.removeAt) }));
+    }, Math.max(0, nextRemoval - performance.now()));
+    return () => window.clearTimeout(timer);
+  }, [explorationBattle.completed, explorationBattle.corpses, explorationBattle.failed, screen]);
 
   useEffect(() => {
     if (screen !== "explorationBattle" || explorationBattle.failed || explorationBattle.completed || explorationBattle.pendingKicks.length === 0) return;
@@ -9883,12 +9918,15 @@ export function DeadRoadGame() {
     const taskConfig = explorationBattleTaskConfig(explorationBattle.taskOrder);
     if (screen !== "explorationBattle" || !explorationBattle.completed || !explorationBattle.rewardEligible || taskConfig.reward !== "police") return;
     // 任务二的落单警察事件只在首次通关时播放，重复通关直接停留在普通结算界面。
+    // 先让最终击杀的尸体完整保留十秒，再衔接公路招募剧情。
+    const latestCorpseRemoval = explorationBattle.corpses.reduce((latest, corpse) => Math.max(latest, corpse.removeAt), performance.now());
+    const recruitDelay = Math.max(240, latestCorpseRemoval - performance.now());
     const timer = window.setTimeout(() => {
       setExplorationRecruitPhase("approach");
       changeScreen("explorationRecruit");
-    }, 240);
+    }, recruitDelay);
     return () => window.clearTimeout(timer);
-  }, [changeScreen, explorationBattle.completed, explorationBattle.rewardEligible, explorationBattle.taskOrder, screen]);
+  }, [changeScreen, explorationBattle.completed, explorationBattle.corpses, explorationBattle.rewardEligible, explorationBattle.taskOrder, screen]);
 
   useEffect(() => {
     if (screen !== "explorationRecruit" || explorationRecruitPhase !== "approach") return;
@@ -14546,6 +14584,18 @@ export function DeadRoadGame() {
               )}
               {armoredSupportActive && <div className={`armored-support-vehicle ${armoredSupportRemaining < 700 ? "leaving" : ""}`} aria-label="重机枪装甲车支援"><ExplorationArmoredSupportModel firingStartedAt={armoredSupportFiring ? armoredSupportStartedAt : undefined} reloadUntil={explorationBattle.armoredSupportReloadUntil} />{armoredSupportFiring && <><i key={`armored-tracer-${Math.floor(explorationSupportClock / LEVEL8_HMG_FIRE_MS)}`} className="armored-support-tracer" /><i key={`armored-case-${Math.floor(explorationSupportClock / LEVEL8_HMG_FIRE_MS)}`} className="armored-ejected-casing" /></>}{armoredSupportReloading && <i className="armored-dropped-ammo-box" />}</div>}
               {explorationBattle.airstrikeEffects.map((effect) => <ExplorationAirstrikeEffectView key={effect.id} effect={effect} />)}
+              <svg className="battle-unit-bullet-tracers" viewBox="0 0 100 60" preserveAspectRatio="none" aria-hidden="true">
+                {explorationBattle.units.map((unit) => {
+                  if (!unit.shotTarget) return null;
+                  const member = EXPLORATION_MEMBERS.find((candidate) => candidate.id === unit.memberId);
+                  if (!member || MELEE_WEAPONS.has(member.weapon)) return null;
+                  const tracerCount = Math.min(5, WEAPONS[member.weapon].pellets ?? 1);
+                  return <g key={`${unit.id}-${unit.shotSerial}`}>{Array.from({ length: tracerCount }, (_, index) => {
+                    const spreadOffset = (index - (tracerCount - 1) / 2) * .42;
+                    return <line key={index} className="battle-unit-bullet-tracer" x1={unit.x + 1.5} y1={60 - unit.y} x2={unit.shotTarget!.x} y2={60 - unit.shotTarget!.y + spreadOffset} />;
+                  })}</g>;
+                })}
+              </svg>
               {explorationBattle.units.map((unit) => {
                 const member = EXPLORATION_MEMBERS.find((candidate) => candidate.id === unit.memberId) ?? EXPLORATION_MEMBERS[0];
                 return (
@@ -14554,6 +14604,15 @@ export function DeadRoadGame() {
                     {unit.action === "attack" && !MELEE_WEAPONS.has(member.weapon) && <span className="battle-ejected-casing" />}
                     {unit.action === "reload" && WEAPON_HOLD[member.weapon].reloadKind === "mag" && <span className="battle-dropped-magazine" />}
                     <i className="battle-entity-hp"><b style={{ width: `${unit.hp / unit.maxHp * 100}%` }} /></i>
+                  </div>
+                );
+              })}
+              {explorationBattle.corpses.map((corpse) => {
+                const large = isLargeExplorationZombie(corpse.kind);
+                const fade = Math.max(0, Math.min(1, (corpse.removeAt - explorationSupportClock) / 2000));
+                return (
+                  <div key={`corpse-${corpse.id}-${corpse.diedAt}`} className="battle-enemy battle-enemy-shared-model knocked-down battle-corpse" style={{ left: `${corpse.x}%`, bottom: `${corpse.y}%`, zIndex: 38 + Math.round(60 - corpse.y), opacity: fade }} aria-label="倒地僵尸尸体">
+                    <ZombieKindPreview kind={corpse.kind} width={184} height={108} className="battle-zombie-shared-preview" fillHeight={!large} hpRatio={0} wounds={corpse.wounds} missingLimbs={corpse.missingLimbs} knockedDown />
                   </div>
                 );
               })}
