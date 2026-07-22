@@ -297,7 +297,7 @@ test("range shop configures batch zombie spawns per kind", async () => {
   assert.match(source, /g\.rangeSpawnQueue = queue;\s*g\.rangeBatchTotal = queue\.length;\s*g\.zombies = \[\];\s*g\.corpses = \[\];\s*g\.spits = \[\];/);
   assert.match(source, /const resumeRangeEndless = useCallback/);
   // 品种预览组件与服装缓存
-  assert.match(source, /function ZombieKindPreview\(\{ kind, width = 150, height = 200, className = "spawn-preview" \}: \{ kind: ZombieKind; width\?: number; height\?: number; className\?: string \}\)/);
+  assert.match(source, /function ZombieKindPreview\(\{ kind, width = 150, height = 200, className = "spawn-preview"/);
   assert.match(source, /const PREVIEW_OUTFITS = new Map<ZombieKind, ZombieOutfit>\(\)/);
 });
 
@@ -1349,7 +1349,7 @@ test("adds a ticket-paid player-aimed lottery road battle with weighted rarity r
   assert.match(source, /鼠标瞄准 · 按住左键全自动射击 · MG42/);
   assert.match(source, /className=\{`lottery-zombie/);
   assert.match(source, /data-lottery-zombie=\{index\}/);
-  assert.match(source, /const \[lotteryDead, setLotteryDead\] = useState<number\[\]>\(\[\]\)/);
+  assert.match(source, /const lotteryDead = lotteryZombieDamage\.flatMap/);
   assert.match(source, /const updateLotteryAim = useCallback/);
   assert.match(source, /const fireLottery = useCallback/);
   assert.match(source, /closest\("\[data-lottery-zombie\]"\)/);
@@ -1447,4 +1447,57 @@ test("adds the exploration exchange shop, vehicle upgrades and courage auto-batt
   assert.match(css, /\.battle-vehicle-position[^}]*bottom: 10%[^}]*width: 280px/);
   assert.match(css, /\.battle-courage/);
   assert.match(css, /\.battle-squad-bar/);
+});
+
+test("adds the exploration six-slot team roster with shared character and weapon previews", async () => {
+  const source = await readFile(new URL("../app/DeadRoadGame.tsx", import.meta.url), "utf8");
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+
+  assert.match(source, /type Screen = [^;]+"explorationTeam"/);
+  assert.match(source, /type ExplorationTeamTab = "personnel" \| "consumables"/);
+  assert.match(source, /const EXPLORATION_TEAM_SIZE = 6/);
+  assert.match(source, /const EXPLORATION_MAX_VEHICLE_LEVEL = 15/);
+  assert.match(source, /id: "civilian"[\s\S]*name: "平民"[\s\S]*weapon: "baseballbat"[\s\S]*rarity: "common"[\s\S]*faction: "民间武装"[\s\S]*hp: 80[\s\S]*damage: 15[\s\S]*speed: "中等"/);
+  assert.match(source, /id: "farmer"[\s\S]*name: "农民"[\s\S]*weapon: "sawedoff"[\s\S]*rarity: "common"[\s\S]*faction: "民间武装"[\s\S]*hp: 70[\s\S]*damage: WEAPONS\.sawedoff\.damage[\s\S]*speed: "慢"/);
+  assert.match(source, /const \[explorationTeamTab, setExplorationTeamTab\] = useState<ExplorationTeamTab>\("personnel"\)/);
+  assert.match(source, /const \[deployedMemberIds, setDeployedMemberIds\] = useState<string\[\]>\(\["civilian", "farmer"\]\)/);
+  assert.match(source, /Math\.min\(15, explorationVehicleLevel\)/);
+  assert.match(source, /speedFactor: member\.speedFactor/);
+  assert.match(source, /setExplorationExperience\(\(experience\) => experience - upgradeCost\)/);
+  assert.match(source, /recruitedMemberIds\.includes\(member\.id\)/);
+  assert.match(source, /deployedMemberIds\.map\(\(memberId\) =>/);
+  assert.match(source, /target\.hp -= pelletDamage/);
+  assert.match(source, /unit\.cooldown = weapon\.fireRate \/ 1000/);
+  assert.match(source, /unit\.reloadRemaining = weapon\.reload \/ 1000/);
+  assert.match(source, /sound\.gunshot\(member\.weapon/);
+  assert.match(source, /const pellets = weapon\.pellets \?\? 1/);
+  assert.match(source, /const pelletHitChance = weapon\.pellets/);
+  assert.match(source, /if \(Math\.random\(\) > pelletHitChance\) continue/);
+  assert.match(source, /target\.legDamage >= target\.maxHp \* \.22/);
+  assert.match(source, /target\.knockedDownRemaining = Math\.max/);
+  assert.match(source, /battle-unit-shared-model[\s\S]*<ExplorationMemberPreview member=\{member\}/);
+  assert.match(source, /battle-enemy-shared-model[\s\S]*<ZombieKindPreview kind=\{zombie\.kind\}/);
+  assert.match(source, /function ExplorationMemberPreview/);
+  assert.match(source, /standingLegPose/);
+  assert.match(source, /gaitLegPose/);
+  assert.match(source, /drawWeaponModel\(ctx, member\.weapon/);
+  assert.match(source, /computeReloadVisual\(member\.weapon/);
+  assert.match(source, /drawReloadProps\(ctx, member\.weapon/);
+  assert.match(source, /lottery-zombie-shared-preview/);
+  assert.match(source, /screen === "explorationTeam"/);
+  assert.match(source, /人员上阵/);
+  assert.match(source, /消耗品上阵/);
+  assert.match(source, /当前上阵人员/);
+  assert.match(source, /未上阵与待购买人员/);
+  assert.match(source, /等级不能超过车辆等级/);
+  assert.match(source, /levelSkills:[\s\S]*level: 5[\s\S]*level: 10[\s\S]*level: 15/);
+
+  assert.match(css, /\.exploration-team-panel/);
+  assert.match(css, /\.team-deployed-grid/);
+  assert.match(css, /repeat\(6, minmax\(0, 1fr\)\)/);
+  assert.match(css, /\.team-member-card\.rarity-common/);
+  assert.match(css, /\.team-member-card\.rarity-rare/);
+  assert.match(css, /\.team-member-card\.rarity-epic/);
+  assert.match(css, /\.team-member-card\.rarity-legendary/);
+  assert.match(css, /\.team-member-preview/);
 });
