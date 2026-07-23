@@ -31,11 +31,12 @@ const KICK_KNOCKBACK_WORLD_X = 82;
 const KICK_KNOCKBACK_WORLD_Y = 52;
 
 type MajorMode = "classic" | "exploration";
-type Screen = "menu" | "exploration" | "playing" | "shop" | "loadout" | "gameover" | "codex" | "levels" | "levelComplete" | "lottery" | "explorationShop" | "vehicleGarage" | "explorationTeam" | "explorationTasks" | "explorationBattle" | "explorationRecruit";
+type Screen = "menu" | "exploration" | "playing" | "shop" | "loadout" | "gameover" | "codex" | "levels" | "levelComplete" | "lottery" | "explorationShop" | "vehicleGarage" | "explorationTeam" | "explorationTasks" | "explorationBattle" | "explorationTest" | "explorationRecruit";
 type GameMode = "survival" | "range" | "level";
 type ShopTab = "weapons" | "armor" | "supplies" | "items" | "partners" | "zombies";
 type CodexCategory = "regular" | "special";
 type LotteryRarity = "common" | "rare" | "epic" | "legendary";
+type ExplorationLotteryReward = { memberId: string | null; rarity: LotteryRarity };
 type LotteryPhase = "idle" | "firing" | "flash" | "reveal";
 type ExplorationTeamTab = "personnel" | "consumables";
 type ExplorationTaskSystemTab = "daily" | "achievements";
@@ -46,8 +47,8 @@ type ExplorationMemberRarity = "common" | "rare" | "epic" | "legendary";
 type ExplorationMemberSpeed = "慢" | "中等" | "快";
 type ExplorationVehicleKind = "van" | "truck" | "bus";
 type ExplorationBattleAction = "guard" | "walk" | "attack" | "reload" | "kick" | "throw";
-type ExplorationBattleUnit = { id: string; memberId: string; label: string; level: number; hp: number; maxHp: number; damage: number; speedFactor: number; x: number; y: number; cooldown: number; ammo: number; reloadRemaining: number; reloadStartedAt: number; attacksPerformed: number; skillCooldown: number; actionRemaining: number; actionStartedAt: number; action: ExplorationBattleAction; shotTarget: { x: number; y: number } | null; shotSerial: number };
-type ExplorationBattleZombie = { id: number; kind: ZombieKind; hp: number; maxHp: number; x: number; y: number; cooldown: number; cooldownUntil: number; damage: number; speed: number; action: "guard" | "walk" | "attack"; attackWindupRemaining: number; attackAnimationRemaining: number; attackStartedAt: number; attackImpactAt: number; attackAnimationUntil: number; attackTargetUnitId: string | null; wounds: Wound[]; missingLimbs: ZombieLimb[]; legDamage: number; knockedDownRemaining: number; shieldHp: number; shieldIntact: boolean; shieldDents: Array<{ x: number; y: number }>; ignited: boolean };
+type ExplorationBattleUnit = { id: string; memberId: string; label: string; level: number; hp: number; maxHp: number; damage: number; speedFactor: number; x: number; y: number; cooldown: number; ammo: number; reloadRemaining: number; reloadStartedAt: number; attacksPerformed: number; skillCooldown: number; abilityCooldown: number; activeWeapon: WeaponKey; openingAttackPending: boolean; openingWeaponLocked: boolean; shieldHp: number; maxShieldHp: number; actionRemaining: number; actionStartedAt: number; action: ExplorationBattleAction; shotTarget: { x: number; y: number } | null; shotSerial: number };
+type ExplorationBattleZombie = { id: number; kind: ZombieKind; hp: number; maxHp: number; x: number; y: number; cooldown: number; cooldownUntil: number; damage: number; speed: number; action: "guard" | "walk" | "attack"; attackWindupRemaining: number; attackAnimationRemaining: number; attackStartedAt: number; attackImpactAt: number; attackAnimationUntil: number; attackTargetUnitId: string | null; wounds: Wound[]; missingLimbs: ZombieLimb[]; legDamage: number; knockedDownRemaining: number; stunnedRemaining: number; shieldHp: number; shieldIntact: boolean; shieldDents: Array<{ x: number; y: number }>; ignited: boolean };
 type ExplorationBattleCorpse = { id: number; kind: ZombieKind; x: number; y: number; wounds: Wound[]; missingLimbs: ZombieLimb[]; shieldIntact: boolean; shieldDents: Array<{ x: number; y: number }>; diedAt: number; removeAt: number };
 type ExplorationBattleGroundProp = { id: string; kind: "casing" | "mag" | "shield"; weapon?: WeaponKey; x: number; y: number; rotation: number; createdAt: number; removeAt: number };
 type ExplorationBattleBloodEffect = { id: string; x: number; y: number; angle: number; createdAt: number; removeAt: number; tint?: "blood" | "vomit"; droplets?: Array<{ x: number; y: number; size: number; duration: number }>; stainDrops?: Array<{ x: number; y: number; rx: number }> };
@@ -55,11 +56,14 @@ type ExplorationBattleDetachedLimb = { id: string; kind: "arm" | "leg"; x: numbe
 type ExplorationBattleMetalShard = { id: string; x: number; y: number; vx: number; vy: number; rotation: number; angularVelocity: number; points: Array<[number, number]>; color: string; createdAt: number; removeAt: number };
 type ExplorationBattleKnife = { id: number; fromX: number; fromY: number; toX: number; toY: number; life: number };
 type ExplorationBattleSpit = { id: string; fromX: number; fromY: number; toX: number; toY: number; createdAt: number; launchAt: number; impactAt: number; targetUnitId: string; damage: number };
-type ExplorationBattlePendingMeleeHit = { id: string; targetId: number; weapon: WeaponKey; damage: number; impactAt: number };
+type ExplorationBattlePendingMeleeHit = { id: string; unitId: string; targetId: number; weapon: WeaponKey; damage: number; impactAt: number; openingAttack?: boolean; stunChance?: number; stunSeconds?: number };
 type ExplorationBattlePendingKick = { id: number; targetId: number; impactAt: number };
 type ExplorationAirstrikeEffect = { id: number; x: number; impactAt: number; until: number; impacted: boolean };
+type ExplorationMedkit = { id: string; x: number; y: number; createdAt: number; nextHealAt: number; removeAt: number };
+type ExplorationMemberAbilityEffect = { id: string; kind: "molotov" | "impact" | "selfDestruct" | "taser"; fromX: number; fromY: number; x: number; y: number; createdAt: number; removeAt: number };
 type ExplorationZombieDamageState = { hp: number; wounds: Wound[]; missingLimbs: ZombieLimb[]; legDamage: number; knockedDownRemaining: number };
 type ExplorationBattleState = {
+  testMode: boolean;
   taskOrder: number;
   rewardEligible: boolean;
   courage: number;
@@ -89,6 +93,8 @@ type ExplorationBattleState = {
   armoredSupportAmmo: number;
   armoredSupportReloadUntil: number;
   airstrikeEffects: ExplorationAirstrikeEffect[];
+  medkits: ExplorationMedkit[];
+  memberAbilityEffects: ExplorationMemberAbilityEffect[];
   failed: boolean;
   completed: boolean;
 };
@@ -113,6 +119,28 @@ type ExplorationMemberDefinition = {
   courageCost: number;
   purchaseCost: number;
   levelSkills: { level: 5 | 10 | 15; name: string }[];
+  lotteryOnly?: boolean;
+  displayWeaponName?: string;
+  battleProfile?: {
+    openingWeapon?: WeaponKey;
+    openingDamage?: number;
+    keepOpeningWeaponOnKillAtLevel?: number;
+    stunChance?: number;
+    stunSeconds?: number;
+    shieldHp?: number;
+    damageReduction?: number;
+    spitImmune?: boolean;
+    buttstrokeDamage?: number;
+    molotovInterval?: number;
+    molotovHpThreshold?: number;
+    medkitInterval?: number;
+    impactGrenadeInterval?: number;
+    selfDestruct?: boolean;
+    dualFire?: boolean;
+    igniteShots?: boolean;
+    attackIntervalFactor?: number;
+    attackIntervalSeconds?: number;
+  };
   combatSkills?: {
     attackIntervalFactor: number;
     kickEvery: number;
@@ -962,6 +990,11 @@ const EXPLORATION_RARITY_LABELS: Record<ExplorationMemberRarity, string> = {
   epic: "史诗",
   legendary: "传奇",
 };
+const NO_EXPLORATION_LEVEL_SKILLS: ExplorationMemberDefinition["levelSkills"] = [
+  { level: 5, name: "无" },
+  { level: 10, name: "无" },
+  { level: 15, name: "无" },
+];
 const EXPLORATION_MEMBERS: ExplorationMemberDefinition[] = [
   {
     id: "civilian",
@@ -1036,7 +1069,165 @@ const EXPLORATION_MEMBERS: ExplorationMemberDefinition[] = [
     ],
     combatSkills: { attackIntervalFactor: .72, kickEvery: 3, comboChance: .3, thrownKnifeInterval: 10, thrownKnifeDamage: 100 },
   },
+  {
+    id: "lumberjack", name: "伐木工", weapon: "fireaxe", displayWeaponName: "伐木斧", rarity: "rare", lotteryOnly: true,
+    trait: "无", faction: "民间武装", hp: 150, damage: 15, hpPerLevel: 4, damagePerLevel: 1,
+    speed: "慢", speedFactor: .82, courageCost: 20, purchaseCost: 1200, levelSkills: NO_EXPLORATION_LEVEL_SKILLS,
+  },
+  {
+    id: "mechanic", name: "机械师", weapon: "crowbar", rarity: "rare", lotteryOnly: true,
+    trait: "出战时持大锤完成首次攻击，随后改用撬棍", faction: "民间武装", hp: 70, damage: weaponDamage("crowbar"),
+    hpPerLevel: 3, damagePerLevel: 2, speed: "中等", speedFactor: 1, courageCost: 15, purchaseCost: 1200,
+    levelSkills: [{ level: 5, name: "无" }, { level: 10, name: "大锤首击击杀时继续使用大锤" }, { level: 15, name: "无" }],
+    battleProfile: { openingWeapon: "hammer", openingDamage: 80, keepOpeningWeaponOnKillAtLevel: 10 },
+  },
+  {
+    id: "engineer", name: "工程师", weapon: "hammer", rarity: "rare", lotteryOnly: true,
+    trait: "无", faction: "民间武装", hp: 70, damage: 25, hpPerLevel: 3, damagePerLevel: 2,
+    speed: "中等", speedFactor: 1, courageCost: 15, purchaseCost: 1200, levelSkills: NO_EXPLORATION_LEVEL_SKILLS,
+  },
+  {
+    id: "combatPolice", name: "格斗警察", weapon: "crowbar", displayWeaponName: "警棍", rarity: "rare", lotteryOnly: true,
+    trait: "无", faction: "警察", hp: 80, damage: 20, hpPerLevel: 3, damagePerLevel: 2,
+    speed: "中等", speedFactor: 1, courageCost: 15, purchaseCost: 1200, levelSkills: NO_EXPLORATION_LEVEL_SKILLS,
+  },
+  {
+    id: "sheriff", name: "警长", weapon: "rem870", rarity: "epic", lotteryOnly: true,
+    trait: "遭到僵尸近战攻击时使用枪托反击", faction: "警察", hp: 100, damage: weaponDamage("rem870"),
+    hpPerLevel: 3, damagePerLevel: 2, speed: "中等", speedFactor: 1, courageCost: 25, purchaseCost: 2600,
+    levelSkills: NO_EXPLORATION_LEVEL_SKILLS, battleProfile: { buttstrokeDamage: 20 },
+  },
+  {
+    id: "riotShieldPolice", name: "盾牌防爆警察", weapon: "crowbar", displayWeaponName: "泰瑟枪、盾牌与警棍", rarity: "epic", lotteryOnly: true,
+    trait: "100 HP 盾牌；首次泰瑟攻击眩晕 3 秒，随后使用警棍；减伤 25%", faction: "武装警察",
+    hp: 100, damage: 20, hpPerLevel: 4, damagePerLevel: 1, speed: "慢", speedFactor: .82, courageCost: 25,
+    purchaseCost: 2600, levelSkills: NO_EXPLORATION_LEVEL_SKILLS,
+    battleProfile: { openingDamage: 20, stunChance: 1, stunSeconds: 3, shieldHp: 100, damageReduction: .25 },
+  },
+  {
+    id: "stunBatonPolice", name: "电棍警察", weapon: "crowbar", displayWeaponName: "电棍", rarity: "epic", lotteryOnly: true,
+    trait: "攻击时有 50% 概率眩晕敌人 3 秒", faction: "武装警察", hp: 70, damage: 20,
+    hpPerLevel: 3, damagePerLevel: 2, speed: "中等", speedFactor: 1, courageCost: 20, purchaseCost: 2600,
+    levelSkills: NO_EXPLORATION_LEVEL_SKILLS, battleProfile: { stunChance: .5, stunSeconds: 3 },
+  },
+  {
+    id: "swat", name: "特警", weapon: "mp5k", rarity: "epic", lotteryOnly: true,
+    trait: "高射速", faction: "武装警察", hp: 80, damage: weaponDamage("mp5k"), hpPerLevel: 3, damagePerLevel: 2,
+    speed: "中等", speedFactor: 1, courageCost: 20, purchaseCost: 2600, levelSkills: NO_EXPLORATION_LEVEL_SKILLS,
+    battleProfile: { attackIntervalFactor: .72 },
+  },
+  {
+    id: "firefighter", name: "消防员", weapon: "fireaxe", rarity: "rare", lotteryOnly: true,
+    trait: "免疫喷吐攻击", faction: "紧急救助", hp: 80, damage: weaponDamage("fireaxe"), hpPerLevel: 3, damagePerLevel: 2,
+    speed: "中等", speedFactor: 1, courageCost: 20, purchaseCost: 1200,
+    levelSkills: [{ level: 5, name: "无" }, { level: 10, name: "生命不高于 40 时，向尸群最密集处投掷燃烧瓶" }, { level: 15, name: "无" }],
+    battleProfile: { spitImmune: true, molotovHpThreshold: 40 },
+  },
+  {
+    id: "medic", name: "医护人员", weapon: "m1911", rarity: "epic", lotteryOnly: true,
+    trait: "免疫喷吐；每 15 秒放置持续 10 秒的医疗箱，附近队友每秒恢复 10 HP", faction: "紧急救助",
+    hp: 60, damage: weaponDamage("m1911"), hpPerLevel: 3, damagePerLevel: 2, speed: "中等", speedFactor: 1,
+    courageCost: 30, purchaseCost: 2600, levelSkills: NO_EXPLORATION_LEVEL_SKILLS,
+    battleProfile: { spitImmune: true, medkitInterval: 15 },
+  },
+  {
+    id: "soldier", name: "士兵", weapon: "m16", rarity: "epic", lotteryOnly: true,
+    trait: "减伤 25%", faction: "军队", hp: 100, damage: weaponDamage("m16"), hpPerLevel: 3, damagePerLevel: 2,
+    speed: "中等", speedFactor: 1, courageCost: 25, purchaseCost: 2600, levelSkills: NO_EXPLORATION_LEVEL_SKILLS,
+    battleProfile: { damageReduction: .25 },
+  },
+  {
+    id: "sniper", name: "狙击手", weapon: "awm", rarity: "epic", lotteryOnly: true,
+    trait: "减伤 25%", faction: "军队", hp: 70, damage: weaponDamage("awm"), hpPerLevel: 3, damagePerLevel: 2,
+    speed: "中等", speedFactor: 1, courageCost: 30, purchaseCost: 2600, levelSkills: NO_EXPLORATION_LEVEL_SKILLS,
+    battleProfile: { damageReduction: .25 },
+  },
+  {
+    id: "assaultSoldier", name: "冲锋士兵", weapon: "mac11", rarity: "epic", lotteryOnly: true,
+    trait: "减伤 25%", faction: "军队", hp: 100, damage: weaponDamage("mac11"), hpPerLevel: 3, damagePerLevel: 2,
+    speed: "快", speedFactor: 1.24, courageCost: 25, purchaseCost: 2600, levelSkills: NO_EXPLORATION_LEVEL_SKILLS,
+    battleProfile: { damageReduction: .25 },
+  },
+  {
+    id: "outlaw", name: "亡命之徒", weapon: "rem870", rarity: "rare", lotteryOnly: true,
+    trait: "无", faction: "非法人员", hp: 80, damage: weaponDamage("rem870"), hpPerLevel: 3, damagePerLevel: 2,
+    speed: "慢", speedFactor: .82, courageCost: 20, purchaseCost: 1200, levelSkills: NO_EXPLORATION_LEVEL_SKILLS,
+  },
+  {
+    id: "thug", name: "暴徒", weapon: "baseballbat", rarity: "rare", lotteryOnly: true,
+    trait: "每 10 秒向僵尸最密集处投掷一枚燃烧瓶", faction: "非法人员", hp: 80, damage: weaponDamage("baseballbat"),
+    hpPerLevel: 3, damagePerLevel: 2, speed: "中等", speedFactor: 1, courageCost: 20, purchaseCost: 1200,
+    levelSkills: NO_EXPLORATION_LEVEL_SKILLS, battleProfile: { molotovInterval: 10 },
+  },
+  {
+    id: "bandit", name: "强盗", weapon: "m1911", rarity: "rare", lotteryOnly: true,
+    trait: "无", faction: "非法人员", hp: 70, damage: weaponDamage("m1911"), hpPerLevel: 3, damagePerLevel: 2,
+    speed: "中等", speedFactor: 1, courageCost: 20, purchaseCost: 1200, levelSkills: NO_EXPLORATION_LEVEL_SKILLS,
+  },
+  {
+    id: "bomber", name: "中东小伙", weapon: "fists", displayWeaponName: "炸弹背心", rarity: "rare", lotteryOnly: true,
+    trait: "冲向敌人并自爆", faction: "非法人员", hp: 70, damage: ITEMS.frag.damage, hpPerLevel: 0, damagePerLevel: 3,
+    speed: "快", speedFactor: 1.24, courageCost: 15, purchaseCost: 1200, levelSkills: NO_EXPLORATION_LEVEL_SKILLS,
+    battleProfile: { selfDestruct: true },
+  },
+  {
+    id: "rifleman", name: "步枪手", weapon: "scarh", rarity: "legendary", lotteryOnly: true,
+    trait: "子弹灼烧；免疫喷吐；减伤 25%", faction: "特战小组", hp: 100, damage: weaponDamage("scarh"),
+    hpPerLevel: 3, damagePerLevel: 2, speed: "中等", speedFactor: 1, courageCost: 30, purchaseCost: 5200,
+    levelSkills: NO_EXPLORATION_LEVEL_SKILLS, battleProfile: { igniteShots: true, spitImmune: true, damageReduction: .25 },
+  },
+  {
+    id: "flintSniper", name: "燧石66狙击手", weapon: "flint66", rarity: "legendary", lotteryOnly: true,
+    trait: "灼烧敌人；减伤 25%", faction: "特战小组", hp: 70, damage: weaponDamage("flint66"), hpPerLevel: 3,
+    damagePerLevel: 2, speed: "慢", speedFactor: .82, courageCost: 30, purchaseCost: 5200,
+    levelSkills: NO_EXPLORATION_LEVEL_SKILLS, battleProfile: { igniteShots: true, damageReduction: .25 },
+  },
+  {
+    id: "shieldTrooper", name: "盾兵", weapon: "m1911", rarity: "legendary", lotteryOnly: true,
+    trait: "300 HP 金属盾；免疫喷吐；减伤 50%", faction: "特战小组", hp: 100, damage: weaponDamage("m1911"),
+    hpPerLevel: 4, damagePerLevel: 1, speed: "慢", speedFactor: .82, courageCost: 30, purchaseCost: 5200,
+    levelSkills: NO_EXPLORATION_LEVEL_SKILLS, battleProfile: { shieldHp: 300, spitImmune: true, damageReduction: .5 },
+  },
+  {
+    id: "grenadier", name: "投弹兵", weapon: "hammer", displayWeaponName: "狼牙棒", rarity: "epic", lotteryOnly: true,
+    trait: "每 15 秒向最近的僵尸投掷一枚冲击手雷", faction: "联合国部队", hp: 100, damage: 20,
+    hpPerLevel: 3, damagePerLevel: 2, speed: "中等", speedFactor: 1, courageCost: 25, purchaseCost: 2600,
+    levelSkills: NO_EXPLORATION_LEVEL_SKILLS, battleProfile: { impactGrenadeInterval: 15 },
+  },
+  {
+    id: "peacekeeper", name: "维和士兵", weapon: "ak47", rarity: "epic", lotteryOnly: true,
+    trait: "无", faction: "联合国部队", hp: 100, damage: weaponDamage("ak47"), hpPerLevel: 3, damagePerLevel: 2,
+    speed: "中等", speedFactor: 1, courageCost: 25, purchaseCost: 2600, levelSkills: NO_EXPLORATION_LEVEL_SKILLS,
+  },
+  {
+    id: "shotgunSoldier", name: "霰弹枪士兵", weapon: "saiga12", rarity: "epic", lotteryOnly: true,
+    trait: "无", faction: "联合国部队", hp: 100, damage: weaponDamage("saiga12"), hpPerLevel: 3, damagePerLevel: 2,
+    speed: "中等", speedFactor: 1, courageCost: 25, purchaseCost: 2600, levelSkills: NO_EXPLORATION_LEVEL_SKILLS,
+  },
+  {
+    id: "terminator", name: "终结者", weapon: "gatling", rarity: "legendary", lotteryOnly: true,
+    trait: "无", faction: "个人", hp: 120, damage: weaponDamage("gatling"), hpPerLevel: 3, damagePerLevel: 2,
+    speed: "慢", speedFactor: .82, courageCost: 35, purchaseCost: 5200, levelSkills: NO_EXPLORATION_LEVEL_SKILLS,
+  },
+  {
+    id: "warMachine", name: "战争机器", weapon: "m32", rarity: "legendary", lotteryOnly: true,
+    trait: "无", faction: "个人", hp: 100, damage: weaponDamage("m32"), hpPerLevel: 3, damagePerLevel: 2,
+    speed: "慢", speedFactor: .82, courageCost: 40, purchaseCost: 5200, levelSkills: NO_EXPLORATION_LEVEL_SKILLS,
+  },
+  {
+    id: "heavy", name: "重装者", weapon: "hammer", displayWeaponName: "重锤", rarity: "legendary", lotteryOnly: true,
+    trait: "每 3 秒挥出一锤", faction: "个人", hp: 150, damage: 110, hpPerLevel: 3, damagePerLevel: 2,
+    speed: "慢", speedFactor: .82, courageCost: 30, purchaseCost: 5200, levelSkills: NO_EXPLORATION_LEVEL_SKILLS,
+    battleProfile: { attackIntervalSeconds: 3 },
+  },
+  {
+    id: "dualGunner", name: "双枪", weapon: "mac11", displayWeaponName: "双持 MAC-11", rarity: "epic", lotteryOnly: true,
+    trait: "双持", faction: "个人", hp: 70, damage: weaponDamage("mac11") * 2, hpPerLevel: 3, damagePerLevel: 2,
+    speed: "中等", speedFactor: 1, courageCost: 30, purchaseCost: 2600, levelSkills: NO_EXPLORATION_LEVEL_SKILLS,
+    battleProfile: { dualFire: true },
+  },
 ];
+const EXPLORATION_LOTTERY_MEMBERS = EXPLORATION_MEMBERS.filter((member) => member.lotteryOnly);
 /** 临时军队支援同样复用探索人物/生存武器模型，但不进入玩家可培养的人员列表。 */
 const EXPLORATION_SUPPORT_SOLDIER: ExplorationMemberDefinition = {
   id: "supportSoldier",
@@ -1155,7 +1346,7 @@ function moveExplorationEntityToward(entity: { x: number; y: number }, target: {
   entity.y = Math.max(4, Math.min(56, entity.y));
 }
 
-function freshExplorationBattle(vehicleHp: number, taskOrder: number, rewardEligible = false): ExplorationBattleState {
+function freshExplorationBattle(vehicleHp: number, taskOrder: number, rewardEligible = false, testMode = false): ExplorationBattleState {
   const taskConfig = explorationBattleTaskConfig(taskOrder);
   const zombies = taskConfig.openingZombieKinds.map((kind, index): ExplorationBattleZombie => {
     const point = explorationBattleSpawnPoint(index + 1);
@@ -1183,6 +1374,7 @@ function freshExplorationBattle(vehicleHp: number, taskOrder: number, rewardElig
       missingLimbs: [],
       legDamage: 0,
       knockedDownRemaining: 0,
+      stunnedRemaining: 0,
       shieldHp: kind === "shield" ? SHIELD_HP : 0,
       shieldIntact: kind === "shield",
       shieldDents: [],
@@ -1190,6 +1382,7 @@ function freshExplorationBattle(vehicleHp: number, taskOrder: number, rewardElig
     };
   });
   return {
+    testMode,
     taskOrder,
     rewardEligible,
     courage: 0,
@@ -1219,6 +1412,8 @@ function freshExplorationBattle(vehicleHp: number, taskOrder: number, rewardElig
     armoredSupportAmmo: EXPLORATION_ARMORED_SUPPORT_INITIAL_AMMO,
     armoredSupportReloadUntil: 0,
     airstrikeEffects: [],
+    medkits: [],
+    memberAbilityEffects: [],
     failed: false,
     completed: false,
   };
@@ -1315,6 +1510,42 @@ function ExplorationAirstrikeEffectView({ effect }: { effect: ExplorationAirstri
   );
 }
 
+function ExplorationMemberAbilityEffectView({ effect }: { effect: ExplorationMemberAbilityEffect }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    if (effect.kind === "taser") return;
+    const canvas = ref.current;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return;
+    let animationFrame = 0;
+    const numericId = [...effect.id].reduce((hash, character) => (hash * 31 + character.charCodeAt(0)) >>> 0, 0);
+    const draw = (now: number) => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.save();
+      ctx.translate(canvas.width / 2, canvas.height - 68);
+      if (effect.kind === "molotov") drawClassicMolotovFire(ctx, now);
+      else drawBlastEffect(ctx, {
+        id: numericId,
+        x: 0,
+        y: 0,
+        startedAt: effect.createdAt,
+        until: effect.removeAt,
+        radius: effect.kind === "selfDestruct" ? ITEMS.frag.radius : ITEMS.impact.radius,
+        kind: "frag",
+      }, now);
+      ctx.restore();
+      if (now < effect.removeAt) animationFrame = window.requestAnimationFrame(draw);
+    };
+    draw(performance.now());
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [effect]);
+  return (
+    <span className={`battle-member-ability ability-${effect.kind}`} style={{ left: `${effect.x}%`, bottom: `${effect.y}%`, "--ability-from-x": `${effect.fromX - effect.x}vw`, "--ability-from-y": `${effect.fromY - effect.y}vh` } as React.CSSProperties} aria-hidden="true">
+      {effect.kind === "taser" ? <><i /><b /></> : <canvas ref={ref} className="battle-member-classic-effect" width={420} height={300} />}
+    </span>
+  );
+}
+
 const LOTTERY_RARITIES: Record<LotteryRarity, { label: string; chance: number; rank: number }> = {
   common: { label: "普通", chance: 50, rank: 0 },
   rare: { label: "稀有", chance: 30, rank: 1 },
@@ -1342,10 +1573,18 @@ function rollLotteryRarity(roll = Math.random()): LotteryRarity {
   return "legendary";
 }
 
-function highestLotteryRarity(rewards: LotteryRarity[]): LotteryRarity | null {
-  return rewards.reduce<LotteryRarity | null>((highest, rarity) => (
-    highest === null || LOTTERY_RARITIES[rarity].rank > LOTTERY_RARITIES[highest].rank ? rarity : highest
+function highestLotteryRarity(rewards: ExplorationLotteryReward[]): LotteryRarity | null {
+  return rewards.reduce<LotteryRarity | null>((highest, reward) => (
+    highest === null || LOTTERY_RARITIES[reward.rarity].rank > LOTTERY_RARITIES[highest].rank ? reward.rarity : highest
   ), null);
+}
+
+function rollExplorationLotteryMember(roll = Math.random()): ExplorationLotteryReward {
+  const rarity = rollLotteryRarity(roll);
+  if (rarity === "common") return { memberId: null, rarity };
+  const rarityPool = EXPLORATION_LOTTERY_MEMBERS.filter((member) => member.rarity === rarity);
+  const member = rarityPool[Math.floor(Math.random() * rarityPool.length)] ?? EXPLORATION_LOTTERY_MEMBERS[0];
+  return { memberId: member.id, rarity };
 }
 
 function readExplorationClearedTasks(): number[] {
@@ -5846,6 +6085,44 @@ function drawThrowableModel(ctx: CanvasRenderingContext2D, key: "molotov" | "fra
   ctx.restore();
 }
 
+/** 经典/探索共用的十秒燃烧瓶火场，保证火焰、黑烟与热浪视觉完全同源。 */
+function drawClassicMolotovFire(ctx: CanvasRenderingContext2D, now: number) {
+  const flamePulse = .85 + Math.sin(now / 90) * .12;
+  const fireGradient = ctx.createRadialGradient(0, 8, 4, 0, 8, 116);
+  fireGradient.addColorStop(0, "rgba(241,124,37,.72)"); fireGradient.addColorStop(.48, "rgba(197,58,25,.33)"); fireGradient.addColorStop(1, "rgba(94,25,15,0)");
+  ctx.fillStyle = fireGradient; ctx.beginPath(); ctx.ellipse(0, 8, 118 * flamePulse, 54 * flamePulse, 0, 0, Math.PI * 2); ctx.fill();
+  const flameTongue = (baseX: number, baseY: number, height: number, halfWidth: number, lean: number, color: string, alpha: number) => {
+    const tipX = baseX + lean;
+    const tipY = baseY - height;
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(baseX - halfWidth, baseY);
+    ctx.quadraticCurveTo(baseX - halfWidth * .55 + lean * .4, baseY - height * .55, tipX, tipY);
+    ctx.quadraticCurveTo(baseX + halfWidth * .75 + lean * .35, baseY - height * .45, baseX + halfWidth, baseY);
+    ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1;
+  };
+  for (let flame = -84; flame <= 84; flame += 21) {
+    const seed = flame * .37;
+    const baseHeight = 30 + ((flame + Math.floor(now / 70)) % 5) * 6;
+    flameTongue(flame, 18, baseHeight, 11, Math.sin(now / 210 + seed) * 9, "#d94f1e", .92);
+    flameTongue(flame + 1, 16, baseHeight * .68, 7.5, Math.sin(now / 130 + seed * 1.7) * 5, "#f5a028", .9);
+    flameTongue(flame + 1.5, 14, baseHeight * .4, 4, Math.sin(now / 61 + seed * 2.3) * 2.5, "#ffe27a", .95);
+  }
+  for (let smoke = 0; smoke < 6; smoke++) {
+    const risePhase = ((now / 2100 + smoke * .19) % 1);
+    const sway = Math.sin(now / 480 + smoke * 1.9) * (6 + risePhase * 12);
+    const radius = (8 + risePhase * 17) * (1 + Math.sin(now / 350 + smoke * 2.4) * .08);
+    softPuff(ctx, (smoke - 2.5) * 14 + sway, -26 - risePhase * 74, radius, "34,30,27", (1 - risePhase) * .34 * Math.min(1, risePhase * 6 + .25));
+  }
+  ctx.lineWidth = 2.6;
+  for (let heat = 0; heat < 3; heat++) {
+    const x = -58 + heat * 58 + Math.sin(now / 340 + heat * 2.2) * 7;
+    ctx.strokeStyle = `rgba(255,236,180,${.06 + .04 * Math.sin(now / 290 + heat * 1.4)})`;
+    ctx.beginPath(); ctx.moveTo(x, -24); ctx.quadraticCurveTo(x + Math.sin(now / 260 + heat) * 8, -48, x + Math.sin(now / 310 + heat * 1.3) * 5, -72); ctx.stroke();
+  }
+}
+
 // 柔边烟团：径向渐变大团块（中心浓、边缘消散），多团叠加形成连续体积感烟云，而非离散圆点。
 function softPuff(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, rgb: string, alpha: number) {
   if (alpha <= 0.012 || r <= 0.6) return;
@@ -9042,7 +9319,7 @@ function drawSurvivalHumanHeadAndFace(ctx: CanvasRenderingContext2D, facing: num
 }
 
 /** 探索队伍详情与战斗复用生存模式的人体骨架、步态、枪焰和真实武器模型。 */
-function ExplorationMemberPreview({ member, motion = "standing", reloadProgress = 0, reloadStartedAt, actionStartedAt, battleScale = false, automaticWeaponStartedAt }: { member: ExplorationMemberDefinition; motion?: "standing" | "moving" | "attacking" | "reloading" | "kicking" | "throwing"; reloadProgress?: number; reloadStartedAt?: number; actionStartedAt?: number; battleScale?: boolean; automaticWeaponStartedAt?: number }) {
+function ExplorationMemberPreview({ member, motion = "standing", reloadProgress = 0, reloadStartedAt, actionStartedAt, battleScale = false, automaticWeaponStartedAt, weaponOverride, openingAttackPending = false, shieldHp }: { member: ExplorationMemberDefinition; motion?: "standing" | "moving" | "attacking" | "reloading" | "kicking" | "throwing"; reloadProgress?: number; reloadStartedAt?: number; actionStartedAt?: number; battleScale?: boolean; automaticWeaponStartedAt?: number; weaponOverride?: WeaponKey; openingAttackPending?: boolean; shieldHp?: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const canvas = ref.current;
@@ -9052,25 +9329,27 @@ function ExplorationMemberPreview({ member, motion = "standing", reloadProgress 
     const motionStartedAt = performance.now();
     const draw = (now: number) => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const automaticPhase = automaticWeaponStartedAt === undefined || now < automaticWeaponStartedAt ? null : explorationAutomaticWeaponPhase(member.weapon, automaticWeaponStartedAt, now);
+      const renderWeapon = weaponOverride ?? member.weapon;
+      const automaticPhase = automaticWeaponStartedAt === undefined || now < automaticWeaponStartedAt ? null : explorationAutomaticWeaponPhase(renderWeapon, automaticWeaponStartedAt, now);
       const renderMotion = automaticPhase ? (automaticPhase.reloading ? "reloading" : "attacking") : motion;
       const renderReloadProgress = automaticPhase?.reloadProgress
         ?? (renderMotion === "reloading" && reloadStartedAt !== undefined
-          ? Math.min(1, (now - reloadStartedAt) / Math.max(1, WEAPONS[member.weapon].reload))
+          ? Math.min(1, (now - reloadStartedAt) / Math.max(1, WEAPONS[renderWeapon].reload))
           : reloadProgress);
       const facing = 1;
       const scale = battleScale ? EXPLORATION_BATTLE_MEMBER_SCALE : 1.9;
       const farmer = member.id === "farmer";
-      const police = member.faction === "警察";
-      const soldier = member.faction === "军队";
-      const rearUniform = farmer ? "#5b513e" : police ? "#172b43" : soldier ? "#252d29" : "#313936";
-      const frontUniform = farmer ? "#665b44" : police ? "#1d3653" : soldier ? "#2c3530" : "#39423e";
-      const torsoUniform = farmer ? "#777045" : police ? "#254867" : soldier ? "#384537" : "#4e5b47";
-      const vestUniform = farmer ? "#5c5638" : police ? "#132a40" : soldier ? "#1f2a22" : "#3c4738";
+      const police = member.faction.includes("警察");
+      const soldier = member.faction === "军队" || member.faction === "特战小组" || member.faction === "联合国部队";
+      const emergency = member.faction === "紧急救助";
+      const rearUniform = farmer ? "#5b513e" : police ? "#172b43" : soldier ? "#252d29" : emergency ? "#493637" : "#313936";
+      const frontUniform = farmer ? "#665b44" : police ? "#1d3653" : soldier ? "#2c3530" : emergency ? "#613e3b" : "#39423e";
+      const torsoUniform = farmer ? "#777045" : police ? "#254867" : soldier ? "#384537" : emergency ? "#8e493c" : "#4e5b47";
+      const vestUniform = farmer ? "#5c5638" : police ? "#132a40" : soldier ? "#1f2a22" : emergency ? "#4a302f" : "#3c4738";
       const gaitCycle = (now / 230) % 1;
       const moving = renderMotion === "moving";
       const kickProgress = Math.min(1, Math.max(0, (now - motionStartedAt) / KICK_ANIMATION_MS));
-      const attackCycle = automaticPhase ? WEAPONS[member.weapon].fireRate : Math.max(360, WEAPONS[member.weapon].fireRate);
+      const attackCycle = automaticPhase ? WEAPONS[renderWeapon].fireRate : Math.max(360, WEAPONS[renderWeapon].fireRate);
       const attackStartedAt = automaticWeaponStartedAt ?? actionStartedAt ?? motionStartedAt;
       const attackPhase = renderMotion === "attacking" ? ((now - attackStartedAt) % attackCycle) / attackCycle : renderMotion === "throwing" ? .48 : 0;
       ctx.save();
@@ -9089,27 +9368,33 @@ function ExplorationMemberPreview({ member, motion = "standing", reloadProgress 
       ctx.moveTo(-15, -102); ctx.lineTo(15, -102); ctx.lineTo(13, -66); ctx.lineTo(-13, -66); ctx.closePath(); ctx.fill();
       ctx.fillStyle = vestUniform;
       roundedRect(ctx, -11, -91, 22, 23, 3); ctx.fill();
+      if (member.id === "bomber") {
+        ctx.fillStyle = "#222a25";
+        for (let index = 0; index < 4; index++) { roundedRect(ctx, -10 + index * 5, -89, 3.5, 18, 1); ctx.fill(); }
+        ctx.strokeStyle = "#b33a31"; ctx.lineWidth = 1.4;
+        ctx.beginPath(); ctx.moveTo(-8, -76); ctx.quadraticCurveTo(0, -66, 8, -76); ctx.stroke();
+      }
       if (police) {
         ctx.fillStyle = "#b7d0e2";
         ctx.beginPath(); ctx.arc(0, -84, 3.1, 0, Math.PI * 2); ctx.fill();
       }
       drawSurvivalHumanHeadAndFace(ctx, facing, farmer ? "farmerHat" : police ? "policeCap" : soldier ? "combatHelmet" : "cap");
 
-      const melee = MELEE_WEAPONS.has(member.weapon);
+      const melee = MELEE_WEAPONS.has(renderWeapon);
       const recoil = !melee && renderMotion === "attacking" ? Math.sin(Math.min(1, attackPhase * 2) * Math.PI) : 0;
       const meleeSwing = melee && renderMotion === "attacking" ? Math.sin(attackPhase * Math.PI) : 0;
-      const weaponAngle = melee ? -.62 + meleeSwing * 1.1 : -.08 + recoil * WEAPON_RECOIL[member.weapon].rise;
-      const gunX = (melee ? 12 : 13) - recoil * WEAPON_RECOIL[member.weapon].back;
+      const weaponAngle = melee ? -.62 + meleeSwing * 1.1 : -.08 + recoil * WEAPON_RECOIL[renderWeapon].rise;
+      const gunX = (melee ? 12 : 13) - recoil * WEAPON_RECOIL[renderWeapon].back;
       const gunY = melee ? -91 : -88;
-      const gunScale = playerWeaponScale(member.weapon);
-      const hold = WEAPON_HOLD[member.weapon];
+      const gunScale = playerWeaponScale(renderWeapon);
+      const hold = WEAPON_HOLD[renderWeapon];
       const cosA = Math.cos(weaponAngle);
       const sinA = Math.sin(weaponAngle);
       const toLocal = (point: [number, number]): [number, number] => [
         gunX + (cosA * point[0] - sinA * point[1]) * gunScale,
         gunY + (sinA * point[0] + cosA * point[1]) * gunScale,
       ];
-      const reloadVisual = renderMotion === "reloading" ? computeReloadVisual(member.weapon, renderReloadProgress, toLocal, facing) : null;
+      const reloadVisual = renderMotion === "reloading" ? computeReloadVisual(renderWeapon, renderReloadProgress, toLocal, facing) : null;
       const rearShoulder: [number, number] = [-cosA * 10, -98 - sinA * 4];
       const leadShoulder: [number, number] = [cosA * 10, -98 + sinA * 4];
       const rightHand = toLocal(hold.grip);
@@ -9124,27 +9409,60 @@ function ExplorationMemberPreview({ member, motion = "standing", reloadProgress 
       ctx.save();
       ctx.translate(gunX, gunY);
       ctx.rotate(weaponAngle);
-      const cycleBolt = renderMotion === "attacking" && ["rem870", "awm", "flint66"].includes(member.weapon)
+      const cycleBolt = renderMotion === "attacking" && ["rem870", "awm", "flint66"].includes(renderWeapon)
         ? Math.sin(Math.min(1, attackPhase * 2) * Math.PI)
         : 0;
-      const pumpCycle = member.weapon === "rem870" ? cycleBolt : 0;
-      const boltActionCycle = BOLT_ACTION_WEAPONS.has(member.weapon) ? cycleBolt : 0;
-      drawWeaponModel(ctx, member.weapon, gunScale, reloadVisual?.hideMag ?? false, Math.max(reloadVisual?.bolt ?? 0, pumpCycle), reloadVisual?.cylinderSpin ?? 0, boltActionCycle);
+      const pumpCycle = renderWeapon === "rem870" ? cycleBolt : 0;
+      const boltActionCycle = BOLT_ACTION_WEAPONS.has(renderWeapon) ? cycleBolt : 0;
+      const signatureBaton = ["combatPolice", "riotShieldPolice", "stunBatonPolice"].includes(member.id) && !(member.id === "riotShieldPolice" && openingAttackPending);
+      if (signatureBaton) {
+        ctx.save(); ctx.scale(gunScale, gunScale);
+        ctx.fillStyle = member.id === "stunBatonPolice" ? "#25343e" : "#1d2327";
+        roundedRect(ctx, 0, -3.4, 58, 6.8, 2.8); ctx.fill();
+        ctx.fillStyle = member.id === "stunBatonPolice" ? "#55ccff" : "#59636a";
+        roundedRect(ctx, 37, -2.3, 17, 4.6, 2); ctx.fill();
+        ctx.restore();
+      } else if (member.id === "riotShieldPolice" && openingAttackPending) {
+        ctx.save(); ctx.scale(gunScale, gunScale);
+        ctx.fillStyle = "#232b31"; roundedRect(ctx, 0, -7, 25, 14, 3); ctx.fill();
+        ctx.strokeStyle = "#71d8ff"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(24, -4); ctx.lineTo(31, -7); ctx.moveTo(24, 4); ctx.lineTo(31, 7); ctx.stroke();
+        ctx.restore();
+      } else if (member.id === "grenadier") {
+        ctx.save(); ctx.scale(gunScale, gunScale);
+        ctx.fillStyle = "#67462d"; roundedRect(ctx, 0, -3, 52, 6, 2); ctx.fill();
+        ctx.fillStyle = "#58616a"; ctx.beginPath(); ctx.arc(57, 0, 9, 0, Math.PI * 2); ctx.fill();
+        for (let index = 0; index < 8; index++) { const a = index / 8 * Math.PI * 2; ctx.beginPath(); ctx.moveTo(57 + Math.cos(a) * 8, Math.sin(a) * 8); ctx.lineTo(57 + Math.cos(a) * 14, Math.sin(a) * 14); ctx.strokeStyle = "#89939b"; ctx.stroke(); }
+        ctx.restore();
+      } else {
+        drawWeaponModel(ctx, renderWeapon, gunScale, reloadVisual?.hideMag ?? false, Math.max(reloadVisual?.bolt ?? 0, pumpCycle), reloadVisual?.cylinderSpin ?? 0, boltActionCycle);
+        if (member.battleProfile?.dualFire) {
+          ctx.save(); ctx.translate(0, 10); drawWeaponModel(ctx, renderWeapon, gunScale, reloadVisual?.hideMag ?? false); ctx.restore();
+        }
+      }
       if (reloadVisual) {
         ctx.save();
         ctx.scale(gunScale, gunScale);
-        drawReloadProps(ctx, member.weapon, reloadVisual);
+        drawReloadProps(ctx, renderWeapon, reloadVisual);
         ctx.restore();
       }
-      if (!melee && renderMotion === "attacking" && attackPhase * attackCycle < 65) drawSurvivalMuzzleFlash(ctx, member.weapon);
+      if (!melee && renderMotion === "attacking" && attackPhase * attackCycle < 65) drawSurvivalMuzzleFlash(ctx, renderWeapon);
       ctx.restore();
+      if ((member.battleProfile?.shieldHp ?? 0) > 0 && (shieldHp ?? member.battleProfile?.shieldHp ?? 0) > 0) {
+        ctx.save();
+        ctx.translate(2, -72);
+        ctx.fillStyle = member.id === "shieldTrooper" ? "#49555f" : "#27343d";
+        ctx.strokeStyle = "#93a3af"; ctx.lineWidth = 2;
+        roundedRect(ctx, -5, -26, member.id === "shieldTrooper" ? 28 : 24, 58, 5); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = "rgba(138,188,214,.32)"; roundedRect(ctx, 0, -20, 15, 13, 2); ctx.fill();
+        ctx.restore();
+      }
       ctx.restore();
       if (renderMotion !== "standing" || automaticWeaponStartedAt !== undefined) animationFrame = window.requestAnimationFrame(draw);
     };
     draw(performance.now());
     return () => window.cancelAnimationFrame(animationFrame);
-  }, [actionStartedAt, automaticWeaponStartedAt, battleScale, member, motion, reloadProgress, reloadStartedAt]);
-  return <canvas ref={ref} className="team-member-preview" width={330} height={430} aria-label={`${member.name}与${WEAPONS[member.weapon].name}建模预览`} />;
+  }, [actionStartedAt, automaticWeaponStartedAt, battleScale, member, motion, openingAttackPending, reloadProgress, reloadStartedAt, shieldHp, weaponOverride]);
+  return <canvas ref={ref} className="team-member-preview" width={330} height={430} aria-label={`${member.name}与${member.displayWeaponName ?? WEAPONS[member.weapon].name}建模预览`} />;
 }
 
 /** 商店、上阵栏和战斗栏共用一套消耗品图标，不再用文字占位。 */
@@ -9299,6 +9617,7 @@ export function DeadRoadGame() {
   const reportedExplorationBattleKillsRef = useRef(0);
   const reportedLotteryKillsRef = useRef(0);
   const explorationProgressLoadedRef = useRef(false);
+  const explorationTestPlacementRef = useRef<{ x: number; y: number } | null>(null);
   // 动态世界宽度：画布位图宽度（世界单位）跟随舞台实际宽高比；worldWRef 供各回调免闭包读取
   const [canvasW, setCanvasW] = useState(DEFAULT_WORLD_W);
   const worldWRef = useRef(DEFAULT_WORLD_W);
@@ -9325,6 +9644,7 @@ export function DeadRoadGame() {
   const [explorationMemberLevels, setExplorationMemberLevels] = useState<Record<string, number>>({ civilian: 1, farmer: 1 });
   const [starterPackPurchased, setStarterPackPurchased] = useState(false);
   const [explorationBattle, setExplorationBattle] = useState<ExplorationBattleState>(() => freshExplorationBattle(200, 1));
+  const [explorationTestPlacement, setExplorationTestPlacement] = useState<{ x: number; y: number } | null>(null);
   const [explorationRecruitPhase, setExplorationRecruitPhase] = useState<ExplorationRecruitPhase>("approach");
   const [explorationSupportClock, setExplorationSupportClock] = useState(0);
   const [lotteryPhase, setLotteryPhase] = useState<LotteryPhase>("idle");
@@ -9332,7 +9652,7 @@ export function DeadRoadGame() {
   const [lotteryLastHit, setLotteryLastHit] = useState<number | null>(null);
   const [lotteryShotSerial, setLotteryShotSerial] = useState(0);
   const [lotteryAim, setLotteryAim] = useState({ x: 50, y: 48, angle: -90, distance: 240 });
-  const [lotteryRewards, setLotteryRewards] = useState<LotteryRarity[]>([]);
+  const [lotteryRewards, setLotteryRewards] = useState<ExplorationLotteryReward[]>([]);
   const [lotteryDrawCount, setLotteryDrawCount] = useState<1 | 10>(1);
   const lotteryDead = lotteryZombieDamage.flatMap((state, index) => state.hp <= 0 ? [index] : []);
   const lotteryKilled = lotteryDead.length;
@@ -9685,19 +10005,30 @@ export function DeadRoadGame() {
     changeScreen("explorationBattle");
   }, [changeScreen, explorationClearedTasks, explorationVehicleLevel]);
 
+  const startExplorationTest = useCallback(() => {
+    sound.uiClick();
+    reportedCompletedExplorationBattleRef.current = false;
+    reportedExplorationBattleKillsRef.current = 0;
+    explorationTestPlacementRef.current = null;
+    setExplorationTestPlacement(null);
+    setExplorationBattle(freshExplorationBattle(999999, 0, false, true));
+    changeScreen("explorationTest");
+  }, [changeScreen]);
+
   const deployExplorationUnit = useCallback((memberId: string) => {
     const member = EXPLORATION_MEMBERS.find((candidate) => candidate.id === memberId);
-    if (!member || !deployedMemberIds.includes(memberId)) return;
-    const level = explorationMemberLevels[memberId] ?? 1;
+    const testMode = screenRef.current === "explorationTest";
+    if (!member || (!testMode && !deployedMemberIds.includes(memberId))) return;
+    const level = testMode ? 15 : explorationMemberLevels[memberId] ?? 1;
     const stats = explorationMemberStatsAtLevel(member, level);
     setExplorationBattle((battle) => {
-      if (battle.failed || battle.completed || battle.courage < member.courageCost) return battle;
+      if (battle.failed || battle.completed || (!testMode && battle.courage < member.courageCost)) return battle;
       const id = `member-${memberId}-${battle.nextUnitId}`;
-      const spawnPoint = explorationUnitSpawnPoint(battle.nextUnitId);
+      const spawnPoint = testMode && explorationTestPlacementRef.current ? explorationTestPlacementRef.current : explorationUnitSpawnPoint(battle.nextUnitId);
       sound.uiClick();
       return {
         ...battle,
-        courage: battle.courage - member.courageCost,
+        courage: testMode ? battle.courage : battle.courage - member.courageCost,
         nextUnitId: battle.nextUnitId + 1,
         units: [...battle.units, {
           id,
@@ -9711,11 +10042,17 @@ export function DeadRoadGame() {
           x: spawnPoint.x,
           y: spawnPoint.y,
           cooldown: 0,
-          ammo: MELEE_WEAPONS.has(member.weapon) ? 1 : WEAPONS[member.weapon].magazine,
+          ammo: MELEE_WEAPONS.has(member.weapon) ? 1 : WEAPONS[member.weapon].magazine * (member.battleProfile?.dualFire ? 2 : 1),
           reloadRemaining: 0,
           reloadStartedAt: 0,
           attacksPerformed: 0,
           skillCooldown: member.combatSkills?.thrownKnifeInterval ?? 0,
+          abilityCooldown: member.battleProfile?.medkitInterval ?? member.battleProfile?.molotovInterval ?? member.battleProfile?.impactGrenadeInterval ?? 0,
+          activeWeapon: member.battleProfile?.openingWeapon ?? member.weapon,
+          openingAttackPending: member.battleProfile?.openingDamage !== undefined || member.battleProfile?.openingWeapon !== undefined,
+          openingWeaponLocked: false,
+          shieldHp: member.battleProfile?.shieldHp ?? 0,
+          maxShieldHp: member.battleProfile?.shieldHp ?? 0,
           actionRemaining: 0,
           actionStartedAt: 0,
           action: "guard",
@@ -9726,8 +10063,20 @@ export function DeadRoadGame() {
     });
   }, [deployedMemberIds, explorationMemberLevels]);
 
+  const chooseExplorationTestPlacement = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (screenRef.current !== "explorationTest") return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const placement = {
+      x: Math.max(8, Math.min(92, (event.clientX - rect.left) / rect.width * 100)),
+      y: Math.max(6, Math.min(54, (rect.bottom - event.clientY) / rect.height * 60)),
+    };
+    explorationTestPlacementRef.current = placement;
+    setExplorationTestPlacement(placement);
+    sound.uiClick();
+  }, []);
+
   useEffect(() => {
-    if (screen !== "explorationBattle" || explorationBattle.failed || explorationBattle.completed) return;
+    if ((screen !== "explorationBattle" && screen !== "explorationTest") || explorationBattle.failed || explorationBattle.completed) return;
     const courageTimer = window.setInterval(() => {
       setExplorationBattle((battle) => battle.failed ? battle : { ...battle, courage: battle.courage + 1, elapsed: battle.elapsed + 1 });
     }, 1000);
@@ -9735,7 +10084,7 @@ export function DeadRoadGame() {
   }, [explorationBattle.completed, explorationBattle.failed, screen]);
 
   useEffect(() => {
-    if (screen !== "explorationBattle" || explorationBattle.failed || explorationBattle.completed || explorationBattleTaskConfig(explorationBattle.taskOrder).finite) return;
+    if ((screen !== "explorationBattle" && screen !== "explorationTest") || explorationBattle.failed || explorationBattle.completed || explorationBattleTaskConfig(explorationBattle.taskOrder).finite) return;
     const spawnTimer = window.setInterval(() => {
       setExplorationBattle((battle) => {
         if (battle.failed) return battle;
@@ -9766,6 +10115,7 @@ export function DeadRoadGame() {
             missingLimbs: [],
             legDamage: 0,
             knockedDownRemaining: 0,
+            stunnedRemaining: 0,
             shieldHp: 0,
             shieldIntact: false,
             shieldDents: [],
@@ -9779,7 +10129,7 @@ export function DeadRoadGame() {
   }, [explorationBattle.completed, explorationBattle.failed, explorationBattle.taskOrder, screen]);
 
   useEffect(() => {
-    if (screen !== "explorationBattle" || explorationBattle.failed || explorationBattle.completed) return;
+    if ((screen !== "explorationBattle" && screen !== "explorationTest") || explorationBattle.failed || explorationBattle.completed) return;
     const combatTimer = window.setInterval(() => {
       setExplorationSupportClock(performance.now());
       setExplorationBattle((battle) => {
@@ -9793,9 +10143,10 @@ export function DeadRoadGame() {
             ...unit,
             cooldown: Math.max(0, unit.cooldown - .25),
             skillCooldown: Math.max(0, unit.skillCooldown - .25),
+            abilityCooldown: Math.max(0, unit.abilityCooldown - .25),
             actionRemaining,
             reloadRemaining,
-            ammo: unit.reloadRemaining > 0 && reloadRemaining === 0 && member ? WEAPONS[member.weapon].magazine : unit.ammo,
+            ammo: unit.reloadRemaining > 0 && reloadRemaining === 0 && member ? WEAPONS[unit.activeWeapon].magazine * (member.battleProfile?.dualFire ? 2 : 1) : unit.ammo,
             reloadStartedAt: reloadRemaining === 0 ? 0 : unit.reloadStartedAt,
             action: reloadRemaining > 0 ? "reload" : actionRemaining > 0 ? unit.action : "guard",
             shotTarget: null,
@@ -9815,7 +10166,19 @@ export function DeadRoadGame() {
             } else {
               const target = units.find((unit) => unit.id === zombie.attackTargetUnitId && unit.hp > 0);
               if (target) {
-                target.hp -= zombie.damage * limbAttackFactor;
+                const member = EXPLORATION_MEMBERS.find((candidate) => candidate.id === target.memberId);
+                let incomingDamage = zombie.damage * limbAttackFactor;
+                if (target.shieldHp > 0) {
+                  const absorbed = Math.min(target.shieldHp, incomingDamage);
+                  target.shieldHp -= absorbed;
+                  incomingDamage -= absorbed;
+                  sound.armorClank({ volume: .58 });
+                }
+                target.hp -= incomingDamage * (1 - (member?.battleProfile?.damageReduction ?? 0));
+                if (member?.battleProfile?.buttstrokeDamage && zombie.hp > 0) {
+                  zombie.hp -= member.battleProfile.buttstrokeDamage + Math.max(0, target.level - 1) * member.damagePerLevel;
+                  sound.bodyHit({ volume: .52 });
+                }
                 sound.playerHurt({ volume: .62 });
               }
             }
@@ -9825,6 +10188,7 @@ export function DeadRoadGame() {
             hp: zombie.hp - (zombie.ignited ? IGNITE_DPS * .25 : 0),
             cooldown: Math.max(0, (zombie.cooldownUntil - supportNow) / 1000),
             knockedDownRemaining: Math.max(0, zombie.knockedDownRemaining - .25),
+            stunnedRemaining: Math.max(0, zombie.stunnedRemaining - .25),
             attackWindupRemaining,
             attackAnimationRemaining,
             attackImpactAt: attackImpactDue ? 0 : zombie.attackImpactAt,
@@ -9848,7 +10212,12 @@ export function DeadRoadGame() {
           }
           const target = units.find((unit) => unit.id === spit.targetUnitId && unit.hp > 0);
           if (!target || explorationPlaneDistance(target, { x: spit.toX, y: spit.toY }) > 3.5) return;
-          target.hp -= spit.damage;
+          const member = EXPLORATION_MEMBERS.find((candidate) => candidate.id === target.memberId);
+          if (member?.battleProfile?.spitImmune) {
+            sound.armorClank({ volume: .34 });
+            return;
+          }
+          target.hp -= spit.damage * (1 - (member?.battleProfile?.damageReduction ?? 0));
           sound.playerHurt({ volume: .5 });
         });
         const addGroundProp = (id: string, kind: ExplorationBattleGroundProp["kind"], weapon: WeaponKey | undefined, x: number, y: number) => {
@@ -10044,10 +10413,23 @@ export function DeadRoadGame() {
         dueMeleeHits.forEach((hit) => {
           const target = zombies.find((zombie) => zombie.id === hit.targetId && zombie.hp > 0);
           if (!target) return;
+          const hpBeforeHit = target.hp;
           target.hp -= hit.damage * explorationZombieArmorDamageFactor(target.kind, hit.weapon);
+          if ((hit.stunChance ?? 0) > Math.random()) target.stunnedRemaining = Math.max(target.stunnedRemaining, hit.stunSeconds ?? 3);
           target.wounds = [...target.wounds.slice(-7), { x: 0, y: -84, region: "body", size: 4.2, bone: target.wounds.filter((wound) => wound.region === "body").length >= 2 }];
           addBloodEffect(`melee-${hit.id}`, target, 0);
           sound.bodyHit({ volume: .5 });
+          if (hit.openingAttack) {
+            const unit = units.find((candidate) => candidate.id === hit.unitId);
+            const member = unit ? EXPLORATION_MEMBERS.find((candidate) => candidate.id === unit.memberId) : undefined;
+            if (unit && member) {
+              const keptByLevelSkill = unit.level >= (member.battleProfile?.keepOpeningWeaponOnKillAtLevel ?? Number.POSITIVE_INFINITY) && hpBeforeHit > 0 && target.hp <= 0;
+              unit.openingAttackPending = false;
+              unit.openingWeaponLocked = keptByLevelSkill;
+              unit.activeWeapon = keptByLevelSkill ? (member.battleProfile?.openingWeapon ?? member.weapon) : member.weapon;
+              unit.ammo = MELEE_WEAPONS.has(unit.activeWeapon) ? 1 : WEAPONS[unit.activeWeapon].magazine * (member.battleProfile?.dualFire ? 2 : 1);
+            }
+          }
         });
         let knives = battle.knives.map((knife) => ({ ...knife, life: knife.life - .25 })).filter((knife) => knife.life > 0);
         let nextKnifeId = battle.nextKnifeId;
@@ -10058,6 +10440,24 @@ export function DeadRoadGame() {
         let armoredSupportAmmo = battle.armoredSupportAmmo;
         let armoredSupportReloadUntil = battle.armoredSupportReloadUntil;
         let airstrikeEffects = battle.airstrikeEffects.filter((effect) => effect.until > supportNow);
+        let medkits = battle.medkits.filter((medkit) => medkit.removeAt > supportNow);
+        let memberAbilityEffects = battle.memberAbilityEffects.filter((effect) => effect.removeAt > supportNow);
+        memberAbilityEffects.filter((effect) => effect.kind === "molotov").forEach((fire) => {
+          const radius = Math.max(5, ITEMS.molotov.radius / 18);
+          zombies.filter((zombie) => zombie.hp > 0).forEach((zombie) => {
+            const distance = explorationPlaneDistance(zombie, fire);
+            if (distance > radius) return;
+            // 与经典模式一致：燃烧区域持续 10 秒，每帧按距离衰减并直接绕过护甲。
+            zombie.hp -= ITEMS.molotov.damage * .25 * (1 - distance / (radius * 2));
+          });
+        });
+        medkits = medkits.map((medkit) => {
+          if (medkit.nextHealAt > supportNow) return medkit;
+          units.forEach((unit) => {
+            if (unit.hp > 0 && explorationPlaneDistance(unit, medkit) <= 8) unit.hp = Math.min(unit.maxHp, unit.hp + 10);
+          });
+          return { ...medkit, nextHealAt: supportNow + 1000 };
+        });
         const impactingAirstrikes = airstrikeEffects.filter((effect) => !effect.impacted && effect.impactAt <= supportNow);
         if (impactingAirstrikes.length > 0) {
           zombies = zombies.map((zombie) => {
@@ -10127,15 +10527,51 @@ export function DeadRoadGame() {
         units.forEach((unit) => {
           const member = EXPLORATION_MEMBERS.find((candidate) => candidate.id === unit.memberId);
           if (!member) return;
-          const weapon = WEAPONS[member.weapon];
-          const firearm = isFirearmWeapon(member.weapon);
-          const firearmWeapon = firearm ? member.weapon as FirearmSoundKey : null;
+          const profile = member.battleProfile;
+          const activeWeapon = unit.activeWeapon;
+          const weapon = WEAPONS[activeWeapon];
+          const firearm = isFirearmWeapon(activeWeapon);
+          const firearmWeapon = firearm ? activeWeapon as FirearmSoundKey : null;
           const combatSkills = member.combatSkills;
           const livingZombies = zombies.filter((zombie) => zombie.hp > 0);
           const nearestZombie = livingZombies.reduce<ExplorationBattleZombie | null>((nearest, zombie) => (
             nearest === null || explorationPlaneDistance(unit, zombie) < explorationPlaneDistance(unit, nearest) ? zombie : nearest
           ), null);
           if (!nearestZombie) { unit.action = "guard"; return; } // 没有敌人时，队员将在原地警戒。
+          if (profile?.medkitInterval && unit.abilityCooldown <= 0) {
+            medkits = [...medkits, { id: `${unit.id}-medkit-${Math.floor(supportNow)}`, x: unit.x, y: unit.y, createdAt: supportNow, nextHealAt: supportNow + 1000, removeAt: supportNow + 10000 }];
+            unit.abilityCooldown = profile.medkitInterval;
+          }
+          const shouldThrowMolotov = unit.abilityCooldown <= 0 && (
+            profile?.molotovInterval !== undefined
+            || (profile?.molotovHpThreshold !== undefined && unit.level >= 10 && unit.hp <= profile.molotovHpThreshold)
+          );
+          if (shouldThrowMolotov) {
+            const densest = livingZombies.map((candidate) => ({
+              zombie: candidate,
+              count: livingZombies.filter((zombie) => explorationPlaneDistance(zombie, candidate) <= 8).length,
+            })).sort((a, b) => b.count - a.count)[0]?.zombie ?? nearestZombie;
+            memberAbilityEffects = [...memberAbilityEffects, { id: `${unit.id}-molotov-${Math.floor(supportNow)}`, kind: "molotov", fromX: unit.x, fromY: unit.y, x: densest.x, y: densest.y, createdAt: supportNow, removeAt: supportNow + MOLOTOV_BURN_MS }];
+            unit.abilityCooldown = profile?.molotovInterval ?? 99999;
+            unit.action = "throw";
+            unit.actionRemaining = .55;
+            sound.itemThrow();
+            sound.molotovIgnite(MOLOTOV_BURN_MS / 1000);
+            return;
+          }
+          if (profile?.impactGrenadeInterval && unit.abilityCooldown <= 0) {
+            const blastRadius = Math.max(5, ITEMS.impact.radius / 18);
+            zombies.filter((zombie) => zombie.hp > 0 && explorationPlaneDistance(zombie, nearestZombie) <= blastRadius).forEach((zombie) => {
+              damageExplorationZombieFromExplosion(zombie, ITEMS.impact.damage, nearestZombie.x, nearestZombie.y, blastRadius, "frag", `${unit.id}-impact-${zombie.id}-${Math.floor(supportNow)}`);
+            });
+            memberAbilityEffects = [...memberAbilityEffects, { id: `${unit.id}-impact-${Math.floor(supportNow)}`, kind: "impact", fromX: unit.x, fromY: unit.y, x: nearestZombie.x, y: nearestZombie.y, createdAt: supportNow, removeAt: supportNow + ITEMS.impact.blastDuration }];
+            unit.abilityCooldown = profile.impactGrenadeInterval;
+            unit.action = "throw";
+            unit.actionRemaining = .55;
+            sound.itemThrow();
+            sound.explosion("frag", { volume: .62 });
+            return;
+          }
           if (unit.reloadRemaining > 0) { unit.action = "reload"; return; }
           if (unit.actionRemaining > 0 && (unit.action === "attack" || unit.action === "kick" || unit.action === "throw")) return;
           if (combatSkills && unit.level >= 15 && unit.skillCooldown <= 0) {
@@ -10155,7 +10591,18 @@ export function DeadRoadGame() {
             }
           }
           const distance = explorationPlaneDistance(unit, nearestZombie);
-          const attackDistance = firearm ? Math.min(22, weapon.range / 35) : 4.5;
+          if (profile?.selfDestruct && distance <= 4.5) {
+            const blastRadius = Math.max(6, ITEMS.frag.radius / 18);
+            zombies.filter((zombie) => zombie.hp > 0 && explorationPlaneDistance(zombie, unit) <= blastRadius).forEach((zombie) => {
+              damageExplorationZombieFromExplosion(zombie, unit.damage, unit.x, unit.y, blastRadius, "frag", `${unit.id}-self-${zombie.id}-${Math.floor(supportNow)}`);
+            });
+            memberAbilityEffects = [...memberAbilityEffects, { id: `${unit.id}-self-${Math.floor(supportNow)}`, kind: "selfDestruct", fromX: unit.x, fromY: unit.y, x: unit.x, y: unit.y, createdAt: supportNow, removeAt: supportNow + ITEMS.frag.blastDuration }];
+            unit.hp = 0;
+            sound.explosion("frag", { volume: .78 });
+            return;
+          }
+          const taserOpening = member.id === "riotShieldPolice" && unit.openingAttackPending;
+          const attackDistance = taserOpening ? 15 : firearm ? Math.min(22, weapon.range / 35) : 4.5;
           if (distance > attackDistance) {
             moveExplorationEntityToward(unit, nearestZombie, distance, 1.15 * unit.speedFactor);
             unit.action = "walk";
@@ -10164,8 +10611,9 @@ export function DeadRoadGame() {
               unit.reloadRemaining = weapon.reload / 1000;
               unit.reloadStartedAt = supportNow;
               unit.action = "reload";
-              if (["mag", "belt", "box"].includes(WEAPON_HOLD[member.weapon].reloadKind)) {
-                addGroundProp(`${unit.id}-mag-${unit.shotSerial}`, "mag", member.weapon, unit.x + .5, unit.y);
+              if (["mag", "belt", "box"].includes(WEAPON_HOLD[activeWeapon].reloadKind)) {
+                addGroundProp(`${unit.id}-mag-${unit.shotSerial}`, "mag", activeWeapon, unit.x + .5, unit.y);
+                if (profile?.dualFire) addGroundProp(`${unit.id}-mag-second-${unit.shotSerial}`, "mag", activeWeapon, unit.x + .9, unit.y + .4);
               }
               sound.reload(firearmWeapon!, weapon.reload);
               return;
@@ -10179,11 +10627,20 @@ export function DeadRoadGame() {
               if (!firearm) {
                 pendingMeleeHits = [...pendingMeleeHits, {
                   id: `${unit.id}-${unit.attacksPerformed}-${Math.floor(supportNow)}`,
+                  unitId: unit.id,
                   targetId: target.id,
-                  weapon: member.weapon,
-                  damage: unit.damage,
+                  weapon: activeWeapon,
+                  damage: unit.openingAttackPending || unit.openingWeaponLocked ? (profile?.openingDamage ?? unit.damage) + Math.max(0, unit.level - 1) * member.damagePerLevel : unit.damage,
                   impactAt: supportNow + Math.min(320, Math.max(170, weapon.fireRate * .45)),
+                  openingAttack: unit.openingAttackPending,
+                  stunChance: member.id === "riotShieldPolice" && !unit.openingAttackPending ? undefined : profile?.stunChance,
+                  stunSeconds: member.id === "riotShieldPolice" && !unit.openingAttackPending ? undefined : profile?.stunSeconds,
                 }];
+                if (taserOpening) {
+                  memberAbilityEffects = [...memberAbilityEffects, { id: `${unit.id}-taser-${Math.floor(supportNow)}`, kind: "taser", fromX: unit.x, fromY: unit.y, x: target.x, y: target.y, createdAt: supportNow, removeAt: supportNow + 420 }];
+                  unit.shotTarget = { x: target.x, y: target.y };
+                  unit.shotSerial += 1;
+                }
               } else for (let pellet = 0; pellet < pellets; pellet++) {
                 const normalizedDistance = Math.min(1, distance / Math.max(1, weapon.range / 35));
                 const pelletHitChance = weapon.pellets ? Math.max(.28, 1 - normalizedDistance * (1.15 + (weapon.spread ?? 0) * 2.4)) : 1;
@@ -10191,7 +10648,7 @@ export function DeadRoadGame() {
                 const roll = Math.random();
                 const region: HitRegion = roll < .16 ? "head" : roll < .46 ? "legs" : "body";
                 const pelletDamage = weapon.pellets
-                  ? weaponDamage(member.weapon) + (unit.damage - member.damage) / pellets
+                  ? weaponDamage(activeWeapon) + (unit.damage - member.damage) / pellets
                   : unit.damage;
                 if (weapon.blastKind && weapon.explosionRadius) {
                     const blastRadius = Math.max(5, weapon.explosionRadius / 18);
@@ -10211,6 +10668,7 @@ export function DeadRoadGame() {
                       const candidate = shotTargets[penetrationIndex];
                       const penetratedDamage = pelletDamage * Math.max(.1, 1 - penetrationIndex * .2);
                       const penetrated = resolveExplorationProjectileHit(candidate, firearmWeapon!, penetratedDamage, region, `${unit.id}-blood-${unit.attacksPerformed}-${pellet}-${candidate.id}`);
+                      if (profile?.igniteShots) candidate.ignited = true;
                       connectedHit = penetrated || connectedHit;
                       if (!penetrated) break;
                     }
@@ -10221,8 +10679,9 @@ export function DeadRoadGame() {
               if (combatSkills && unit.level >= 10 && Math.random() < combatSkills.comboChance) {
                 pendingMeleeHits = [...pendingMeleeHits, {
                   id: `${unit.id}-combo-${unit.attacksPerformed}-${Math.floor(supportNow)}`,
+                  unitId: unit.id,
                   targetId: target.id,
-                  weapon: member.weapon,
+                  weapon: activeWeapon,
                   damage: unit.damage,
                   impactAt: supportNow + Math.min(430, Math.max(260, weapon.fireRate * .65)),
                 }];
@@ -10244,16 +10703,17 @@ export function DeadRoadGame() {
                 unit.shotSerial += 1;
               }
             }
-            unit.cooldown = weapon.fireRate / 1000 * (combatSkills?.attackIntervalFactor ?? 1);
+            unit.cooldown = profile?.attackIntervalSeconds ?? weapon.fireRate / 1000 * (profile?.attackIntervalFactor ?? combatSkills?.attackIntervalFactor ?? 1);
             if (!performedKick) unit.actionRemaining = Math.max(firearm ? .14 : .36, Math.min(.7, weapon.fireRate / 1000));
             unit.actionStartedAt = supportNow;
             unit.action = performedKick ? "kick" : "attack";
             if (!firearm) sound.meleeSwing("heavy");
             else {
-              unit.ammo -= 1;
-              if (!weapon.explosionRadius) addGroundProp(`${unit.id}-casing-${unit.shotSerial}`, "casing", member.weapon, unit.x + 1.2, unit.y + 1.5);
-              sound.gunshot(member.weapon, { fireRateMs: weapon.fireRate, volume: .48 });
-              if (BOLT_ACTION_WEAPONS.has(member.weapon)) sound.boltAction(boltCycleMs(member.weapon));
+              unit.ammo -= profile?.dualFire ? 2 : 1;
+              if (!weapon.explosionRadius) addGroundProp(`${unit.id}-casing-${unit.shotSerial}`, "casing", activeWeapon, unit.x + 1.2, unit.y + 1.5);
+              if (profile?.dualFire && !weapon.explosionRadius) addGroundProp(`${unit.id}-casing-second-${unit.shotSerial}`, "casing", activeWeapon, unit.x + 1.5, unit.y + .8);
+              sound.gunshot(activeWeapon as FirearmSoundKey, { fireRateMs: weapon.fireRate, volume: .48 });
+              if (BOLT_ACTION_WEAPONS.has(activeWeapon)) sound.boltAction(boltCycleMs(activeWeapon));
             }
           }
         });
@@ -10284,7 +10744,7 @@ export function DeadRoadGame() {
 
         zombies.forEach((zombie) => {
           if (!zombiesAlerted) { zombie.action = "guard"; return; }
-          if (zombie.knockedDownRemaining > 0) { zombie.action = "guard"; return; }
+          if (zombie.knockedDownRemaining > 0 || zombie.stunnedRemaining > 0) { zombie.action = "guard"; return; }
           if (zombie.attackAnimationRemaining > 0) { zombie.action = "attack"; return; }
           const missingLegs = Number(zombie.missingLimbs.includes("leftLeg")) + Number(zombie.missingLimbs.includes("rightLeg"));
           const limbMovementFactor = missingLegs === 2 ? .18 : missingLegs === 1 ? .58 : 1;
@@ -10359,14 +10819,14 @@ export function DeadRoadGame() {
         });
         units = units.filter((unit) => unit.hp > 0);
         vehicleHp = Math.max(0, vehicleHp);
-        return { ...battle, zombiesAlerted, units, zombies, corpses, groundProps, bloodEffects, detachedLimbs, metalShards, knives, spits, pendingMeleeHits, pendingKicks, airstrikeEffects, armySupportNextShotAt, armoredSupportNextShotAt, armoredSupportAmmo, armoredSupportReloadUntil, nextKnifeId, nextKickId, kills: battle.kills + killedThisTick, vehicleHp, completed, failed: !completed && vehicleHp <= 0 };
+        return { ...battle, zombiesAlerted, units, zombies, corpses, groundProps, bloodEffects, detachedLimbs, metalShards, knives, spits, pendingMeleeHits, pendingKicks, airstrikeEffects, medkits, memberAbilityEffects, armySupportNextShotAt, armoredSupportNextShotAt, armoredSupportAmmo, armoredSupportReloadUntil, nextKnifeId, nextKickId, kills: battle.kills + killedThisTick, vehicleHp, completed, failed: !battle.testMode && !completed && vehicleHp <= 0 };
       });
     }, 250);
     return () => window.clearInterval(combatTimer);
   }, [explorationBattle.completed, explorationBattle.failed, screen]);
 
   useEffect(() => {
-    if (screen !== "explorationBattle" || (!explorationBattle.completed && !explorationBattle.failed)) return;
+    if ((screen !== "explorationBattle" && screen !== "explorationTest") || (!explorationBattle.completed && !explorationBattle.failed)) return;
     const removalTimes = [
       ...explorationBattle.corpses.map((corpse) => corpse.removeAt),
       ...explorationBattle.groundProps.map((prop) => prop.removeAt),
@@ -10394,7 +10854,7 @@ export function DeadRoadGame() {
   }, [explorationBattle.bloodEffects, explorationBattle.completed, explorationBattle.corpses, explorationBattle.detachedLimbs, explorationBattle.failed, explorationBattle.groundProps, explorationBattle.metalShards, explorationBattle.spits, screen]);
 
   useEffect(() => {
-    if (screen !== "explorationBattle" || explorationBattle.failed || explorationBattle.completed || explorationBattle.pendingKicks.length === 0) return;
+    if ((screen !== "explorationBattle" && screen !== "explorationTest") || explorationBattle.failed || explorationBattle.completed || explorationBattle.pendingKicks.length === 0) return;
     const nextImpact = explorationBattle.pendingKicks.reduce((earliest, impact) => impact.impactAt < earliest.impactAt ? impact : earliest);
     const timer = window.setTimeout(() => {
       setExplorationBattle((battle) => {
@@ -10535,11 +10995,15 @@ export function DeadRoadGame() {
     recordExplorationDailyMetric("recruitDraws", count);
     setExplorationAchievementProgress((progress) => ({ ...progress, lotteryDraws: progress.lotteryDraws + count }));
     setLotteryDrawCount(count);
-    // 每一抽独立结算且不去重：单抽之间与十连内部都允许重复获得同一奖励品质/内容。
-    setLotteryRewards(Array.from({ length: count }, () => rollLotteryRarity()));
+    // 每一抽独立结算且不去重：单抽之间与十连内部都允许重复获得同一人物。
+    const rewards = Array.from({ length: count }, () => rollExplorationLotteryMember());
+    setLotteryRewards(rewards);
+    const recruitedIds = [...new Set(rewards.map((reward) => reward.memberId).filter((id): id is string => id !== null))];
+    setRecruitedMemberIds((current) => [...new Set([...current, ...recruitedIds.filter((id) => !ownedMemberIds.includes(id))])]);
+    setExplorationMemberLevels((levels) => Object.fromEntries(EXPLORATION_MEMBERS.map((member) => [member.id, levels[member.id] ?? 1])));
     resetLotteryBattle();
     setLotteryPhase("firing");
-  }, [recruitTickets, recordExplorationDailyMetric, resetLotteryBattle]);
+  }, [ownedMemberIds, recruitTickets, recordExplorationDailyMetric, resetLotteryBattle]);
 
   const updateLotteryAim = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     if (lotteryPhase !== "firing") return;
@@ -13023,7 +13487,7 @@ export function DeadRoadGame() {
           // 抽奖战斗演出期间锁定退出；待机/结果页可返回探索主界面
           event.preventDefault();
           if (!event.repeat) closeLottery();
-        } else if (screenRef.current === "explorationShop" || screenRef.current === "vehicleGarage" || screenRef.current === "explorationTeam" || screenRef.current === "explorationBattle") {
+        } else if (screenRef.current === "explorationShop" || screenRef.current === "vehicleGarage" || screenRef.current === "explorationTeam" || screenRef.current === "explorationBattle" || screenRef.current === "explorationTest") {
           event.preventDefault();
           if (!event.repeat) closeExplorationSubscreen();
         } else if (screenRef.current === "loadout" && loadoutOpenRef.current !== null) {
@@ -13573,53 +14037,7 @@ export function DeadRoadGame() {
       }
       if (item.key === "molotov") {
         if (item.triggered) {
-          const flamePulse = .85 + Math.sin(now / 90) * .12;
-          const fireGradient = ctx.createRadialGradient(0, 8, 4, 0, 8, 116);
-          fireGradient.addColorStop(0, "rgba(241,124,37,.72)"); fireGradient.addColorStop(.48, "rgba(197,58,25,.33)"); fireGradient.addColorStop(1, "rgba(94,25,15,0)");
-          ctx.fillStyle = fireGradient; ctx.beginPath(); ctx.ellipse(0, 8, 118 * flamePulse, 54 * flamePulse, 0, 0, Math.PI * 2); ctx.fill();
-          // 分层火焰：每根火柱由外焰（大幅低频摆动）→内焰（中摆）→焰心（小幅快摆）三层泪滴火舌叠成
-          const flameTongue = (baseX: number, baseY: number, height: number, halfWidth: number, lean: number, color: string, alpha: number) => {
-            const tipX = baseX + lean;
-            const tipY = baseY - height;
-            ctx.globalAlpha = alpha;
-            ctx.fillStyle = color;
-            ctx.beginPath();
-            ctx.moveTo(baseX - halfWidth, baseY);
-            ctx.quadraticCurveTo(baseX - halfWidth * 0.55 + lean * 0.4, baseY - height * 0.55, tipX, tipY);
-            ctx.quadraticCurveTo(baseX + halfWidth * 0.75 + lean * 0.35, baseY - height * 0.45, baseX + halfWidth, baseY);
-            ctx.closePath();
-            ctx.fill();
-            ctx.globalAlpha = 1;
-          };
-          for (let flame = -84; flame <= 84; flame += 21) {
-            const seed = flame * 0.37;
-            const baseHeight = 30 + ((flame + Math.floor(now / 70)) % 5) * 6;
-            const outerLean = Math.sin(now / 210 + seed) * 9;
-            const midLean = Math.sin(now / 130 + seed * 1.7) * 5;
-            const coreLean = Math.sin(now / 61 + seed * 2.3) * 2.5;
-            flameTongue(flame, 18, baseHeight, 11, outerLean, "#d94f1e", .92);
-            flameTongue(flame + 1, 16, baseHeight * .68, 7.5, midLean, "#f5a028", .9);
-            flameTongue(flame + 1.5, 14, baseHeight * .4, 4, coreLean, "#ffe27a", .95);
-          }
-          // 根部黑烟：柔边烟团自火焰根部持续生成、翻滚上升、逐渐变淡（连续体积感）
-          for (let s = 0; s < 6; s++) {
-            const risePhase = ((now / 2100 + s * 0.19) % 1);
-            const sway = Math.sin(now / 480 + s * 1.9) * (6 + risePhase * 12);
-            const sx = (s - 2.5) * 14 + sway;
-            const sy = -26 - risePhase * 74;
-            const sr = (8 + risePhase * 17) * (1 + Math.sin(now / 350 + s * 2.4) * 0.08);
-            softPuff(ctx, sx, sy, sr, "34,30,27", (1 - risePhase) * 0.34 * Math.min(1, risePhase * 6 + 0.25));
-          }
-          // 热浪：焰尖上方几道半透明的扭动亮纹，暗示热空气扰动
-          ctx.lineWidth = 2.6;
-          for (let h = 0; h < 3; h++) {
-            const hx = -58 + h * 58 + Math.sin(now / 340 + h * 2.2) * 7;
-            ctx.strokeStyle = `rgba(255,236,180,${0.06 + 0.04 * Math.sin(now / 290 + h * 1.4)})`;
-            ctx.beginPath();
-            ctx.moveTo(hx, -24);
-            ctx.quadraticCurveTo(hx + Math.sin(now / 260 + h) * 8, -48, hx + Math.sin(now / 310 + h * 1.3) * 5, -72);
-            ctx.stroke();
-          }
+          drawClassicMolotovFire(ctx, now);
         } else {
           drawThrowableModel(ctx, "molotov", now);
         }
@@ -14432,6 +14850,7 @@ export function DeadRoadGame() {
   const hasUnclaimedExplorationReward = hasUnclaimedDailyTask || hasUnclaimedActivityReward || hasUnclaimedAchievement;
   const currentExplorationVehicleKind = explorationVehicleKind(explorationVehicleLevel);
   const currentExplorationVehicleMaxHp = explorationVehicleMaxHp(explorationVehicleLevel);
+  const displayedExplorationVehicleMaxHp = explorationBattle.testMode ? explorationBattle.vehicleHp : currentExplorationVehicleMaxHp;
   const currentExplorationVehicleUpgradeCost = explorationVehicleUpgradeCost(explorationVehicleLevel);
   const currentExplorationBattleTaskConfig = explorationBattleTaskConfig(explorationBattle.taskOrder);
   const explorationBattleWave = 1 + Math.floor(explorationBattle.elapsed / 20);
@@ -14749,6 +15168,7 @@ export function DeadRoadGame() {
               <button type="button" onClick={() => { sound.uiClick(); setExplorationExchangeNotice(null); changeScreen("explorationShop"); }}><b>▣</b><span>商店</span><small>兑换招募券</small></button>
               <button type="button" onClick={() => { sound.uiClick(); changeScreen("vehicleGarage"); }}><b>▰</b><span>车辆改装</span><small>升级出战车辆</small></button>
               <button type="button" onClick={() => { sound.uiClick(); setExplorationTeamTab("personnel"); changeScreen("explorationTeam"); }}><b>♟</b><span>队伍</span><small>查看出战成员</small></button>
+              <button type="button" onClick={startExplorationTest}><b>⚙</b><span>测试模式</span><small>自由放置全部人物</small></button>
             </nav>
 
             <nav className="exploration-rail exploration-rail-right" aria-label="探索模式右侧功能">
@@ -15044,7 +15464,7 @@ export function DeadRoadGame() {
                         <div><dt>人物血量</dt><dd>{selectedExplorationMemberStats.hp} HP <small>（每级 +{selectedExplorationMember.hpPerLevel}）</small></dd></div>
                         <div><dt>单次攻击伤害</dt><dd>{selectedExplorationMemberStats.damage} <small>（每级 +{selectedExplorationMember.damagePerLevel}）</small></dd></div>
                         <div><dt>人物速度</dt><dd>{selectedExplorationMember.speed}</dd></div>
-                        <div><dt>当前武器</dt><dd>{WEAPONS[selectedExplorationMember.weapon].name}</dd></div>
+                        <div><dt>当前武器</dt><dd>{selectedExplorationMember.displayWeaponName ?? WEAPONS[selectedExplorationMember.weapon].name}</dd></div>
                         <div><dt>召唤勇气值</dt><dd>{selectedExplorationMember.courageCost}</dd></div>
                       </dl>
                       <div className="team-level-line"><span>人物等级</span><strong>LV.{selectedExplorationMemberLevel}</strong><small>上限 LV.{selectedExplorationMemberMaxLevel}</small></div>
@@ -15087,7 +15507,7 @@ export function DeadRoadGame() {
           </div>
         )}
 
-        {screen === "explorationBattle" && (
+        {(screen === "explorationBattle" || screen === "explorationTest") && (
           <div className="exploration-battle-panel overlay-panel">
             <div className="battle-farm-scenery" aria-hidden="true">
               <span className="battle-sky-cloud cloud-a" />
@@ -15109,13 +15529,14 @@ export function DeadRoadGame() {
               </div>
               <div className="battle-top-hud">
                 <div className="battle-courage"><small>勇气值</small><strong>{explorationBattle.courage}</strong><span>每秒 +1</span></div>
-                <div className="battle-vehicle-hp"><small>车辆 HP</small><strong>{Math.ceil(explorationBattle.vehicleHp)} / {currentExplorationVehicleMaxHp}</strong><i><b style={{ width: `${explorationBattle.vehicleHp / currentExplorationVehicleMaxHp * 100}%` }} /></i></div>
+                <div className="battle-vehicle-hp"><small>{explorationBattle.testMode ? "测试车辆 HP" : "车辆 HP"}</small><strong>{Math.ceil(explorationBattle.vehicleHp)} / {displayedExplorationVehicleMaxHp}</strong><i><b style={{ width: `${explorationBattle.vehicleHp / displayedExplorationVehicleMaxHp * 100}%` }} /></i></div>
               </div>
             </div>
-            <div className="battle-observer-label">任务{EXPLORATION_TASK_NAMES[explorationBattle.taskOrder - 1]?.replace("任务", "")} · 第 {explorationBattleWave} 阶段 · {explorationBattle.elapsed}s · 农场道路 · 第三人称自动作战</div>
+            <div className="battle-observer-label">{explorationBattle.testMode ? "人物测试场 · 点击道路选择落点 · 无限尸潮 · 免费部署" : `任务${EXPLORATION_TASK_NAMES[explorationBattle.taskOrder - 1]?.replace("任务", "")}`} · 第 {explorationBattleWave} 阶段 · {explorationBattle.elapsed}s · 农场道路 · 第三人称自动作战</div>
 
-            <div className={`battlefield ${explorationBattle.airstrikeEffects.some((effect) => effect.impacted && explorationSupportClock < effect.impactAt + ITEMS.airstrike.shakeMs) ? "airstrike-shaking" : ""}`} aria-label="探索模式自动战斗区域">
+            <div className={`battlefield ${explorationBattle.testMode ? "test-placement-field" : ""} ${explorationBattle.airstrikeEffects.some((effect) => effect.impacted && explorationSupportClock < effect.impactAt + ITEMS.airstrike.shakeMs) ? "airstrike-shaking" : ""}`} aria-label="探索模式自动战斗区域" onPointerDown={chooseExplorationTestPlacement}>
               <div className="battle-vehicle-position"><ExplorationVehicleModel kind={currentExplorationVehicleKind} compact /></div>
+              {explorationBattle.testMode && explorationTestPlacement && <span className="battle-test-placement-marker" style={{ left: `${explorationTestPlacement.x}%`, bottom: `${explorationTestPlacement.y}%` }}>下一名部署于此</span>}
               {armySupportActive && (
                 <div className={`army-support-squad ${armySupportRemaining < 700 ? "leaving" : ""}`} aria-label="5名M16士兵支援">
                   {Array.from({ length: 5 }, (_, index) => (
@@ -15129,6 +15550,8 @@ export function DeadRoadGame() {
               )}
               {armoredSupportActive && <div className={`armored-support-vehicle ${armoredSupportRemaining < 700 ? "leaving" : ""}`} aria-label="重机枪装甲车支援"><ExplorationArmoredSupportModel firingStartedAt={armoredSupportFiring ? armoredSupportStartedAt : undefined} reloadUntil={explorationBattle.armoredSupportReloadUntil} />{armoredSupportFiring && <><i key={`armored-tracer-${Math.floor(explorationSupportClock / LEVEL8_HMG_FIRE_MS)}`} className="armored-support-tracer" /><i key={`armored-case-${Math.floor(explorationSupportClock / LEVEL8_HMG_FIRE_MS)}`} className="armored-ejected-casing" /></>}{armoredSupportReloading && <i className="armored-dropped-ammo-box" />}</div>}
               {explorationBattle.airstrikeEffects.map((effect) => <ExplorationAirstrikeEffectView key={effect.id} effect={effect} />)}
+              {explorationBattle.medkits.map((medkit) => <div key={medkit.id} className="battle-member-medkit" style={{ left: `${medkit.x}%`, bottom: `${medkit.y}%` }} aria-label="医疗箱治疗区域"><b>✚</b><i /></div>)}
+              {explorationBattle.memberAbilityEffects.map((effect) => <ExplorationMemberAbilityEffectView key={effect.id} effect={effect} />)}
               {explorationBattle.groundProps.map((prop) => {
                 const fade = Math.max(0, Math.min(1, (prop.removeAt - explorationSupportClock) / 2000));
                 return <ExplorationGroundPropView key={prop.id} prop={prop} fade={fade} />;
@@ -15149,8 +15572,8 @@ export function DeadRoadGame() {
                 {explorationBattle.units.map((unit) => {
                   if (!unit.shotTarget) return null;
                   const member = EXPLORATION_MEMBERS.find((candidate) => candidate.id === unit.memberId);
-                  if (!member || MELEE_WEAPONS.has(member.weapon)) return null;
-                  const tracerCount = Math.min(5, WEAPONS[member.weapon].pellets ?? 1);
+                  if (!member || (MELEE_WEAPONS.has(unit.activeWeapon) && member.id !== "riotShieldPolice")) return null;
+                  const tracerCount = Math.min(5, WEAPONS[unit.activeWeapon].pellets ?? 1);
                   return <g key={`${unit.id}-${unit.shotSerial}`}>{Array.from({ length: tracerCount }, (_, index) => {
                     const spreadOffset = (index - (tracerCount - 1) / 2) * .42;
                     return <line key={index} className="battle-unit-bullet-tracer" x1={unit.x + 1.5} y1={60 - unit.y} x2={unit.shotTarget!.x} y2={60 - unit.shotTarget!.y + spreadOffset} />;
@@ -15161,10 +15584,13 @@ export function DeadRoadGame() {
                 const member = EXPLORATION_MEMBERS.find((candidate) => candidate.id === unit.memberId) ?? EXPLORATION_MEMBERS[0];
                 return (
                   <div key={unit.id} className={`battle-unit battle-unit-shared-model ${explorationBattleHasLivingZombies ? "advancing" : "guarding"}`} style={{ left: `${unit.x}%`, bottom: `${unit.y}%`, zIndex: 50 + Math.round(60 - unit.y) }} aria-label={`${unit.label}，HP ${Math.ceil(unit.hp)}`}>
-                    <ExplorationMemberPreview member={member} battleScale motion={unit.action === "walk" ? "moving" : unit.action === "attack" ? "attacking" : unit.action === "reload" ? "reloading" : unit.action === "kick" ? "kicking" : unit.action === "throw" ? "throwing" : "standing"} reloadProgress={unit.action === "reload" ? 1 - unit.reloadRemaining / Math.max(.001, WEAPONS[member.weapon].reload / 1000) : 0} reloadStartedAt={unit.action === "reload" ? unit.reloadStartedAt : undefined} actionStartedAt={unit.action === "attack" ? unit.actionStartedAt : undefined} />
-                    {unit.action === "attack" && !MELEE_WEAPONS.has(member.weapon) && !WEAPONS[member.weapon].explosionRadius && <span className="battle-ejected-casing" />}
-                    {unit.action === "reload" && ["mag", "belt", "box"].includes(WEAPON_HOLD[member.weapon].reloadKind) && <span className="battle-dropped-magazine" />}
+                    <ExplorationMemberPreview member={member} battleScale weaponOverride={unit.activeWeapon} openingAttackPending={unit.openingAttackPending} shieldHp={unit.shieldHp} motion={unit.action === "walk" ? "moving" : unit.action === "attack" ? "attacking" : unit.action === "reload" ? "reloading" : unit.action === "kick" ? "kicking" : unit.action === "throw" ? "throwing" : "standing"} reloadProgress={unit.action === "reload" ? 1 - unit.reloadRemaining / Math.max(.001, WEAPONS[unit.activeWeapon].reload / 1000) : 0} reloadStartedAt={unit.action === "reload" ? unit.reloadStartedAt : undefined} actionStartedAt={unit.action === "attack" ? unit.actionStartedAt : undefined} />
+                    {unit.action === "attack" && !MELEE_WEAPONS.has(unit.activeWeapon) && !WEAPONS[unit.activeWeapon].explosionRadius && <span className="battle-ejected-casing" />}
+                    {member.battleProfile?.dualFire && unit.action === "attack" && <span className="battle-ejected-casing second" />}
+                    {unit.action === "reload" && ["mag", "belt", "box"].includes(WEAPON_HOLD[unit.activeWeapon].reloadKind) && <span className="battle-dropped-magazine" />}
+                    {member.battleProfile?.dualFire && unit.action === "reload" && <span className="battle-dropped-magazine second" />}
                     <i className="battle-entity-hp"><b style={{ width: `${unit.hp / unit.maxHp * 100}%` }} /></i>
+                    {unit.maxShieldHp > 0 && <i className="battle-entity-shield"><b style={{ width: `${unit.shieldHp / unit.maxShieldHp * 100}%` }} /></i>}
                   </div>
                 );
               })}
@@ -15181,7 +15607,7 @@ export function DeadRoadGame() {
                 const large = isLargeExplorationZombie(zombie.kind);
                 const knockedDown = zombie.knockedDownRemaining > 0;
                 return (
-                  <div key={zombie.id} className={`battle-enemy battle-enemy-shared-model ${large ? "large" : ""} ${knockedDown ? "knocked-down" : ""}`} style={{ left: `${zombie.x}%`, bottom: `${zombie.y}%`, zIndex: 50 + Math.round(60 - zombie.y) }} aria-label={`进攻僵尸，HP ${Math.ceil(zombie.hp)}`}>
+                  <div key={zombie.id} className={`battle-enemy battle-enemy-shared-model ${large ? "large" : ""} ${knockedDown ? "knocked-down" : ""} ${zombie.stunnedRemaining > 0 ? "stunned" : ""}`} style={{ left: `${zombie.x}%`, bottom: `${zombie.y}%`, zIndex: 50 + Math.round(60 - zombie.y) }} aria-label={`进攻僵尸，HP ${Math.ceil(zombie.hp)}${zombie.stunnedRemaining > 0 ? "，眩晕中" : ""}`}>
                     <ZombieKindPreview kind={zombie.kind} width={knockedDown ? 184 : large ? 144 : 108} height={knockedDown ? 108 : large ? 220 : 168} className="battle-zombie-shared-preview" fillHeight={!large} motion={zombie.action === "attack" ? "attacking" : zombie.action === "walk" ? "walking" : "standing"} actionStartedAt={zombie.action === "attack" ? zombie.attackStartedAt : undefined} hpRatio={zombie.hp / zombie.maxHp} wounds={zombie.wounds} missingLimbs={zombie.missingLimbs} shieldIntact={zombie.shieldIntact} shieldDents={zombie.shieldDents} ignited={zombie.ignited} knockedDown={knockedDown} />
                     {zombie.hp < zombie.maxHp && <span key={`${zombie.id}-${Math.ceil(zombie.hp)}`} className="battle-zombie-blood" />}
                     <i className="battle-entity-hp"><b style={{ width: `${zombie.hp / zombie.maxHp * 100}%` }} /></i>
@@ -15193,16 +15619,16 @@ export function DeadRoadGame() {
               {explorationBattle.zombies.length === 0 && !explorationBattle.failed && <p className="battle-guard-message">没有敌人时，队员将在原地警戒</p>}
             </div>
 
-            <div className="battle-squad-bar" aria-label="出战队伍">
-              <div className="battle-squad-heading"><small>出战队伍</small><strong>消耗勇气部署</strong></div>
-              {deployedMemberIds.map((memberId) => {
+            <div className={`battle-squad-bar ${explorationBattle.testMode ? "test-roster" : ""}`} aria-label="出战队伍">
+              <div className="battle-squad-heading"><small>{explorationBattle.testMode ? "全部测试人物" : "出战队伍"}</small><strong>{explorationBattle.testMode ? "横向滚动 · 免费重复放置" : "消耗勇气部署"}</strong></div>
+              {(explorationBattle.testMode ? EXPLORATION_MEMBERS.map((member) => member.id) : deployedMemberIds).map((memberId) => {
                 const member = EXPLORATION_MEMBERS.find((candidate) => candidate.id === memberId);
                 if (!member) return null;
                 const activeCount = explorationBattle.units.filter((unit) => unit.memberId === memberId).length;
                 return (
-                  <button key={memberId} type="button" onClick={() => deployExplorationUnit(memberId)} disabled={explorationBattle.failed || explorationBattle.completed || explorationBattle.courage < member.courageCost}>
+                  <button key={memberId} type="button" onClick={() => deployExplorationUnit(memberId)} disabled={explorationBattle.failed || explorationBattle.completed || (!explorationBattle.testMode && explorationBattle.courage < member.courageCost)}>
                     <ExplorationMemberPreview member={member} />
-                    <span>{member.name}</span><strong>{member.courageCost} 勇气 · 场上 {activeCount}</strong>
+                    <span>{member.name}</span><strong>{explorationBattle.testMode ? "免费放置" : `${member.courageCost} 勇气`} · 场上 {activeCount}</strong>
                   </button>
                 );
               })}
@@ -15342,14 +15768,25 @@ export function DeadRoadGame() {
                 <p>公路已肃清</p>
                 <h2>{lotteryDrawCount === 10 ? "十连招募结果" : "招募结果"}</h2>
                 <div className="lottery-reward-grid">
-                  {lotteryRewards.map((rarity, index) => (
-                    <article key={`${rarity}-${index}`} className={`lottery-reward-card reward-${rarity}`}>
-                      <small>NO. {String(index + 1).padStart(2, "0")}</small>
-                      <i>?</i>
-                      <strong>{LOTTERY_RARITIES[rarity].label}</strong>
-                      <span>奖励内容待公布</span>
-                    </article>
-                  ))}
+                  {lotteryRewards.map((reward, index) => {
+                    const member = EXPLORATION_MEMBERS.find((candidate) => candidate.id === reward.memberId);
+                    if (!member) return (
+                      <article key={`common-${index}`} className="lottery-reward-card reward-common">
+                        <small>NO. {String(index + 1).padStart(2, "0")}</small>
+                        <i>?</i>
+                        <strong>普通补给</strong>
+                        <span>奖励内容待后续开放</span>
+                      </article>
+                    );
+                    return (
+                      <article key={`${reward.memberId}-${index}`} className={`lottery-reward-card reward-${reward.rarity}`}>
+                        <small>NO. {String(index + 1).padStart(2, "0")}</small>
+                        <ExplorationMemberPreview member={member} />
+                        <strong>{EXPLORATION_RARITY_LABELS[member.rarity]} · {member.name}</strong>
+                        <span>{member.faction} · {member.displayWeaponName ?? WEAPONS[member.weapon].name}</span>
+                      </article>
+                    );
+                  })}
                 </div>
                 <div className="lottery-reveal-actions">
                   <button type="button" autoFocus onClick={() => { sound.uiClick(); setLotteryPhase("idle"); resetLotteryBattle(); setLotteryRewards([]); }}>继续招募</button>

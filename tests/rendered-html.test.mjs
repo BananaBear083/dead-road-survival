@@ -1369,7 +1369,7 @@ test("adds a ticket-paid player-aimed lottery road battle with weighted rarity r
   assert.match(source, /lotteryOverlayActive \? <div className="masthead lottery-masthead-placeholder" aria-hidden="true" \/> : <header className="masthead">/);
   assert.match(source, /tabIndex=\{screen === "playing" \? 0 : -1\}/);
   assert.match(source, /\{lotteryPhase === "idle" && \([\s\S]*lottery-topbar/);
-  assert.match(source, /奖励内容待公布/);
+  assert.match(source, /EXPLORATION_RARITY_LABELS\[member\.rarity\][\s\S]*member\.name/);
   assert.match(css, /\.lottery-panel/);
   assert.match(css, /\.lottery-first-person-gun/);
   assert.match(css, /\.lottery-gun-aim[^}]*rotate\(calc\(var\(--lottery-aim-angle, -90deg\) \+ 7deg\)\)/);
@@ -1417,7 +1417,7 @@ test("adds the exploration exchange shop, vehicle upgrades and courage auto-batt
   assert.match(source, /const EXPLORATION_TASK1_EXPERIENCE = 157/);
   assert.match(source, /const EXPLORATION_PROGRESS_KEY = "dead-road-exploration-progress"/);
   assert.match(source, /const \[explorationExperience, setExplorationExperience\] = useState\(0\)/);
-  assert.match(source, /function freshExplorationBattle\(vehicleHp: number, taskOrder: number, rewardEligible = false\)/);
+  assert.match(source, /function freshExplorationBattle\(vehicleHp: number, taskOrder: number, rewardEligible = false, testMode = false\)/);
   assert.match(source, /1: \{ openingZombieKinds: \["normal", "normal", "normal"\], finite: true, reward: "resources"/);
   assert.match(source, /kind: "normal"/);
   assert.match(source, /setExplorationCoins\(\(coins\) => coins \+ taskConfig\.rewardCoins\)/);
@@ -1466,14 +1466,14 @@ test("adds the exploration six-slot team roster with shared character and weapon
   assert.match(source, /speedFactor: member\.speedFactor/);
   assert.match(source, /setExplorationExperience\(\(experience\) => experience - upgradeCost\)/);
   assert.match(source, /recruitedMemberIds\.includes\(member\.id\)/);
-  assert.match(source, /deployedMemberIds\.map\(\(memberId\) =>/);
+  assert.match(source, /explorationBattle\.testMode \? EXPLORATION_MEMBERS\.map\(\(member\) => member\.id\) : deployedMemberIds/);
   assert.match(source, /resolveExplorationProjectileHit\(candidate, firearmWeapon!, penetratedDamage/);
   assert.match(source, /type ExplorationBattlePendingMeleeHit =/);
   assert.match(source, /impactAt: supportNow \+ Math\.min\(320/);
   assert.match(source, /target\.hp -= hit\.damage \* explorationZombieArmorDamageFactor/);
-  assert.match(source, /unit\.cooldown = weapon\.fireRate \/ 1000/);
+  assert.match(source, /unit\.cooldown = profile\?\.attackIntervalSeconds \?\? weapon\.fireRate \/ 1000/);
   assert.match(source, /unit\.reloadRemaining = weapon\.reload \/ 1000/);
-  assert.match(source, /sound\.gunshot\(member\.weapon/);
+  assert.match(source, /sound\.gunshot\(activeWeapon as FirearmSoundKey/);
   assert.match(source, /const pellets = weapon\.pellets \?\? 1/);
   assert.match(source, /const pelletHitChance = weapon\.pellets/);
   assert.match(source, /if \(Math\.random\(\) > pelletHitChance\) continue/);
@@ -1492,9 +1492,9 @@ test("adds the exploration six-slot team roster with shared character and weapon
   assert.match(source, /if \(armor\.key === "civilian"\) \{\s*drawSurvivalHumanHeadAndFace\(ctx, facing, "cap"\)/);
   assert.match(source, /standingLegPose/);
   assert.match(source, /gaitLegPose/);
-  assert.match(source, /drawWeaponModel\(ctx, member\.weapon/);
-  assert.match(source, /computeReloadVisual\(member\.weapon/);
-  assert.match(source, /drawReloadProps\(ctx, member\.weapon/);
+  assert.match(source, /drawWeaponModel\(ctx, renderWeapon/);
+  assert.match(source, /computeReloadVisual\(renderWeapon/);
+  assert.match(source, /drawReloadProps\(ctx, renderWeapon/);
   assert.match(source, /lottery-zombie-shared-preview/);
   assert.match(source, /screen === "explorationTeam"/);
   assert.match(source, /team-member-card[\s\S]*<ExplorationMemberPreview member=\{member\} \/>/);
@@ -1527,7 +1527,7 @@ test("adds escalating member upgrades, repeatable lottery rewards, shared hurt a
   assert.match(source, /function explorationMemberUpgradeCost\(level: number\) \{ return 200 \+ \(level - 1\) \* 50; \}/);
   assert.match(source, /const upgradeCost = explorationMemberUpgradeCost\(level\)/);
   assert.match(source, /const selectedExplorationMemberUpgradeCost = explorationMemberUpgradeCost\(selectedExplorationMemberLevel\)/);
-  assert.match(source, /setLotteryRewards\(Array\.from\(\{ length: count \}, \(\) => rollLotteryRarity\(\)\)\)/);
+  assert.match(source, /const rewards = Array\.from\(\{ length: count \}, \(\) => rollExplorationLotteryMember\(\)\)/);
   assert.doesNotMatch(source, /setLotteryRewards\([^\n]*new Set/);
 
   assert.match(source, /id: "combatSoldier"[\s\S]*name: "格斗士兵"[\s\S]*weapon: "combatknife"[\s\S]*rarity: "legendary"[\s\S]*trait: "攻速较快"[\s\S]*faction: "军队"[\s\S]*hp: 150[\s\S]*damage: 50[\s\S]*speed: "快"/);
@@ -1624,7 +1624,7 @@ test("keeps exploration zombies full-size and complete while attacking", async (
   assert.match(source, /for \(const z of g\.zombies\)[\s\S]*drawCompleteZombieBodyFrame\(ctx, z,/);
   assert.match(source, /const previewLength = knockedDown \? width - 18 : height - 14/);
   assert.match(source, /ctx\.translate\(knockedDown \? canvas\.width - 8 : canvas\.width \/ 2/);
-  assert.match(source, /className=\{`battle-enemy battle-enemy-shared-model \$\{large \? "large" : ""\} \$\{knockedDown \? "knocked-down" : ""\}`\}/);
+  assert.match(source, /className=\{`battle-enemy battle-enemy-shared-model \$\{large \? "large" : ""\} \$\{knockedDown \? "knocked-down" : ""\} \$\{zombie\.stunnedRemaining > 0 \? "stunned" : ""\}`\}/);
   assert.match(source, /width=\{knockedDown \? 184 : large \? 144 : 108\} height=\{knockedDown \? 108 : large \? 220 : 168\}/);
   assert.match(css, /\.battle-enemy-shared-model[^}]*width: 108px[^}]*height: 184px/);
   assert.match(css, /\.battle-enemy-shared-model\.knocked-down[^}]*width:\s*184px[^}]*height:\s*124px/);
@@ -1693,7 +1693,7 @@ test("uses weapon-specific reload audio and ten-second dropped firearm props in 
   assert.match(source, /const spitTarget = nearestUnit \?\? \{ id: "vehicle", x: 9, y: 12 \}/);
   assert.match(source, /explorationPlaneDistance\(target, \{ x: spit\.toX, y: spit\.toY \}\) > 3\.5/);
   assert.match(source, /if \(!weapon\.explosionRadius\) addGroundProp/);
-  assert.match(source, /if \(BOLT_ACTION_WEAPONS\.has\(member\.weapon\)\) sound\.boltAction/);
+  assert.match(source, /if \(BOLT_ACTION_WEAPONS\.has\(activeWeapon\)\) sound\.boltAction/);
   assert.match(source, /Math\.max\(\.1, 1 - penetrationIndex \* \.2\)/);
   assert.match(source, /if \(!penetrated\) break/);
 });
@@ -1736,7 +1736,7 @@ test("adds manual reward claims, member growth and reusable exploration support 
   assert.match(source, /armoredSupportNextShotAt \+= LEVEL8_HMG_FIRE_MS/);
   assert.match(source, /armySupportNextShotAt \+= WEAPONS\.m16\.fireRate/);
   assert.match(source, /resolveExplorationProjectileHit\(zombie, "m16", weaponDamage\("m16"\)/);
-  assert.match(source, /weaponDamage\(member\.weapon\) \+ \(unit\.damage - member\.damage\) \/ pellets/);
+  assert.match(source, /weaponDamage\(activeWeapon\) \+ \(unit\.damage - member\.damage\) \/ pellets/);
   assert.match(source, /sound\.airstrike\(\)/);
   assert.match(source, /impactAt: now \+ 550[\s\S]*impacted: false/);
   assert.match(source, /damageExplorationZombieFromExplosion\(zombie, 500 \* hitCount/);
@@ -1745,7 +1745,7 @@ test("adds manual reward claims, member growth and reusable exploration support 
   assert.match(source, /zombie\.knockedDownRemaining = Math\.max/);
   assert.match(source, /dropletCount = 13/);
   assert.match(source, /if \(!penetrated\) break/);
-  assert.match(source, /!WEAPONS\[member\.weapon\]\.explosionRadius/);
+  assert.match(source, /!WEAPONS\[unit\.activeWeapon\]\.explosionRadius/);
   assert.match(source, /zombie\.attackWindupRemaining = \.235/);
   assert.match(source, /zombie\.attackAnimationRemaining = \.56/);
   assert.match(source, /zombie\.attackImpactAt = supportNow \+ 235/);
@@ -1825,7 +1825,7 @@ test("supports paid supplies, repeat summons and a stable two-dimensional explor
   assert.match(source, /召唤勇气值[\s\S]*selectedExplorationMember\.courageCost/);
   assert.match(source, /nextUnitId/);
   assert.match(source, /member-\$\{memberId\}-\$\{battle\.nextUnitId\}/);
-  assert.match(source, /courage: battle\.courage - member\.courageCost/);
+  assert.match(source, /courage: testMode \? battle\.courage : battle\.courage - member\.courageCost/);
   assert.doesNotMatch(source, /battle\.deployed\.includes\(id\)/);
   assert.match(source, /explorationCoins < item\.price/);
   assert.match(source, /setExplorationCoins\(\(coins\) => coins - item\.price\)/);
@@ -1891,4 +1891,28 @@ test("recruits a rare police officer through the task two roadside cinematic", a
   assert.match(css, /\.exploration-recruit-panel/);
   assert.match(css, /\.recruit-police/);
   assert.match(css, /\.recruit-reward-card[^{]*\{[^}]*#4ea8ff/);
+});
+
+test("defines the complete lottery-only exploration roster and test range", async () => {
+  const source = await readFile(new URL("../app/DeadRoadGame.tsx", import.meta.url), "utf8");
+  const lotteryOnlyMembers = [
+    "伐木工", "机械师", "工程师", "格斗警察", "警长", "盾牌防爆警察", "电棍警察", "特警",
+    "消防员", "医护人员", "士兵", "狙击手", "冲锋士兵", "亡命之徒", "暴徒", "强盗",
+    "中东小伙", "步枪手", "燧石66狙击手", "盾兵", "投弹兵", "维和士兵", "霰弹枪士兵",
+    "终结者", "战争机器", "重装者", "双枪",
+  ];
+
+  for (const name of lotteryOnlyMembers) {
+    assert.match(source, new RegExp(`name: "${name}"`));
+  }
+  assert.match(source, /lotteryOnly: true/g);
+  assert.match(source, /const EXPLORATION_LOTTERY_MEMBERS/);
+  assert.match(source, /screen === "explorationTest"/);
+  assert.match(source, /测试模式/);
+  assert.match(source, /testMode: boolean/);
+  assert.match(source, /shieldHp/);
+  assert.match(source, /stunSeconds/);
+  assert.match(source, /spitImmune/);
+  assert.match(source, /medkitInterval/);
+  assert.match(source, /selfDestruct/);
 });

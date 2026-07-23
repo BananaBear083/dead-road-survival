@@ -773,7 +773,9 @@ button { -webkit-tap-highlight-color: transparent; }
 @keyframes battle-unit-tracer-flight { from { opacity:1; stroke-dashoffset:12; } to { opacity:0; stroke-dashoffset:-12; } }
 .battle-muzzle-flash { position: absolute; z-index: 9; left: 77%; top: 38%; width: 20px; height: 13px; background: radial-gradient(circle at 0 50%, #fff5b6 0 17%, #f2a532 20% 42%, transparent 45%), conic-gradient(from 45deg at 0 50%, transparent, #ffd65a, transparent 24% 76%, #ffd65a, transparent); filter: drop-shadow(0 0 6px #f0a82c); animation: battle-flash .16s ease-out both; }
 .battle-ejected-casing { position: absolute; z-index: 8; left: 62%; top: 40%; width: 5px; height: 2px; border-radius: 2px; background: #c9a950; box-shadow: 0 0 0 1px #685728; animation: battle-casing .55s ease-out both; }
+.battle-ejected-casing.second { left:55%; top:44%; animation-delay:.03s; }
 .battle-dropped-magazine { position: absolute; z-index: 4; left: 57%; top: 54%; width: 7px; height: 16px; background: #252c29; border: 1px solid #697069; transform-origin: center; animation: battle-mag-drop .75s ease-in both; }
+.battle-dropped-magazine.second { left:64%; animation-delay:.08s; }
 @keyframes battle-flash { from { opacity: 1; transform: scale(1.2); } to { opacity: 0; transform: scale(.45); } }
 @keyframes battle-casing { to { opacity: .3; transform: translate(-18px, 38px) rotate(520deg); } }
 @keyframes battle-mag-drop { to { opacity: .55; transform: translateY(48px) rotate(48deg); } }
@@ -1391,3 +1393,29 @@ button { -webkit-tap-highlight-color: transparent; }
   .account-dialog { max-height: calc(100dvh - 24px); padding: 25px 20px; }
   .account-dialog h2 { font-size: 27px; }
 }
+
+/* 探索人物专属战斗反馈：盾牌耐久、医疗箱、眩晕与投掷/自爆效果。 */
+.battle-entity-shield { position:absolute; left:14%; right:14%; bottom:-13px; height:4px; overflow:hidden; border:1px solid rgba(137,218,255,.75); border-radius:999px; background:rgba(7,21,30,.85); }
+.battle-entity-shield b { display:block; height:100%; background:linear-gradient(90deg,#3e9ed0,#a8edff); box-shadow:0 0 8px #71d8ff; }
+.battle-enemy.stunned::before { content:"✦ 眩晕"; position:absolute; left:50%; top:-13px; z-index:8; padding:2px 6px; transform:translateX(-50%); border-radius:999px; color:#d9f8ff; background:rgba(25,91,121,.88); box-shadow:0 0 12px #65d8ff; font-size:9px; white-space:nowrap; animation:battle-stun-pulse .42s ease-in-out infinite alternate; }
+@keyframes battle-stun-pulse { to { transform:translateX(-50%) translateY(-3px); filter:brightness(1.35); } }
+.battle-member-medkit { position:absolute; z-index:41; width:38px; height:25px; transform:translate(-50%,25%); border:2px solid #e3e8de; border-radius:4px; color:#f3faf0; background:linear-gradient(#68736b,#343b37); box-shadow:0 6px 9px rgba(0,0,0,.4); }
+.battle-member-medkit b { position:absolute; inset:0; display:grid; place-items:center; color:#e4564f; font-size:18px; }
+.battle-member-medkit i { position:absolute; left:50%; bottom:50%; width:180px; height:90px; transform:translate(-50%,50%); border:2px solid rgba(111,255,171,.3); border-radius:50%; box-shadow:inset 0 0 30px rgba(71,255,151,.12),0 0 18px rgba(71,255,151,.18); animation:battle-medkit-pulse 1s ease-in-out infinite; }
+@keyframes battle-medkit-pulse { 50% { transform:translate(-50%,50%) scale(1.08); opacity:.55; } }
+.battle-member-ability { position:absolute; z-index:88; width:12px; height:12px; transform:translate(-50%,-50%); pointer-events:none; }
+.battle-member-classic-effect { position:absolute; left:50%; bottom:50%; width:420px; height:300px; transform:translate(-50%,50%); }
+.battle-member-ability i { position:absolute; inset:-28px; border-radius:50%; animation:battle-member-blast .85s ease-out forwards; }
+.ability-molotov i { background:radial-gradient(circle,rgba(255,244,136,.95) 0 9%,rgba(255,113,29,.8) 16%,rgba(131,33,10,.28) 48%,transparent 70%); box-shadow:0 -20px 28px rgba(255,95,18,.58); }
+.ability-impact i,.ability-selfDestruct i { background:radial-gradient(circle,#fff7c5 0 7%,#ff9a35 11%,rgba(84,75,65,.82) 30%,rgba(42,45,44,.35) 55%,transparent 72%); box-shadow:0 -34px 38px rgba(67,67,64,.75); }
+.ability-selfDestruct i { inset:-45px; }
+.ability-taser i { inset:-9px; border:2px solid #8ce8ff; background:#e8fdff; box-shadow:0 0 18px #5ed9ff; }
+.ability-taser b { position:absolute; right:50%; top:50%; width:150px; height:2px; transform-origin:right center; background:linear-gradient(90deg,transparent,#82e8ff); box-shadow:0 0 7px #6ee7ff; }
+@keyframes battle-member-blast { from { transform:scale(.18); opacity:1; } to { transform:scale(1.85); opacity:0; } }
+.lottery-reward-card .team-member-preview { width:92px; height:120px; margin:-8px auto -3px; object-fit:contain; }
+.battle-squad-bar.test-roster { display:flex; min-height:106px; max-height:124px; overflow-x:auto; overflow-y:hidden; scrollbar-color:#77877a #111713; scrollbar-width:thin; }
+.battle-squad-bar.test-roster .battle-squad-heading { flex:0 0 150px; position:sticky; left:0; z-index:3; background:#111713; }
+.battle-squad-bar.test-roster button { flex:0 0 184px; min-height:92px; }
+.test-placement-field { cursor:crosshair; }
+.battle-test-placement-marker { position:absolute; z-index:100; transform:translate(-50%,50%); padding:5px 8px; color:#efffe8; background:rgba(38,93,51,.88); border:1px solid #8ff0a7; border-radius:3px; box-shadow:0 0 0 7px rgba(90,229,122,.12),0 0 18px rgba(90,229,122,.45); font-size:9px; font-weight:1000; white-space:nowrap; pointer-events:none; }
+.battle-test-placement-marker::after { content:""; position:absolute; left:50%; top:100%; width:1px; height:20px; background:#8ff0a7; }
