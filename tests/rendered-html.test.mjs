@@ -389,7 +389,7 @@ test("fills any screen aspect ratio with a dynamic world width", async () => {
   assert.doesNotMatch(css, /1420px/);
 });
 
-test("expands menu/shop/loadout panels by hiding the key-hint bar outside battle", async () => {
+test("expands panels outside battle and halves the key-hint bar in survival combat", async () => {
   const source = await readFile(new URL("../app/DeadRoadGame.tsx", import.meta.url), "utf8");
   const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
 
@@ -398,8 +398,10 @@ test("expands menu/shop/loadout panels by hiding the key-hint bar outside battle
   assert.match(source, /className=\{`game-shell \$\{panelMode \? "panel-mode" : ""\} \$\{lotteryCinematic \? "lottery-cinematic" : ""\} \$\{gamepadShopping \? "controller-lock" : ""\}`\}/);
   assert.match(css, /\.panel-mode \.controls-bar \{ display: none; \}/);
   assert.match(css, /\.panel-mode \.masthead \{ height: 52px; \}/);
-  // 底栏按键条全局压缩（60px）
+  // 其他战斗模式保持 60px；只有生存模式战斗底栏减半至 30px，把空间让给上方画布
   assert.match(css, /\.controls-bar \{ min-height: 60px/);
+  assert.match(source, /className=\{`game-stage \$\{screen === "playing" \? "is-playing" : ""\} \$\{snapshot\.mode === "survival" \? "survival-stage" : ""\}`\}/);
+  assert.match(css, /\.game-stage\.is-playing\.survival-stage \+ \.controls-bar \{[^}]*min-height: 30px;[^}]*height: 30px;/);
   // 防重叠：按钮组换行 + 菜单装饰不拦截点击
   assert.match(css, /\.shop-footer \{ flex-wrap: wrap/);
   assert.match(css, /\.menu-actions \{ flex-wrap: wrap/);
