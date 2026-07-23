@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   creditPlayerCoins,
   EMPTY_COOP_GAMEPAD_BUTTONS,
+  gamepadMenuScrollDelta,
   nextDirectionalButtonIndex,
   readCoOpGamepad,
   survivalWaveTotal,
@@ -115,6 +116,12 @@ test("商店方向键只选择对应方向最接近的控件且不会错误绕�
   assert.equal(nextDirectionalButtonIndex(controls, 0, "down"), 2);
   assert.equal(nextDirectionalButtonIndex(controls, 0, "left"), 0);
   assert.equal(nextDirectionalButtonIndex(controls, 0, "up"), 0);
+});
+
+test("商店左摇杆可连续向下或向上滚动并过滤轻微漂移", () => {
+  assert.equal(gamepadMenuScrollDelta(0.75), 14);
+  assert.equal(gamepadMenuScrollDelta(-0.6), -11);
+  assert.equal(gamepadMenuScrollDelta(0.1), 0);
 });
 
 test("未连接标准手柄时返回安全的空输入", () => {

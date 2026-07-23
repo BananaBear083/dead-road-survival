@@ -36,6 +36,13 @@ test("co-op keeps separate wallets and hands shopping from keyboard to gamepad",
   const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
 
   assert.match(source, /secondGear: CoOpGear \| null/);
+  assert.match(source, /secondItemInventory: g\.secondGear \? \{ \.\.\.g\.secondGear\.itemInventory \}/);
+  assert.match(source, /secondOwnedPartners: g\.secondGear \? Array\.from\(g\.secondGear\.ownedPartners\)/);
+  assert.match(source, /itemInventoryForSlot\(g, shopperSlot\)\[key\] \+= 1/);
+  assert.match(source, /ownedPartnersForSlot\(g, shopperSlot\)/);
+  assert.match(source, /updatePartner\(g, now, dt, 2\)/);
+  assert.match(source, /owner: slot/);
+  assert.match(source, /setSelectedItemForSlot\(g, 1, null\);[\s\S]*?if \(g\.secondGear\) setSelectedItemForSlot\(g, 2, null\)/);
   assert.match(source, /const rewardOwner = g\.coOp \? z\.rewardOwner \?\? 1 : 1/);
   assert.match(source, /drawText\(ctx, `P1 ◉ \$\{g\.coins\}`/);
   assert.match(source, /drawText\(ctx, `P2 ◉ \$\{g\.secondGear\.coins\}`/);
@@ -56,7 +63,10 @@ test("co-op keeps separate wallets and hands shopping from keyboard to gamepad",
   const menuGamepadEnd = source.indexOf("frameId = requestAnimationFrame(pollMenuGamepad);", menuGamepadStart);
   const menuGamepadLoop = source.slice(menuGamepadStart, menuGamepadEnd);
   assert.doesNotMatch(menuGamepadLoop, /input\.(backPressed|previousTabPressed|kickPressed|menuPressed)/);
-  assert.match(source, /方向键导航 · A 确认 · 键盘仅 ESC 可退出/);
+  assert.match(menuGamepadLoop, /scrollGamepadPanel\(focusScope, gamepadMenuScrollDelta\(input\.moveY\)\)/);
+  assert.match(source, /方向键导航 · 左摇杆滚动 · A 确认 · 键盘仅 ESC 可退出/);
+  assert.doesNotMatch(source, /shopTab === "items" && !gamepadShopping/);
+  assert.doesNotMatch(source, /shopTab === "partners" && !gamepadShopping/);
   for (const action of ["confirmPressed", "backPressed", "previousTabPressed", "menuPressed", "upPressed", "downPressed", "leftPressed", "rightPressed"]) {
     assert.match(gamepad, new RegExp(`${action}:`));
   }
@@ -90,8 +100,9 @@ test("previews, throws, and detonates tactical items with distinct effects", asy
   }
   assert.match(source, /function itemTargetInFront/);
   assert.match(source, /delivery: "place"/);
-  assert.match(source, /const minimumX = game\.player\.x \+ \(fixedPlacement \? 90 : 120\)/);
-  assert.match(source, /g\.selectedItem = g\.selectedItem === key \? null : key/);
+  assert.match(source, /const player = playerForSlot\(game, slot\)/);
+  assert.match(source, /const near = player\.x \+ facing \* \(fixedPlacement \? 90 : 120\)/);
+  assert.match(source, /setSelectedItemForSlot\(g, slot, selectedItemForSlot\(g, slot\) === key \? null : key\)/);
   assert.match(source, /if \(deploySelectedItem\(performance\.now\(\)\)\) return/);
   assert.match(source, /g\.barricades\.push\(\{ id, x: target\.x, y: target\.y, hp: 100, maxHp: 100 \}\)/);
   assert.match(source, /THROW_FLIGHT_MS = 620/);

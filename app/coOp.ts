@@ -97,6 +97,11 @@ function buttonPressed(gamepad: GamepadLike, index: number) {
   return Boolean(button && (button.pressed || button.value >= 0.55));
 }
 
+export function gamepadMenuScrollDelta(moveY: number) {
+  if (!Number.isFinite(moveY) || Math.abs(moveY) < 0.15) return 0;
+  return Math.round(Math.max(-1, Math.min(1, moveY)) * 18);
+}
+
 export function nextDirectionalButtonIndex(
   controls: readonly DirectionalButtonRect[],
   currentIndex: number,

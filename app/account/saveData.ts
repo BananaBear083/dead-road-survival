@@ -104,6 +104,24 @@ function compareRank(left: [number, number, number], right: [number, number, num
   return 0;
 }
 
+function mergeSecondPlayerProgress(left: unknown, right: unknown, preferRight: boolean): JsonObject | null {
+  const leftPlayer = objectOrNull(left);
+  const rightPlayer = objectOrNull(right);
+  if (!leftPlayer) return rightPlayer ? structuredClone(rightPlayer) : null;
+  if (!rightPlayer) return structuredClone(leftPlayer);
+  const preferred = preferRight ? rightPlayer : leftPlayer;
+  const other = preferred === leftPlayer ? rightPlayer : leftPlayer;
+  return {
+    ...structuredClone(other),
+    ...structuredClone(preferred),
+    coins: Math.max(finiteNonNegative(leftPlayer.coins), finiteNonNegative(rightPlayer.coins)),
+    owned: uniqueStrings(leftPlayer.owned, rightPlayer.owned),
+    ownedArmors: uniqueStrings(leftPlayer.ownedArmors, rightPlayer.ownedArmors),
+    ownedPartners: uniqueStrings(leftPlayer.ownedPartners, rightPlayer.ownedPartners),
+    itemInventory: mergeInventories(leftPlayer.itemInventory, rightPlayer.itemInventory),
+  };
+}
+
 /**
  * Progress deliberately merges unlocks and inventory instead of choosing one
  * whole document. A first login must never erase items earned in either copy.
@@ -117,7 +135,7 @@ export function mergeProgress(left: JsonObject | null, right: JsonObject | null)
   return {
     ...structuredClone(other),
     ...structuredClone(preferred),
-    version: Math.max(finiteNonNegative(left.version), finiteNonNegative(right.version), 4),
+    version: Math.max(finiteNonNegative(left.version), finiteNonNegative(right.version), 5),
     nextDay: Math.max(finiteNonNegative(left.nextDay), finiteNonNegative(right.nextDay), 1),
     coins: Math.max(finiteNonNegative(left.coins), finiteNonNegative(right.coins)),
     kills: Math.max(finiteNonNegative(left.kills), finiteNonNegative(right.kills)),
@@ -125,6 +143,7 @@ export function mergeProgress(left: JsonObject | null, right: JsonObject | null)
     ownedArmors: uniqueStrings(left.ownedArmors, right.ownedArmors),
     ownedPartners: uniqueStrings(left.ownedPartners, right.ownedPartners),
     itemInventory: mergeInventories(left.itemInventory, right.itemInventory),
+    secondPlayer: mergeSecondPlayerProgress(left.secondPlayer, right.secondPlayer, preferred === right),
   };
 }
 

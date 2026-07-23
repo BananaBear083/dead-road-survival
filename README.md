@@ -46,20 +46,24 @@ Bluetooth gamepad:
 - `X`: reload
 - `Y`: switch weapon
 - `B` or right bumper (`RB`): kick
+- D-pad left/right: select a purchased tactical item
+- `A`: deploy or use the selected tactical item
 - menu/start: pause or resume
 
 After each cleared day, players shop in turns:
 
 1. Player 1 buys and chooses equipment with keyboard and mouse, then selects
    **P1 准备**.
-2. Mouse input is locked while Player 2 uses only the D-pad to navigate and
-   `A` to confirm. The keyboard is locked except for `Esc`, which saves and
-   exits to the main menu.
+2. Mouse input is locked while Player 2 uses the D-pad to navigate, the left
+   stick to scroll long shop lists, and `A` to confirm. The keyboard is locked
+   except for `Esc`, which saves and exits to the main menu.
 3. Player 2 selects **P2 继续** to start the next day.
 
 Both players use the same survival character, weapon, animation, reload, sound,
 damage, and zombie systems, while keeping independent health, ammunition,
 wallets, weapon ownership, loadouts, and armor.
+Player 2 also keeps a separate tactical-item inventory and partner roster; a
+selected partner follows Player 2 and credits its kills to Player 2.
 Co-op survival spawns exactly twice the single-player zombie total each day.
 Connect the gamepad before starting the mode and press any gamepad button if the
 browser has not detected it yet.

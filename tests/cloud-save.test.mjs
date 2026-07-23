@@ -66,6 +66,15 @@ test("keeps the most advanced loadout while unioning unlocks and inventory", () 
         ownedArmors: ["civilian"],
         ownedPartners: [],
         itemInventory: { frag: 1, molotov: 4 },
+        secondPlayer: {
+          coins: 100,
+          loadout: ["glock17", "sawedoff"],
+          owned: ["glock17", "sawedoff"],
+          ownedArmors: ["civilian"],
+          ownedPartners: ["hound"],
+          partner: "hound",
+          itemInventory: { frag: 1, molotov: 2 },
+        },
       },
     },
     {
@@ -81,15 +90,31 @@ test("keeps the most advanced loadout while unioning unlocks and inventory", () 
         ownedArmors: ["combat"],
         ownedPartners: ["soldier"],
         itemInventory: { frag: 3, molotov: 1 },
-        secondPlayer: { coins: 175, loadout: ["glock17", "sawedoff"] },
+        secondPlayer: {
+          coins: 175,
+          loadout: ["glock17", "sawedoff"],
+          owned: ["glock17", "pkm"],
+          ownedArmors: ["army"],
+          ownedPartners: ["officer"],
+          partner: "officer",
+          itemInventory: { frag: 3, molotov: 1 },
+        },
       },
     },
   );
 
   assert.equal(merged.progress.nextDay, 9);
   assert.equal(merged.progress.coOp, true);
-  assert.equal(merged.progress.version, 4);
-  assert.deepEqual(merged.progress.secondPlayer, { coins: 175, loadout: ["glock17", "sawedoff"] });
+  assert.equal(merged.progress.version, 5);
+  assert.deepEqual(merged.progress.secondPlayer, {
+    coins: 175,
+    loadout: ["glock17", "sawedoff"],
+    owned: ["glock17", "sawedoff", "pkm"],
+    ownedArmors: ["civilian", "army"],
+    ownedPartners: ["hound", "officer"],
+    partner: "officer",
+    itemInventory: { frag: 3, molotov: 2 },
+  });
   assert.equal(merged.progress.coins, 400);
   assert.deepEqual(merged.progress.loadout, ["pkm", "glock17"]);
   assert.equal(merged.progress.weapon, "pkm");
