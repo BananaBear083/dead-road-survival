@@ -16030,7 +16030,7 @@ export function DeadRoadGame() {
         </div>
       </header>}
 
-      <section className={`game-stage ${screen === "playing" ? "is-playing" : ""} ${snapshot.mode === "survival" ? "survival-stage" : ""}`} ref={stageRef}>
+      <section className={`game-stage ${screen === "playing" ? "is-playing" : ""}`} ref={stageRef}>
         <canvas
           ref={canvasRef}
           width={canvasW}

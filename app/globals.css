@@ -1277,33 +1277,32 @@ button { -webkit-tap-highlight-color: transparent; }
 .controls-bar span { font-size: 9px; font-weight: 800; letter-spacing: .05em; }
 .controls-bar p { margin-left: auto; color: var(--signal); font-size: 9px; letter-spacing: .08em; }
 
-/* 生存战斗把底栏高度从 60px 减半至 30px，释放出的空间由上方弹性舞台自动占用。
+/* 生存、靶场、关卡战斗统一把底栏高度从 60px 减半至 30px，释放空间由上方弹性舞台自动占用。
    同时压缩按键块、间距和横向内边距，保留完整提示内容及横向滚动能力。 */
-.game-stage.is-playing.survival-stage + .controls-bar {
+.game-stage.is-playing + .controls-bar {
   min-height: 30px;
   height: 30px;
   gap: clamp(5px, .75vw, 12px);
   padding: 3px clamp(8px, 1.5vw, 28px);
 }
-.game-stage.is-playing.survival-stage + .controls-bar div { flex-direction: row; gap: 4px; }
-.game-stage.is-playing.survival-stage + .controls-bar kbd {
+.game-stage.is-playing + .controls-bar div { flex-direction: row; gap: 4px; }
+.game-stage.is-playing + .controls-bar kbd {
   min-width: 22px;
   padding: 2px 4px;
   border-bottom-width: 1px;
   font-size: 8px;
   line-height: 1;
 }
-.game-stage.is-playing.survival-stage + .controls-bar span {
+.game-stage.is-playing + .controls-bar span {
   font-size: 8px;
   letter-spacing: .03em;
 }
-.game-stage.is-playing.survival-stage + .controls-bar p {
+.game-stage.is-playing + .controls-bar p {
   font-size: 8px;
   line-height: 1;
 }
 
-/* 非战斗界面（菜单/商店/装备/结算）：紧凑页头 + 隐藏底栏按键条，舞台面板向下扩展约 110px；
-   非生存战斗/暂停仍保持原始底栏尺寸 */
+/* 非战斗界面（菜单/商店/装备/结算）：紧凑页头 + 隐藏底栏按键条，舞台面板向下扩展约 110px */
 .panel-mode .masthead { height: 52px; }
 .panel-mode .controls-bar { display: none; }
 
