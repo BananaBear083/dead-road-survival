@@ -1418,10 +1418,10 @@ test("adds the exploration exchange shop, vehicle upgrades and courage auto-batt
   assert.match(source, /const EXPLORATION_PROGRESS_KEY = "dead-road-exploration-progress"/);
   assert.match(source, /const \[explorationExperience, setExplorationExperience\] = useState\(0\)/);
   assert.match(source, /function freshExplorationBattle\(vehicleHp: number, taskOrder: number, rewardEligible = false\)/);
-  assert.match(source, /1: \{ openingZombieKinds: \["normal", "normal", "normal"\], finite: true, reward: "resources"/);
+  assert.match(source, /1: \{ openingZombieKinds: \["normal", "normal", "normal"\], finite: true, reward: \{ kind: "resources"/);
   assert.match(source, /kind: "normal"/);
-  assert.match(source, /setExplorationCoins\(\(coins\) => coins \+ taskConfig\.rewardCoins\)/);
-  assert.match(source, /setExplorationExperience\(\(experience\) => experience \+ taskConfig\.rewardExperience\)/);
+  assert.match(source, /setExplorationCoins\(\(coins\) => coins \+ reward\.coins\)/);
+  assert.match(source, /setExplorationExperience\(\(experience\) => experience \+ reward\.experience\)/);
   assert.match(source, /window\.localStorage\.setItem\(EXPLORATION_PROGRESS_KEY/);
   assert.match(source, /onClick=\{\(\) => startExplorationBattle\(task\.order\)\}/);
   assert.match(source, /EXPLORATION_TASK_NAMES\[explorationBattle\.taskOrder - 1\]\}完成/);
@@ -1871,18 +1871,18 @@ test("recruits a rare police officer through the task two roadside cinematic", a
   assert.match(source, /Array\.from\(\{ length: EXPLORATION_TASK2_NORMAL_ZOMBIE_COUNT \}, \(\) => "normal" as const\)/);
   assert.match(source, /Array\.from\(\{ length: EXPLORATION_TASK2_RUNNER_ZOMBIE_COUNT \}, \(\) => "runner" as const\)/);
   assert.match(source, /2: \{ openingZombieKinds: EXPLORATION_TASK2_OPENING_ZOMBIE_KINDS/);
-  assert.match(source, /2: \{[\s\S]*?reward: "police"[\s\S]*?rewardCoins: EXPLORATION_TASK2_COINS[\s\S]*?rewardExperience: EXPLORATION_TASK2_EXPERIENCE/);
+  assert.match(source, /2: \{[\s\S]*?reward: \{ kind: "police", coins: EXPLORATION_TASK2_COINS, experience: EXPLORATION_TASK2_EXPERIENCE \}/);
   assert.match(source, /explorationBattleTaskConfig\(battle\.taskOrder\)\.finite/);
-  assert.match(source, /taskConfig\.reward === "police"[\s\S]*setOwnedMemberIds[\s\S]*"police"/);
+  assert.match(source, /reward\.kind === "police"[\s\S]*setOwnedMemberIds[\s\S]*"police"/);
   assert.match(source, /const recruitDelay = Math\.max\(240, latestCorpseRemoval - performance\.now\(\)\)/);
   assert.match(source, /changeScreen\("explorationRecruit"\);[\s\S]*}, recruitDelay\)/);
-  assert.match(source, /setExplorationCoins\(\(coins\) => coins \+ taskConfig\.rewardCoins\)/);
-  assert.match(source, /setExplorationExperience\(\(experience\) => experience \+ taskConfig\.rewardExperience\)/);
-  assert.match(source, /recordExplorationDailyEarnings\(taskConfig\.rewardCoins, taskConfig\.rewardExperience\)/);
-  assert.match(source, /!explorationBattle\.rewardEligible \|\| taskConfig\.reward !== "police"/);
+  assert.match(source, /setExplorationCoins\(\(coins\) => coins \+ reward\.coins\)/);
+  assert.match(source, /setExplorationExperience\(\(experience\) => experience \+ reward\.experience\)/);
+  assert.match(source, /recordExplorationDailyEarnings\(reward\.coins, reward\.experience\)/);
+  assert.match(source, /!explorationBattle\.rewardEligible \|\| taskConfig\.reward\.kind !== "police"/);
   assert.doesNotMatch(source, /explorationRecruitRewardEligible/);
   assert.match(source, /\+\{EXPLORATION_TASK2_COINS\} 金币[\s\S]*\+\{EXPLORATION_TASK2_EXPERIENCE\} 经验点数/);
-  assert.match(source, /!explorationBattle\.completed \|\| !explorationBattle\.rewardEligible \|\| taskConfig\.reward !== "police"/);
+  assert.match(source, /!explorationBattle\.completed \|\| !explorationBattle\.rewardEligible \|\| taskConfig\.reward\.kind !== "police"/);
   assert.match(source, /changeScreen\("explorationRecruit"\)/);
   assert.match(source, /setExplorationMemberLevels\([\s\S]*police: levels\.police \?\? 1/);
   assert.match(source, /平民[\s\S]*你可以加入我们/);
@@ -1917,4 +1917,20 @@ test("defines the complete lottery-only exploration roster without a test mode",
   assert.match(source, /spitImmune/);
   assert.match(source, /medkitInterval/);
   assert.match(source, /selfDestruct/);
+});
+
+test("configures exploration tasks three through ten with exact waves and first-clear rewards", async () => {
+  const source = await readFile(new URL("../app/DeadRoadGame.tsx", import.meta.url), "utf8");
+  const configBlock = source.slice(source.indexOf("const EXPLORATION_BATTLE_TASK_CONFIGS"), source.indexOf("const DEFAULT_EXPLORATION_BATTLE_TASK_CONFIG"));
+
+  assert.match(configBlock, /3: \{ openingZombieKinds: repeatExplorationZombie\("helmet", 5\)[\s\S]*?reward: \{ kind: "resources", coins: 1421, experience: 104 \}/);
+  assert.match(configBlock, /4: \{ openingZombieKinds: \[\.\.\.repeatExplorationZombie\("helmetRunner", 3\), \.\.\.repeatExplorationZombie\("runner", 3\)\][\s\S]*?reward: \{ kind: "resources", coins: 1611, experience: 137 \}/);
+  assert.match(configBlock, /5: \{ openingZombieKinds: \[\.\.\.repeatExplorationZombie\("army", 3\), \.\.\.repeatExplorationZombie\("helmetRunner", 3\)\][\s\S]*?reward: \{ kind: "resources", coins: 1567, experience: 129 \}/);
+  assert.match(configBlock, /6: \{ openingZombieKinds: repeatExplorationZombie\("army", 6\)[\s\S]*?reward: \{ kind: "resources", coins: 1521, experience: 171 \}/);
+  assert.match(configBlock, /7: \{ openingZombieKinds: \[\.\.\.repeatExplorationZombie\("army", 3\), \.\.\.repeatExplorationZombie\("armyRunner", 3\)\][\s\S]*?reward: \{ kind: "resources", coins: 1112, experience: 142 \}/);
+  assert.match(configBlock, /8: \{ openingZombieKinds: repeatExplorationZombie\("armyRunner", 6\)[\s\S]*?reward: \{ kind: "resources", coins: 1094, experience: 132 \}/);
+  assert.match(configBlock, /9: \{ openingZombieKinds: \[\.\.\.repeatExplorationZombie\("armyRunner", 6\), \.\.\.repeatExplorationZombie\("zombieDog", 6\)\][\s\S]*?reward: \{ kind: "resources", coins: 1511, experience: 109 \}/);
+  assert.match(configBlock, /10: \{ openingZombieKinds: repeatExplorationZombie\("juggernaut", 2\)[\s\S]*?reward: \{ kind: "vouchers", vouchers: 100 \}/);
+  assert.match(source, /setExplorationVouchers\(\(vouchers\) => vouchers \+ reward\.vouchers\)/);
+  assert.match(source, /currentExplorationBattleTaskConfig\.reward\.kind === "vouchers"[\s\S]*?\+\{currentExplorationBattleTaskConfig\.reward\.vouchers\} 点券/);
 });

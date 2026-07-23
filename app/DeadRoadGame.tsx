@@ -842,12 +842,15 @@ const LEVEL8_ID = "level-clear-highway";
 const LEVEL8_TITLE = "清理高速";
 
 type ExplorationTask = { order: number; label: string; x: number; y: number };
+type ExplorationBattleReward =
+  | { kind: "resources"; coins: number; experience: number }
+  | { kind: "police"; coins: number; experience: number }
+  | { kind: "vouchers"; vouchers: number }
+  | { kind: "none" };
 type ExplorationBattleTaskConfig = {
   openingZombieKinds: ZombieKind[];
   finite: boolean;
-  reward: "resources" | "police" | "none";
-  rewardCoins: number;
-  rewardExperience: number;
+  reward: ExplorationBattleReward;
   completionEyebrow: string;
   completionSummary: string;
 };
@@ -881,11 +884,22 @@ const EXPLORATION_TASK2_OPENING_ZOMBIE_KINDS: ZombieKind[] = [
   ...Array.from({ length: EXPLORATION_TASK2_NORMAL_ZOMBIE_COUNT }, () => "normal" as const),
   ...Array.from({ length: EXPLORATION_TASK2_RUNNER_ZOMBIE_COUNT }, () => "runner" as const),
 ];
+function repeatExplorationZombie(kind: ZombieKind, count: number): ZombieKind[] {
+  return Array.from({ length: count }, () => kind);
+}
 const EXPLORATION_BATTLE_TASK_CONFIGS: Record<number, ExplorationBattleTaskConfig> = {
-  1: { openingZombieKinds: ["normal", "normal", "normal"], finite: true, reward: "resources", rewardCoins: EXPLORATION_TASK1_COINS, rewardExperience: EXPLORATION_TASK1_EXPERIENCE, completionEyebrow: "农场道路已肃清", completionSummary: "三只普通僵尸已全部消灭" },
-  2: { openingZombieKinds: EXPLORATION_TASK2_OPENING_ZOMBIE_KINDS, finite: true, reward: "police", rewardCoins: EXPLORATION_TASK2_COINS, rewardExperience: EXPLORATION_TASK2_EXPERIENCE, completionEyebrow: "公路巡逻队已肃清", completionSummary: `${EXPLORATION_TASK2_NORMAL_ZOMBIE_COUNT} 只普通僵尸与 ${EXPLORATION_TASK2_RUNNER_ZOMBIE_COUNT} 只奔跑僵尸已全部消灭` },
+  1: { openingZombieKinds: ["normal", "normal", "normal"], finite: true, reward: { kind: "resources", coins: EXPLORATION_TASK1_COINS, experience: EXPLORATION_TASK1_EXPERIENCE }, completionEyebrow: "农场道路已肃清", completionSummary: "三只普通僵尸已全部消灭" },
+  2: { openingZombieKinds: EXPLORATION_TASK2_OPENING_ZOMBIE_KINDS, finite: true, reward: { kind: "police", coins: EXPLORATION_TASK2_COINS, experience: EXPLORATION_TASK2_EXPERIENCE }, completionEyebrow: "公路巡逻队已肃清", completionSummary: `${EXPLORATION_TASK2_NORMAL_ZOMBIE_COUNT} 只普通僵尸与 ${EXPLORATION_TASK2_RUNNER_ZOMBIE_COUNT} 只奔跑僵尸已全部消灭` },
+  3: { openingZombieKinds: repeatExplorationZombie("helmet", 5), finite: true, reward: { kind: "resources", coins: 1421, experience: 104 }, completionEyebrow: "头盔尸群已肃清", completionSummary: "5 只摩托车头盔僵尸已全部消灭" },
+  4: { openingZombieKinds: [...repeatExplorationZombie("helmetRunner", 3), ...repeatExplorationZombie("runner", 3)], finite: true, reward: { kind: "resources", coins: 1611, experience: 137 }, completionEyebrow: "高速尸群已肃清", completionSummary: "3 只摩托车头盔奔跑僵尸与 3 只奔跑僵尸已全部消灭" },
+  5: { openingZombieKinds: [...repeatExplorationZombie("army", 3), ...repeatExplorationZombie("helmetRunner", 3)], finite: true, reward: { kind: "resources", coins: 1567, experience: 129 }, completionEyebrow: "军用农道已肃清", completionSummary: "3 只军队僵尸与 3 只摩托车头盔奔跑僵尸已全部消灭" },
+  6: { openingZombieKinds: repeatExplorationZombie("army", 6), finite: true, reward: { kind: "resources", coins: 1521, experience: 171 }, completionEyebrow: "驻军尸群已肃清", completionSummary: "6 只军队僵尸已全部消灭" },
+  7: { openingZombieKinds: [...repeatExplorationZombie("army", 3), ...repeatExplorationZombie("armyRunner", 3)], finite: true, reward: { kind: "resources", coins: 1112, experience: 142 }, completionEyebrow: "混合军队尸群已肃清", completionSummary: "3 只军队僵尸与 3 只军队奔跑僵尸已全部消灭" },
+  8: { openingZombieKinds: repeatExplorationZombie("armyRunner", 6), finite: true, reward: { kind: "resources", coins: 1094, experience: 132 }, completionEyebrow: "军队奔跑尸群已肃清", completionSummary: "6 只军队奔跑僵尸已全部消灭" },
+  9: { openingZombieKinds: [...repeatExplorationZombie("armyRunner", 6), ...repeatExplorationZombie("zombieDog", 6)], finite: true, reward: { kind: "resources", coins: 1511, experience: 109 }, completionEyebrow: "农场腹地已肃清", completionSummary: "6 只军队奔跑僵尸与 6 只僵尸狗已全部消灭" },
+  10: { openingZombieKinds: repeatExplorationZombie("juggernaut", 2), finite: true, reward: { kind: "vouchers", vouchers: 100 }, completionEyebrow: "农田最终防线已肃清", completionSummary: "2 只重装僵尸已全部消灭" },
 };
-const DEFAULT_EXPLORATION_BATTLE_TASK_CONFIG: ExplorationBattleTaskConfig = { openingZombieKinds: [], finite: false, reward: "none", rewardCoins: 0, rewardExperience: 0, completionEyebrow: "道路已肃清", completionSummary: "所有僵尸已全部消灭" };
+const DEFAULT_EXPLORATION_BATTLE_TASK_CONFIG: ExplorationBattleTaskConfig = { openingZombieKinds: [], finite: false, reward: { kind: "none" }, completionEyebrow: "道路已肃清", completionSummary: "所有僵尸已全部消灭" };
 const EXPLORATION_TEAM_SIZE = 6;
 const EXPLORATION_DAILY_ACTIVITY_REWARD_TARGET = 300;
 const EXPLORATION_DAILY_ACTIVITY_REWARD_VOUCHERS = 100;
@@ -10875,7 +10889,8 @@ export function DeadRoadGame() {
   useEffect(() => {
     const taskOrder = explorationBattle.taskOrder;
     const taskConfig = explorationBattleTaskConfig(taskOrder);
-    if (screen !== "explorationBattle" || !explorationBattle.completed || !explorationBattle.rewardEligible || taskConfig.reward === "none") return;
+    const reward = taskConfig.reward;
+    if (screen !== "explorationBattle" || !explorationBattle.completed || !explorationBattle.rewardEligible || reward.kind === "none") return;
     if (explorationClearedTasks.includes(taskOrder) || rewardedExplorationTasksRef.current.has(taskOrder)) return;
     rewardedExplorationTasksRef.current.add(taskOrder);
     const nextCleared = [...explorationClearedTasks, taskOrder].sort((a, b) => a - b);
@@ -10884,14 +10899,18 @@ export function DeadRoadGame() {
     queueMicrotask(() => {
       if (!active) return;
       setExplorationClearedTasks(nextCleared);
-      setExplorationCoins((coins) => coins + taskConfig.rewardCoins);
-      setExplorationExperience((experience) => experience + taskConfig.rewardExperience);
-      recordExplorationDailyEarnings(taskConfig.rewardCoins, taskConfig.rewardExperience);
-      if (taskConfig.reward === "resources") {
+      if (reward.kind === "resources" || reward.kind === "police") {
+        setExplorationCoins((coins) => coins + reward.coins);
+        setExplorationExperience((experience) => experience + reward.experience);
+        recordExplorationDailyEarnings(reward.coins, reward.experience);
+      } else if (reward.kind === "vouchers") {
+        setExplorationVouchers((vouchers) => vouchers + reward.vouchers);
+      }
+      if (reward.kind === "resources" || reward.kind === "vouchers") {
         sound.purchase();
         return;
       }
-      if (taskConfig.reward === "police") {
+      if (reward.kind === "police") {
         // 首次通关任务二即永久获得警察；动画只负责按剧情顺序揭晓，避免中途刷新丢失奖励。
         setOwnedMemberIds((owned) => owned.includes("police") ? owned : [...owned, "police"]);
         setRecruitedMemberIds((recruited) => recruited.filter((id) => id !== "police"));
@@ -10904,7 +10923,7 @@ export function DeadRoadGame() {
 
   useEffect(() => {
     const taskConfig = explorationBattleTaskConfig(explorationBattle.taskOrder);
-    if (screen !== "explorationBattle" || !explorationBattle.completed || !explorationBattle.rewardEligible || taskConfig.reward !== "police") return;
+    if (screen !== "explorationBattle" || !explorationBattle.completed || !explorationBattle.rewardEligible || taskConfig.reward.kind !== "police") return;
     // 任务二的落单警察事件只在首次通关时播放，重复通关直接停留在普通结算界面。
     // 先让最终击杀的尸体完整保留十秒，再衔接公路招募剧情。
     const latestCorpseRemoval = explorationBattle.corpses.reduce((latest, corpse) => Math.max(latest, corpse.removeAt), performance.now());
@@ -15594,14 +15613,16 @@ export function DeadRoadGame() {
                 <p>{currentExplorationBattleTaskConfig.completionEyebrow}</p>
                 <h2>{EXPLORATION_TASK_NAMES[explorationBattle.taskOrder - 1]}完成</h2>
                 <span>{currentExplorationBattleTaskConfig.completionSummary}</span>
-                {explorationBattle.rewardEligible && currentExplorationBattleTaskConfig.reward === "resources" ? (
-                  <div className="battle-rewards"><b>+{currentExplorationBattleTaskConfig.rewardCoins} 金币</b><b>+{currentExplorationBattleTaskConfig.rewardExperience} 经验点数</b></div>
-                ) : explorationBattle.rewardEligible && currentExplorationBattleTaskConfig.reward === "police" ? (
+                {explorationBattle.rewardEligible && currentExplorationBattleTaskConfig.reward.kind === "resources" ? (
+                  <div className="battle-rewards"><b>+{currentExplorationBattleTaskConfig.reward.coins} 金币</b><b>+{currentExplorationBattleTaskConfig.reward.experience} 经验点数</b></div>
+                ) : explorationBattle.rewardEligible && currentExplorationBattleTaskConfig.reward.kind === "police" ? (
                   <div className="battle-rewards"><b>公路招募事件即将开始</b></div>
+                ) : explorationBattle.rewardEligible && currentExplorationBattleTaskConfig.reward.kind === "vouchers" ? (
+                  <div className="battle-rewards"><b>+{currentExplorationBattleTaskConfig.reward.vouchers} 点券</b></div>
                 ) : (
                   <div className="battle-rewards battle-rewards-claimed"><b>首次通关奖励已领取</b></div>
                 )}
-                {!(explorationBattle.rewardEligible && currentExplorationBattleTaskConfig.reward === "police") && <button type="button" onClick={closeExplorationSubscreen}>{explorationBattle.rewardEligible ? "领取并返回农田" : "返回农田"}</button>}
+                {!(explorationBattle.rewardEligible && currentExplorationBattleTaskConfig.reward.kind === "police") && <button type="button" onClick={closeExplorationSubscreen}>{explorationBattle.rewardEligible ? "领取并返回农田" : "返回农田"}</button>}
               </div>
             )}
           </div>
