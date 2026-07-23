@@ -9,9 +9,11 @@ import { notifyLocalSaveChanged } from "./account/saveData";
 import {
   creditPlayerCoins,
   EMPTY_COOP_GAMEPAD_BUTTONS,
+  nextDirectionalButtonIndex,
   readCoOpGamepad,
   survivalWaveTotal,
   type CoOpGamepadButtons,
+  type GamepadFocusDirection,
 } from "./coOp";
 import { firearmReloadInsertionTimeline, soundManager as sound } from "./sound";
 import type { FirearmSoundKey } from "./sound";
@@ -6242,8 +6244,6 @@ function shopPriceLabel(mode: GameMode, listedPrice: number, detailed = false) {
   return detailed ? `◉ ${listedPrice} 金币` : `◉ ${listedPrice}`;
 }
 
-type GamepadFocusDirection = "up" | "down" | "left" | "right";
-
 function gamepadButtonsIn(panel: HTMLElement) {
   return Array.from(panel.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"))
     .filter((button) => button.getClientRects().length > 0 && button.getAttribute("aria-hidden") !== "true");
@@ -6265,24 +6265,12 @@ function moveGamepadFocus(panel: HTMLElement, direction: GamepadFocusDirection) 
     focusGamepadButton(buttons[0]);
     return;
   }
-  const origin = current.getBoundingClientRect();
-  const originX = origin.left + origin.width / 2;
-  const originY = origin.top + origin.height / 2;
-  const vertical = direction === "up" || direction === "down";
-  const sign = direction === "up" || direction === "left" ? -1 : 1;
-  const candidates = buttons
-    .filter((button) => button !== current)
-    .map((button) => {
-      const rect = button.getBoundingClientRect();
-      const dx = rect.left + rect.width / 2 - originX;
-      const dy = rect.top + rect.height / 2 - originY;
-      const forward = (vertical ? dy : dx) * sign;
-      const sideways = Math.abs(vertical ? dx : dy);
-      return { button, forward, score: forward * 3 + sideways };
-    })
-    .filter((entry) => entry.forward > 2)
-    .sort((left, right) => left.score - right.score);
-  focusGamepadButton(candidates[0]?.button ?? buttons[(buttons.indexOf(current) + sign + buttons.length) % buttons.length]);
+  const nextIndex = nextDirectionalButtonIndex(
+    buttons.map((button) => button.getBoundingClientRect()),
+    buttons.indexOf(current),
+    direction,
+  );
+  focusGamepadButton(buttons[nextIndex]);
 }
 
 function roundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
@@ -12913,30 +12901,12 @@ export function DeadRoadGame() {
             focusGamepadButton(gamepadButtonsIn(focusScope)[0]);
           }
         }
-        if (input.backPressed) {
-          sound.uiClick();
-          if (shopDetail) setShopDetail(null);
-          else if (loadoutOpen !== null) setLoadoutOpen(null);
-          else if (screen === "loadout") changeScreen("shop");
-        }
-        if ((input.previousTabPressed || input.kickPressed) && screen === "shop" && !shopDetail) {
-          const tabs = Array.from(panel.querySelectorAll<HTMLButtonElement>('[role="tab"]:not(:disabled)'));
-          const current = Math.max(0, tabs.findIndex((tab) => tab.getAttribute("aria-selected") === "true"));
-          const delta = input.previousTabPressed ? -1 : 1;
-          const next = tabs[(current + delta + tabs.length) % tabs.length];
-          next?.click();
-          focusGamepadButton(next);
-        }
-        if (input.menuPressed && !shopDetail) {
-          const primary = Array.from(panel.querySelectorAll<HTMLButtonElement>(".shop-footer .primary-button:not(:disabled)")).at(-1);
-          primary?.click();
-        }
       }
       frameId = requestAnimationFrame(pollMenuGamepad);
     };
     frameId = requestAnimationFrame(pollMenuGamepad);
     return () => cancelAnimationFrame(frameId);
-  }, [changeScreen, gamepadShopping, loadoutOpen, screen, shopDetail]);
+  }, [gamepadShopping, screen, shopDetail]);
 
   const buyWeapon = useCallback((key: WeaponKey) => {
     const g = stateRef.current;
@@ -13993,6 +13963,7 @@ export function DeadRoadGame() {
       const key = event.key.toLowerCase();
       if (coOpShopperRef.current === 2 && (screenRef.current === "shop" || screenRef.current === "loadout")) {
         event.preventDefault();
+        if (key === "escape" && !event.repeat) saveProgressAndMenu();
         return;
       }
       if (["w", "a", "s", "d", "f", "g", "q", "r", "b", "m", "1", "2", "3", "4", "5", "6", "7", " "].includes(key)) event.preventDefault();
@@ -16663,7 +16634,7 @@ export function DeadRoadGame() {
               <span>枪械 2 <b>{WEAPONS[activeLoadout[1]].name}</b></span>
               <span>近战 <b>{WEAPONS[activeMelee].name}</b></span>
               <span>战斗服 <b>{ARMORS[activeArmor].name} · {activeMaxHp} HP</b></span>
-              <em>{gamepadShopping ? "方向键导航 · A 确认 · B 关闭详情 · LB/RB 切换分类" : rangeFree ? "B 键返回靶场 · Q 切换武器" : "Q 键循环切换"}</em>
+              <em>{gamepadShopping ? "方向键导航 · A 确认 · 键盘仅 ESC 可退出" : rangeFree ? "B 键返回靶场 · Q 切换武器" : "Q 键循环切换"}</em>
             </div>
             <div className="shop-tabs" role="tablist" aria-label="商店分类">
               <button className={shopTab === "weapons" ? "active" : ""} onClick={() => { sound.uiClick(); setShopDetail(null); setShopTab("weapons"); }} role="tab" aria-selected={shopTab === "weapons"}>武器库 <b>{Object.keys(WEAPONS).length}</b></button>
@@ -16856,7 +16827,7 @@ export function DeadRoadGame() {
               <span>战斗服 <b>{ARMORS[activeArmor].name} · {activeMaxHp} HP</b></span>
               {!gamepadShopping && <span>搭档 <b>{snapshot.partner ? PARTNERS[snapshot.partner].name : "无"}</b></span>}
               <span>负重 <b>{snapshotCarriedKg.toFixed(1)}kg · 移速 {snapshotSpeedPct}%</b></span>
-              <em>{gamepadShopping ? "方向键导航 · A 确认 · B 返回" : "Q 键循环切换"}</em>
+              <em>{gamepadShopping ? "方向键导航 · A 确认 · 键盘仅 ESC 可退出" : "Q 键循环切换"}</em>
             </div>
             {loadoutOpen === null ? (
               <div className="loadout-columns">
@@ -17127,8 +17098,8 @@ export function DeadRoadGame() {
         <div><kbd>G</kbd><span>关卡丢弃武器</span></div>
         <div><kbd>鼠标右键</kbd><span>关卡拾取武器</span></div>
         <div><kbd>M</kbd><span>静音开关</span></div>
-        {snapshot.coOp && <div><kbd>P2 手柄</kbd><span>左摇杆移动 · 右摇杆瞄准 · RT 射击 · X 换弹 · Y 切枪 · RB 踢击 · Menu 暂停</span></div>}
-        {snapshot.coOp && <div><kbd>P2 商店</kbd><span>方向键导航 · A 确认 · B 关闭详情/返回 · LB/RB 切换分类</span></div>}
+        {snapshot.coOp && <div><kbd>P2 手柄</kbd><span>左摇杆移动 · 右摇杆瞄准 · RT 射击 · X 换弹 · Y 切枪 · B/RB 蹬踢 · Menu 暂停</span></div>}
+        {snapshot.coOp && <div><kbd>P2 商店</kbd><span>方向键导航 · A 确认 · 键盘仅 ESC 可退出</span></div>}
         <p>提示：路障与阔剑雷仅能放在人物身前；绿色圆圈表示投掷物落点</p>
       </footer>
     </main>

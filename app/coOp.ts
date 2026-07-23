@@ -11,6 +11,15 @@ export type GamepadLike = {
   buttons: readonly GamepadButtonLike[];
 };
 
+export type GamepadFocusDirection = "up" | "down" | "left" | "right";
+
+export type DirectionalButtonRect = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
+
 export type CoOpGamepadButtons = {
   confirm: boolean;
   back: boolean;
@@ -88,6 +97,30 @@ function buttonPressed(gamepad: GamepadLike, index: number) {
   return Boolean(button && (button.pressed || button.value >= 0.55));
 }
 
+export function nextDirectionalButtonIndex(
+  controls: readonly DirectionalButtonRect[],
+  currentIndex: number,
+  direction: GamepadFocusDirection,
+) {
+  if (currentIndex < 0 || currentIndex >= controls.length) return controls.length > 0 ? 0 : -1;
+  const origin = controls[currentIndex];
+  const originX = origin.left + origin.width / 2;
+  const originY = origin.top + origin.height / 2;
+  const vertical = direction === "up" || direction === "down";
+  const sign = direction === "up" || direction === "left" ? -1 : 1;
+  const candidates = controls
+    .map((control, index) => {
+      const dx = control.left + control.width / 2 - originX;
+      const dy = control.top + control.height / 2 - originY;
+      const forward = (vertical ? dy : dx) * sign;
+      const sideways = Math.abs(vertical ? dx : dy);
+      return { index, forward, score: forward + sideways * 4 };
+    })
+    .filter((entry) => entry.index !== currentIndex && entry.forward > 2)
+    .sort((left, right) => left.score - right.score);
+  return candidates[0]?.index ?? currentIndex;
+}
+
 export function survivalWaveTotal(day: number, coOp: boolean) {
   const normalizedDay = Math.max(1, Math.floor(day));
   const singlePlayerTotal = normalizedDay === 1 ? 6 : 5 + Math.ceil(normalizedDay * 2.2);
@@ -130,7 +163,7 @@ export function readCoOpGamepad(
     confirm: buttonPressed(gamepad, 0),
     back: buttonPressed(gamepad, 1),
     fire: buttonPressed(gamepad, 7),
-    kick: buttonPressed(gamepad, 5),
+    kick: buttonPressed(gamepad, 1) || buttonPressed(gamepad, 5),
     reload: buttonPressed(gamepad, 2),
     switchWeapon: buttonPressed(gamepad, 3),
     previousTab: buttonPressed(gamepad, 4),

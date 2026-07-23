@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   creditPlayerCoins,
   EMPTY_COOP_GAMEPAD_BUTTONS,
+  nextDirectionalButtonIndex,
   readCoOpGamepad,
   survivalWaveTotal,
 } from "../app/coOp.ts";
@@ -86,6 +87,34 @@ test("战斗与菜单的全部手柄动作只在按钮按下边沿触发", () =>
     [held.upPressed, held.downPressed, held.leftPressed, held.rightPressed],
     [false, false, false, false],
   );
+});
+
+test("战斗中 B 和 RB 都能独立触发蹬踢", () => {
+  const bKick = readCoOpGamepad(
+    [standardGamepad({ pressed: [1] })],
+    EMPTY_COOP_GAMEPAD_BUTTONS,
+  );
+  const rbKick = readCoOpGamepad(
+    [standardGamepad({ pressed: [5] })],
+    EMPTY_COOP_GAMEPAD_BUTTONS,
+  );
+
+  assert.equal(bKick.kickPressed, true);
+  assert.equal(rbKick.kickPressed, true);
+});
+
+test("商店方向键只选择对应方向最接近的控件且不会错误绕回", () => {
+  const controls = [
+    { left: 80, top: 80, width: 40, height: 40 },
+    { left: 180, top: 80, width: 40, height: 40 },
+    { left: 80, top: 180, width: 40, height: 40 },
+    { left: 110, top: 300, width: 40, height: 40 },
+  ];
+
+  assert.equal(nextDirectionalButtonIndex(controls, 0, "right"), 1);
+  assert.equal(nextDirectionalButtonIndex(controls, 0, "down"), 2);
+  assert.equal(nextDirectionalButtonIndex(controls, 0, "left"), 0);
+  assert.equal(nextDirectionalButtonIndex(controls, 0, "up"), 0);
 });
 
 test("未连接标准手柄时返回安全的空输入", () => {

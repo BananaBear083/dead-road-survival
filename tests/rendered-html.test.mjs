@@ -46,6 +46,17 @@ test("co-op keeps separate wallets and hands shopping from keyboard to gamepad",
   assert.match(css, /\.shop-panel\.controller-turn \{ pointer-events: none; \}/);
   assert.match(source, /const focusScope = shopDetail[\s\S]*?\[role="dialog"\]/);
   assert.match(source, /onClick=\{gamepadShopping \? undefined : closeDetail\}/);
+  const keyboardLockStart = source.indexOf("if (coOpShopperRef.current === 2");
+  const keyboardLockEnd = source.indexOf('if (["w", "a", "s"', keyboardLockStart);
+  const keyboardLock = source.slice(keyboardLockStart, keyboardLockEnd);
+  assert.match(keyboardLock, /key === "escape" && !event\.repeat/);
+  assert.match(keyboardLock, /saveProgressAndMenu\(\)/);
+  assert.match(keyboardLock, /event\.preventDefault\(\)/);
+  const menuGamepadStart = source.indexOf("const pollMenuGamepad");
+  const menuGamepadEnd = source.indexOf("frameId = requestAnimationFrame(pollMenuGamepad);", menuGamepadStart);
+  const menuGamepadLoop = source.slice(menuGamepadStart, menuGamepadEnd);
+  assert.doesNotMatch(menuGamepadLoop, /input\.(backPressed|previousTabPressed|kickPressed|menuPressed)/);
+  assert.match(source, /方向键导航 · A 确认 · 键盘仅 ESC 可退出/);
   for (const action of ["confirmPressed", "backPressed", "previousTabPressed", "menuPressed", "upPressed", "downPressed", "leftPressed", "rightPressed"]) {
     assert.match(gamepad, new RegExp(`${action}:`));
   }
