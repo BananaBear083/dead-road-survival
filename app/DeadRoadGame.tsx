@@ -51,7 +51,9 @@ type ExplorationChapterTheme = "farm" | "suburb" | "desert";
 type ExplorationBattleAction = "guard" | "walk" | "attack" | "reload" | "kick" | "throw";
 type ExplorationBattleUnit = { id: string; memberId: string; label: string; level: number; hp: number; maxHp: number; damage: number; speedFactor: number; x: number; y: number; cooldown: number; ammo: number; reloadRemaining: number; reloadStartedAt: number; attacksPerformed: number; skillCooldown: number; abilityCooldown: number; activeWeapon: WeaponKey; openingAttackPending: boolean; openingWeaponLocked: boolean; shieldHp: number; maxShieldHp: number; actionRemaining: number; actionStartedAt: number; action: ExplorationBattleAction; shotTarget: { x: number; y: number } | null; shotSerial: number };
 type ExplorationBattleZombie = { id: number; kind: ZombieKind; hp: number; maxHp: number; x: number; y: number; cooldown: number; cooldownUntil: number; damage: number; speed: number; action: "guard" | "walk" | "attack"; attackWindupRemaining: number; attackAnimationRemaining: number; attackStartedAt: number; attackImpactAt: number; attackAnimationUntil: number; attackTargetUnitId: string | null; wounds: Wound[]; missingLimbs: ZombieLimb[]; knockedDownRemaining: number; stunnedRemaining: number; shieldHp: number; shieldIntact: boolean; shieldDents: Array<{ x: number; y: number }>; ignited: boolean };
-type ExplorationBattleCorpse = { id: number; kind: ZombieKind; x: number; y: number; wounds: Wound[]; missingLimbs: ZombieLimb[]; shieldIntact: boolean; shieldDents: Array<{ x: number; y: number }>; diedAt: number; removeAt: number };
+type ExplorationBattleCorpse =
+  | { corpseKind: "zombie"; id: number; kind: ZombieKind; x: number; y: number; wounds: Wound[]; missingLimbs: ZombieLimb[]; shieldIntact: boolean; shieldDents: Array<{ x: number; y: number }>; diedAt: number; removeAt: number }
+  | { corpseKind: "unit"; id: string; memberId: string; weapon: WeaponKey; shieldHp: number; openingAttackPending: boolean; x: number; y: number; diedAt: number; removeAt: number };
 type ExplorationBattleGroundProp = { id: string; kind: "casing" | "mag" | "shield"; weapon?: WeaponKey; x: number; y: number; rotation: number; createdAt: number; removeAt: number };
 type ExplorationBattleBloodEffect = { id: string; x: number; y: number; angle: number; createdAt: number; removeAt: number; tint?: "blood" | "vomit"; droplets?: Array<{ x: number; y: number; size: number; duration: number }>; stainDrops?: Array<{ x: number; y: number; rx: number }> };
 type ExplorationBattleDetachedLimb = { id: string; kind: "arm" | "leg"; x: number; y: number; vx: number; vy: number; rotation: number; angularVelocity: number; scale: number; tint: string; skin: string; shoe: string; createdAt: number; removeAt: number };
@@ -9414,7 +9416,7 @@ function drawSurvivalHumanHeadAndFace(ctx: CanvasRenderingContext2D, facing: num
 }
 
 /** 探索队伍详情与战斗复用生存模式的人体骨架、步态、枪焰和真实武器模型。 */
-function ExplorationMemberPreview({ member, motion = "standing", reloadProgress = 0, reloadStartedAt, actionStartedAt, battleScale = false, automaticWeaponStartedAt, weaponOverride, openingAttackPending = false, shieldHp }: { member: ExplorationMemberDefinition; motion?: "standing" | "moving" | "attacking" | "reloading" | "kicking" | "throwing"; reloadProgress?: number; reloadStartedAt?: number; actionStartedAt?: number; battleScale?: boolean; automaticWeaponStartedAt?: number; weaponOverride?: WeaponKey; openingAttackPending?: boolean; shieldHp?: number }) {
+function ExplorationMemberPreview({ member, motion = "standing", reloadProgress = 0, reloadStartedAt, actionStartedAt, battleScale = false, automaticWeaponStartedAt, weaponOverride, openingAttackPending = false, shieldHp, knockedDown = false }: { member: ExplorationMemberDefinition; motion?: "standing" | "moving" | "attacking" | "reloading" | "kicking" | "throwing"; reloadProgress?: number; reloadStartedAt?: number; actionStartedAt?: number; battleScale?: boolean; automaticWeaponStartedAt?: number; weaponOverride?: WeaponKey; openingAttackPending?: boolean; shieldHp?: number; knockedDown?: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const canvas = ref.current;
@@ -9447,11 +9449,20 @@ function ExplorationMemberPreview({ member, motion = "standing", reloadProgress 
       const attackCycle = automaticPhase ? WEAPONS[renderWeapon].fireRate : Math.max(360, WEAPONS[renderWeapon].fireRate);
       const attackStartedAt = automaticWeaponStartedAt ?? actionStartedAt ?? motionStartedAt;
       const attackPhase = renderMotion === "attacking" ? ((now - attackStartedAt) % attackCycle) / attackCycle : renderMotion === "throwing" ? .48 : 0;
+      if (knockedDown) {
+        ctx.save();
+        ctx.fillStyle = "rgba(0,0,0,.34)";
+        ctx.beginPath(); ctx.ellipse(canvas.width * .5, canvas.height * .76, canvas.width * .37, 12, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      }
       ctx.save();
-      ctx.translate(canvas.width * .43, canvas.height * (battleScale ? .94 : .88) + (moving ? Math.sin(gaitCycle * Math.PI * 4) * 1.1 : 0));
+      ctx.translate(knockedDown ? canvas.width - 18 : canvas.width * .43, knockedDown ? canvas.height * .72 : canvas.height * (battleScale ? .94 : .88) + (moving ? Math.sin(gaitCycle * Math.PI * 4) * 1.1 : 0));
+      if (knockedDown) ctx.rotate(-Math.PI * .46);
       ctx.scale(scale, scale);
-      ctx.fillStyle = "rgba(0,0,0,.38)";
-      ctx.beginPath(); ctx.ellipse(0, 5, 28, 8, 0, 0, Math.PI * 2); ctx.fill();
+      if (!knockedDown) {
+        ctx.fillStyle = "rgba(0,0,0,.38)";
+        ctx.beginPath(); ctx.ellipse(0, 5, 28, 8, 0, 0, Math.PI * 2); ctx.fill();
+      }
       const rearLeg = renderMotion === "kicking" ? kickLegPose(kickProgress, facing) : moving ? gaitLegPose((gaitCycle + .5) % 1, facing, -5) : standingLegPose(facing, -5);
       const frontLeg = moving ? gaitLegPose(gaitCycle, facing, 5) : standingLegPose(facing, 5);
       drawLimb(ctx, rearLeg, 7.5, rearUniform, "#151917");
@@ -9556,8 +9567,8 @@ function ExplorationMemberPreview({ member, motion = "standing", reloadProgress 
     };
     draw(performance.now());
     return () => window.cancelAnimationFrame(animationFrame);
-  }, [actionStartedAt, automaticWeaponStartedAt, battleScale, member, motion, openingAttackPending, reloadProgress, reloadStartedAt, shieldHp, weaponOverride]);
-  return <canvas ref={ref} className="team-member-preview" width={330} height={430} aria-label={`${member.name}与${member.displayWeaponName ?? WEAPONS[member.weapon].name}建模预览`} />;
+  }, [actionStartedAt, automaticWeaponStartedAt, battleScale, knockedDown, member, motion, openingAttackPending, reloadProgress, reloadStartedAt, shieldHp, weaponOverride]);
+  return <canvas ref={ref} className="team-member-preview" width={knockedDown ? 430 : 330} height={knockedDown ? 260 : 430} aria-label={`${member.name}与${member.displayWeaponName ?? WEAPONS[member.weapon].name}建模预览`} />;
 }
 
 /** 商店、上阵栏和战斗栏共用一套消耗品图标，不再用文字占位。 */
@@ -10606,6 +10617,7 @@ export function DeadRoadGame() {
         }
 
         units.forEach((unit) => {
+          if (unit.hp <= 0) return;
           const member = EXPLORATION_MEMBERS.find((candidate) => candidate.id === unit.memberId);
           if (!member) return;
           const profile = member.battleProfile;
@@ -10808,6 +10820,7 @@ export function DeadRoadGame() {
             if (zombie.kind === "shield" && zombie.shieldIntact) addGroundProp(`shield-corpse-${zombie.id}`, "shield", undefined, zombie.x, zombie.y);
           });
           corpses = [...corpses, ...killedZombies.map((zombie): ExplorationBattleCorpse => ({
+            corpseKind: "zombie",
             id: zombie.id,
             kind: zombie.kind,
             x: zombie.x,
@@ -10898,6 +10911,21 @@ export function DeadRoadGame() {
             zombie.action = "attack";
           }
         });
+        const killedUnits = units.filter((unit) => unit.hp <= 0);
+        if (killedUnits.length > 0) {
+          corpses = [...corpses, ...killedUnits.map((unit): ExplorationBattleCorpse => ({
+            corpseKind: "unit",
+            id: unit.id,
+            memberId: unit.memberId,
+            weapon: unit.activeWeapon,
+            shieldHp: unit.shieldHp,
+            openingAttackPending: unit.openingAttackPending,
+            x: unit.x,
+            y: unit.y,
+            diedAt: supportNow,
+            removeAt: supportNow + ZOMBIE_CORPSE_MS,
+          }))];
+        }
         units = units.filter((unit) => unit.hp > 0);
         vehicleHp = Math.max(0, vehicleHp);
         return { ...battle, zombiesAlerted, units, zombies, corpses, groundProps, bloodEffects, detachedLimbs, metalShards, knives, spits, pendingMeleeHits, pendingKicks, airstrikeEffects, medkits, memberAbilityEffects, armySupportNextShotAt, armoredSupportNextShotAt, armoredSupportAmmo, armoredSupportReloadUntil, nextKnifeId, nextKickId, kills: battle.kills + killedThisTick, vehicleHp, completed, failed: !completed && vehicleHp <= 0 };
@@ -11026,7 +11054,8 @@ export function DeadRoadGame() {
     if (screen !== "explorationBattle" || !explorationBattle.completed || !explorationBattle.rewardEligible || taskConfig.reward.kind !== "police") return;
     // 任务二的落单警察事件只在首次通关时播放，重复通关直接停留在普通结算界面。
     // 先让最终击杀的尸体完整保留十秒，再衔接公路招募剧情。
-    const latestCorpseRemoval = explorationBattle.corpses.reduce((latest, corpse) => Math.max(latest, corpse.removeAt), performance.now());
+    const latestCorpseRemoval = explorationBattle.corpses
+      .reduce((latest, corpse) => Math.max(latest, corpse.removeAt), performance.now());
     const recruitDelay = Math.max(240, latestCorpseRemoval - performance.now());
     const timer = window.setTimeout(() => {
       setExplorationRecruitPhase("approach");
@@ -15250,6 +15279,7 @@ export function DeadRoadGame() {
 
             <nav className="exploration-rail exploration-rail-left" aria-label="探索模式左侧功能">
               <button type="button" onClick={() => { sound.uiClick(); setExplorationExchangeNotice(null); changeScreen("explorationShop"); }}><b>▣</b><span>商店</span><small>兑换招募券</small></button>
+              <button type="button" onClick={() => { sound.uiClick(); setExplorationNotice("枪械系统内容待开放"); }}><b>⌖</b><span>枪械</span><small>内容待开放</small></button>
               <button type="button" onClick={() => { sound.uiClick(); changeScreen("vehicleGarage"); }}><b>▰</b><span>车辆改装</span><small>升级出战车辆</small></button>
               <button type="button" onClick={() => { sound.uiClick(); setSelectedExplorationMemberId(null); setExplorationTeamTab("personnel"); changeScreen("explorationTeam"); }}><b>♟</b><span>队伍</span><small>查看出战成员</small></button>
             </nav>
@@ -15734,8 +15764,16 @@ export function DeadRoadGame() {
                 );
               })}
               {explorationBattle.corpses.map((corpse) => {
-                const large = isLargeExplorationZombie(corpse.kind);
                 const fade = Math.max(0, Math.min(1, (corpse.removeAt - explorationSupportClock) / 2000));
+                if (corpse.corpseKind === "unit") {
+                  const member = EXPLORATION_MEMBERS.find((candidate) => candidate.id === corpse.memberId) ?? EXPLORATION_MEMBERS[0];
+                  return (
+                    <div key={`unit-corpse-${corpse.id}-${corpse.diedAt}`} className="battle-unit battle-unit-shared-model knocked-down battle-unit-corpse battle-corpse" style={{ left: `${corpse.x}%`, bottom: `${corpse.y}%`, zIndex: 39 + Math.round(60 - corpse.y), opacity: fade }} aria-label={`${member.name}倒地`}>
+                      <ExplorationMemberPreview member={member} knockedDown battleScale weaponOverride={corpse.weapon} shieldHp={corpse.shieldHp} openingAttackPending={corpse.openingAttackPending} />
+                    </div>
+                  );
+                }
+                const large = isLargeExplorationZombie(corpse.kind);
                 return (
                   <div key={`corpse-${corpse.id}-${corpse.diedAt}`} className="battle-enemy battle-enemy-shared-model knocked-down battle-corpse" style={{ left: `${corpse.x}%`, bottom: `${corpse.y}%`, zIndex: 38 + Math.round(60 - corpse.y), opacity: fade }} aria-label="倒地僵尸尸体">
                     <ZombieKindPreview kind={corpse.kind} width={184} height={108} className="battle-zombie-shared-preview" fillHeight={!large} hpRatio={0} wounds={corpse.wounds} missingLimbs={corpse.missingLimbs} shieldIntact={corpse.shieldIntact} shieldDents={corpse.shieldDents} knockedDown />

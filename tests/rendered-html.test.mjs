@@ -1632,7 +1632,7 @@ test("keeps exploration zombies full-size and complete while attacking", async (
   assert.match(css, /\.battle-unit-shared-model[^}]*width: 108px[^}]*height: 184px/);
   assert.match(source, /const EXPLORATION_BATTLE_MEMBER_SCALE = 3\.05/);
   assert.match(source, /const scale = battleScale \? EXPLORATION_BATTLE_MEMBER_SCALE : 1\.9/);
-  assert.match(source, /type ExplorationBattleCorpse = \{/);
+  assert.match(source, /type ExplorationBattleCorpse =/);
   assert.match(source, /corpses: ExplorationBattleCorpse\[\]/);
   assert.match(source, /type ExplorationBattleGroundProp = \{/);
   assert.match(source, /groundProps: ExplorationBattleGroundProp\[\]/);
@@ -1979,4 +1979,20 @@ test("adds three selectable exploration chapters with themed hubs, battles and f
   assert.match(css, /\.exploration-panel\.chapter-desert/);
   assert.match(css, /\.battle-chapter-scenery\.battle-theme-suburb/);
   assert.match(css, /\.battle-chapter-scenery\.battle-theme-desert/);
+});
+
+test("keeps defeated exploration members as matching fallen bodies and adds the firearms entry", async () => {
+  const source = await readFile(new URL("../app/DeadRoadGame.tsx", import.meta.url), "utf8");
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+
+  assert.match(source, /type ExplorationBattleCorpse =[\s\S]*corpseKind: "zombie"[\s\S]*corpseKind: "unit"[\s\S]*memberId: string[\s\S]*removeAt: number/);
+  assert.match(source, /corpses: ExplorationBattleCorpse\[\]/);
+  assert.match(source, /const killedUnits = units\.filter\(\(unit\) => unit\.hp <= 0\)/);
+  assert.match(source, /removeAt: supportNow \+ ZOMBIE_CORPSE_MS/);
+  assert.match(source, /explorationBattle\.corpses\.map\(\(corpse\) =>[\s\S]*corpse\.corpseKind === "unit"/);
+  assert.match(source, /ExplorationMemberPreview[\s\S]*member=\{member\}[\s\S]*knockedDown/);
+  assert.match(source, /shieldHp=\{corpse\.shieldHp\} openingAttackPending=\{corpse\.openingAttackPending\}/);
+  assert.match(source, /<span>枪械<\/span><small>内容待开放<\/small>/);
+  assert.match(css, /\.battle-unit-corpse/);
+  assert.match(css, /\.battle-unit-corpse \.team-member-preview[^}]*width:\s*184px[^}]*height:\s*124px/);
 });

@@ -878,6 +878,8 @@ button { -webkit-tap-highlight-color: transparent; }
 .battle-enemy-shared-model.large { width: 144px; height: 236px; }
 .battle-enemy-shared-model.knocked-down { width: 184px; height: 124px; }
 .battle-corpse { pointer-events:none; animation:none; transition:opacity .25s linear; filter:drop-shadow(4px 5px 2px rgba(0,0,0,.45)) grayscale(.12); }
+.battle-unit-corpse { width:184px; height:124px; animation:none; }
+.battle-unit-corpse .team-member-preview { width:184px; height:124px; max-height:none; object-fit:contain; }
 .battle-ground-prop { position:absolute; z-index:42; display:block; width:1px; height:1px; pointer-events:none; transition:opacity .2s linear; transform-origin:center; filter:drop-shadow(1px 2px 1px rgba(0,0,0,.65)); }
 .battle-ground-prop > canvas { position:absolute; left:-36px; top:-36px; display:block; width:72px; height:72px; }
 .battle-ground-shield > canvas { left:-90px; top:-90px; width:180px; height:180px; }
