@@ -1301,10 +1301,10 @@ test("adds a farm exploration hub with sequential missions and split zombie code
   assert.match(source, /经典模式/);
   assert.match(source, /探索模式/);
   assert.match(source, /screen === "menu" \|\| screen === "exploration"/);
-  assert.match(source, /const EXPLORATION_TASKS:[\s\S]*Array\.from\(\{ length: 10 \}/);
+  assert.match(source, /const EXPLORATION_TASKS:[\s\S]*EXPLORATION_CHAPTERS\.flatMap/);
   assert.match(source, /function isExplorationTaskUnlocked\(/);
   assert.match(source, /return order === 1 \|\| cleared\.includes\(order - 1\)/);
-  assert.match(source, /className="exploration-panel overlay-panel"/);
+  assert.match(source, /className=\{`exploration-panel chapter-\$\{currentExplorationChapter\.theme\} overlay-panel`\}/);
   assert.match(source, /任务一/);
   assert.match(source, /任务十/);
   assert.match(source, /抽奖/);
@@ -1432,7 +1432,7 @@ test("adds the exploration exchange shop, vehicle upgrades and courage auto-batt
   assert.match(source, /vehicleHp/);
   assert.match(source, /任务失败 · 车辆已被击毁/);
   assert.match(source, /没有敌人时，队员将在原地警戒/);
-  assert.match(source, /className="exploration-battle-panel/);
+  assert.match(source, /className=\{`exploration-battle-panel battle-panel-\$\{explorationBattleChapter\.theme\} overlay-panel`\}/);
 
   assert.match(css, /\.exploration-wallet-exp i/);
   assert.match(css, /\.exploration-wallet-exp strong/);
@@ -1933,4 +1933,50 @@ test("configures exploration tasks three through ten with exact waves and first-
   assert.match(configBlock, /10: \{ openingZombieKinds: repeatExplorationZombie\("juggernaut", 2\)[\s\S]*?reward: \{ kind: "vouchers", vouchers: 100 \}/);
   assert.match(source, /setExplorationVouchers\(\(vouchers\) => vouchers \+ reward\.vouchers\)/);
   assert.match(source, /currentExplorationBattleTaskConfig\.reward\.kind === "vouchers"[\s\S]*?\+\{currentExplorationBattleTaskConfig\.reward\.vouchers\} 点券/);
+});
+
+test("turns the lower personnel area into a horizontal reserve roster with click-open details", async () => {
+  const source = await readFile(new URL("../app/DeadRoadGame.tsx", import.meta.url), "utf8");
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+
+  assert.match(source, /const \[selectedExplorationMemberId, setSelectedExplorationMemberId\] = useState<string \| null>\(null\)/);
+  assert.match(source, /function openExplorationMemberDetail|const openExplorationMemberDetail/);
+  assert.match(source, /setSelectedExplorationMemberId\(memberId\)/);
+  assert.match(source, /selectedExplorationMemberId !== null && \([\s\S]*role="dialog" aria-modal="true"/);
+  assert.match(source, /screenRef\.current === "explorationTeam" && selectedExplorationMemberIdRef\.current !== null[\s\S]*setSelectedExplorationMemberId\(null\)/);
+  assert.match(source, /reserveExplorationMembers[\s\S]*Number\(ownedMemberIds\.includes\(right\.id\)\) - Number\(ownedMemberIds\.includes\(left\.id\)\)/);
+  assert.match(source, /className=\{`team-member-card rarity-\$\{member\.rarity\} \$\{owned \? "reserve-owned" : "unpurchased"\}`\}/);
+  assert.match(css, /\.team-personnel-workspace[^}]*grid-template-columns:\s*1fr/);
+  assert.match(css, /\.team-reserve-list[^}]*display:\s*flex[^}]*overflow-x:\s*auto/);
+  assert.match(css, /\.team-member-card\.unpurchased \.team-member-preview[^}]*grayscale\(1\)/);
+  assert.match(css, /\.team-member-detail-backdrop/);
+});
+
+test("adds three selectable exploration chapters with themed hubs, battles and future task maps", async () => {
+  const source = await readFile(new URL("../app/DeadRoadGame.tsx", import.meta.url), "utf8");
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  const chapterBlock = source.slice(source.indexOf("const EXPLORATION_CHAPTERS"), source.indexOf("const EXPLORATION_CLEARED_KEY"));
+
+  assert.match(source, /type ExplorationChapterId = 1 \| 2 \| 3/);
+  assert.match(source, /"explorationChapters"/);
+  assert.equal((chapterBlock.match(/id: [123],/g) ?? []).length, 3);
+  assert.match(chapterBlock, /id: 1[\s\S]*theme: "farm"[\s\S]*taskStart: 1[\s\S]*taskEnd: 10/);
+  assert.match(chapterBlock, /id: 2[\s\S]*theme: "suburb"[\s\S]*taskStart: 11[\s\S]*taskEnd: 20[\s\S]*specialTasks:/);
+  assert.match(chapterBlock, /id: 3[\s\S]*theme: "desert"[\s\S]*taskStart: 21[\s\S]*taskEnd: 30[\s\S]*specialTasks:/);
+  assert.match(chapterBlock, /EXPLORATION_CHAPTERS\.flatMap/);
+  assert.match(source, /EXPLORATION_CHAPTERS\.find\(\(chapter\) => taskOrder >= chapter\.taskStart && taskOrder <= chapter\.taskEnd\)/);
+  assert.match(source, /const \[selectedExplorationChapterId, setSelectedExplorationChapterId\] = useState<ExplorationChapterId>\(1\)/);
+  assert.match(source, /screen === "explorationChapters"/);
+  assert.match(source, /EXPLORATION_CHAPTERS\.map\(\(chapter\) =>/);
+  assert.match(source, /className=\{`exploration-panel chapter-\$\{currentExplorationChapter\.theme\}/);
+  assert.match(source, /battle-theme-\$\{explorationBattleChapter\.theme\}/);
+  assert.match(source, /currentExplorationChapterTasks\.map\(\(task\) =>/);
+  assert.match(source, /currentExplorationChapter\.specialTasks\.map\(\(task\) =>/);
+  assert.match(source, /selectedChapterId: ExplorationChapterId/);
+  assert.match(css, /\.exploration-chapters-panel/);
+  assert.match(css, /\.chapter-card-list[^}]*display:\s*flex/);
+  assert.match(css, /\.exploration-panel\.chapter-suburb/);
+  assert.match(css, /\.exploration-panel\.chapter-desert/);
+  assert.match(css, /\.battle-chapter-scenery\.battle-theme-suburb/);
+  assert.match(css, /\.battle-chapter-scenery\.battle-theme-desert/);
 });

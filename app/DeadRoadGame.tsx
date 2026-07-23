@@ -31,7 +31,7 @@ const KICK_KNOCKBACK_WORLD_X = 82;
 const KICK_KNOCKBACK_WORLD_Y = 52;
 
 type MajorMode = "classic" | "exploration";
-type Screen = "menu" | "exploration" | "playing" | "shop" | "loadout" | "gameover" | "codex" | "levels" | "levelComplete" | "lottery" | "explorationShop" | "vehicleGarage" | "explorationTeam" | "explorationTasks" | "explorationBattle" | "explorationRecruit";
+type Screen = "menu" | "exploration" | "playing" | "shop" | "loadout" | "gameover" | "codex" | "levels" | "levelComplete" | "lottery" | "explorationShop" | "vehicleGarage" | "explorationTeam" | "explorationTasks" | "explorationChapters" | "explorationBattle" | "explorationRecruit";
 type GameMode = "survival" | "range" | "level";
 type ShopTab = "weapons" | "armor" | "supplies" | "items" | "partners" | "zombies";
 type CodexCategory = "regular" | "special";
@@ -46,6 +46,8 @@ type ExplorationConsumableInventory = Record<ExplorationConsumableKey, number>;
 type ExplorationMemberRarity = "common" | "rare" | "epic" | "legendary";
 type ExplorationMemberSpeed = "慢" | "中等" | "快";
 type ExplorationVehicleKind = "van" | "truck" | "bus";
+type ExplorationChapterId = 1 | 2 | 3;
+type ExplorationChapterTheme = "farm" | "suburb" | "desert";
 type ExplorationBattleAction = "guard" | "walk" | "attack" | "reload" | "kick" | "throw";
 type ExplorationBattleUnit = { id: string; memberId: string; label: string; level: number; hp: number; maxHp: number; damage: number; speedFactor: number; x: number; y: number; cooldown: number; ammo: number; reloadRemaining: number; reloadStartedAt: number; attacksPerformed: number; skillCooldown: number; abilityCooldown: number; activeWeapon: WeaponKey; openingAttackPending: boolean; openingWeaponLocked: boolean; shieldHp: number; maxShieldHp: number; actionRemaining: number; actionStartedAt: number; action: ExplorationBattleAction; shotTarget: { x: number; y: number } | null; shotSerial: number };
 type ExplorationBattleZombie = { id: number; kind: ZombieKind; hp: number; maxHp: number; x: number; y: number; cooldown: number; cooldownUntil: number; damage: number; speed: number; action: "guard" | "walk" | "attack"; attackWindupRemaining: number; attackAnimationRemaining: number; attackStartedAt: number; attackImpactAt: number; attackAnimationUntil: number; attackTargetUnitId: string | null; wounds: Wound[]; missingLimbs: ZombieLimb[]; knockedDownRemaining: number; stunnedRemaining: number; shieldHp: number; shieldIntact: boolean; shieldDents: Array<{ x: number; y: number }>; ignited: boolean };
@@ -841,7 +843,19 @@ const LEVEL7_TITLE = "夺取仓库";
 const LEVEL8_ID = "level-clear-highway";
 const LEVEL8_TITLE = "清理高速";
 
-type ExplorationTask = { order: number; label: string; x: number; y: number };
+type ExplorationTask = { order: number; chapterId: ExplorationChapterId; label: string; x: number; y: number; playable: boolean };
+type ExplorationSpecialTask = { id: string; label: string; description: string; x: number; y: number };
+type ExplorationChapterDefinition = {
+  id: ExplorationChapterId;
+  theme: ExplorationChapterTheme;
+  name: string;
+  regionLabel: string;
+  description: string;
+  taskStart: number;
+  taskEnd: number;
+  battleLocation: string;
+  specialTasks: ExplorationSpecialTask[];
+};
 type ExplorationBattleReward =
   | { kind: "resources"; coins: number; experience: number }
   | { kind: "police"; coins: number; experience: number }
@@ -854,18 +868,70 @@ type ExplorationBattleTaskConfig = {
   completionEyebrow: string;
   completionSummary: string;
 };
-const EXPLORATION_TASK_NAMES = ["任务一", "任务二", "任务三", "任务四", "任务五", "任务六", "任务七", "任务八", "任务九", "任务十"];
+const EXPLORATION_TASK_NAMES = [
+  "任务一", "任务二", "任务三", "任务四", "任务五", "任务六", "任务七", "任务八", "任务九", "任务十",
+  "任务十一", "任务十二", "任务十三", "任务十四", "任务十五", "任务十六", "任务十七", "任务十八", "任务十九", "任务二十",
+  "任务二十一", "任务二十二", "任务二十三", "任务二十四", "任务二十五", "任务二十六", "任务二十七", "任务二十八", "任务二十九", "任务三十",
+];
 const EXPLORATION_TASK_POSITIONS = [
   [22, 76], [33, 64], [44, 75], [54, 57], [65, 68],
   [75, 50], [67, 33], [55, 41], [43, 25], [31, 35],
 ] as const;
-/** 探索模式农田地图的十个任务节点；任务内容后续接入，当前只建立顺序解锁入口。 */
-const EXPLORATION_TASKS: ExplorationTask[] = Array.from({ length: 10 }, (_, index) => ({
-  order: index + 1,
-  label: EXPLORATION_TASK_NAMES[index],
-  x: EXPLORATION_TASK_POSITIONS[index][0],
-  y: EXPLORATION_TASK_POSITIONS[index][1],
-}));
+const EXPLORATION_CHAPTERS: ExplorationChapterDefinition[] = [
+  {
+    id: 1,
+    theme: "farm",
+    name: "遗落农田",
+    regionLabel: "第一章",
+    description: "穿过被感染者占据的农田与乡间道路。",
+    taskStart: 1,
+    taskEnd: 10,
+    battleLocation: "农场道路",
+    specialTasks: [],
+  },
+  {
+    id: 2,
+    theme: "suburb",
+    name: "寂静郊区",
+    regionLabel: "第二章",
+    description: "沿住宅区、公路与废弃街区继续向外推进。",
+    taskStart: 11,
+    taskEnd: 20,
+    battleLocation: "郊区道路",
+    specialTasks: [
+      { id: "suburb-special-a", label: "特殊任务 A", description: "郊区特殊行动，内容待后续开放。", x: 79, y: 72 },
+      { id: "suburb-special-b", label: "特殊任务 B", description: "郊区特殊行动，内容待后续开放。", x: 19, y: 27 },
+    ],
+  },
+  {
+    id: 3,
+    theme: "desert",
+    name: "灼热荒漠",
+    regionLabel: "第三章",
+    description: "进入风沙覆盖的荒漠公路与废弃前哨。",
+    taskStart: 21,
+    taskEnd: 30,
+    battleLocation: "沙漠公路",
+    specialTasks: [
+      { id: "desert-special-a", label: "特殊任务 A", description: "沙漠特殊行动，内容待后续开放。", x: 80, y: 70 },
+      { id: "desert-special-b", label: "特殊任务 B", description: "沙漠特殊行动，内容待后续开放。", x: 18, y: 25 },
+    ],
+  },
+];
+/** 任务所属章节、地图位置和战斗主题均从章节定义派生，避免章节边界在多处漂移。 */
+const EXPLORATION_TASKS: ExplorationTask[] = EXPLORATION_CHAPTERS.flatMap((chapter) => (
+  Array.from({ length: chapter.taskEnd - chapter.taskStart + 1 }, (_, chapterIndex) => {
+    const order = chapter.taskStart + chapterIndex;
+    return {
+      order,
+      chapterId: chapter.id,
+      label: EXPLORATION_TASK_NAMES[order - 1],
+      x: EXPLORATION_TASK_POSITIONS[chapterIndex % EXPLORATION_TASK_POSITIONS.length][0],
+      y: EXPLORATION_TASK_POSITIONS[chapterIndex % EXPLORATION_TASK_POSITIONS.length][1],
+      playable: order <= 10,
+    };
+  })
+));
 const EXPLORATION_CLEARED_KEY = "dead-road-exploration-cleared";
 const EXPLORATION_PROGRESS_KEY = "dead-road-exploration-progress";
 const EXPLORATION_VOUCHER_EXCHANGE_COST = 100;
@@ -918,6 +984,19 @@ const EXPLORATION_CONSUMABLES: Record<ExplorationConsumableKey, { name: string; 
 
 function explorationBattleTaskConfig(taskOrder: number) {
   return EXPLORATION_BATTLE_TASK_CONFIGS[taskOrder] ?? DEFAULT_EXPLORATION_BATTLE_TASK_CONFIG;
+}
+
+function explorationChapterById(chapterId: ExplorationChapterId) {
+  return EXPLORATION_CHAPTERS.find((chapter) => chapter.id === chapterId) ?? EXPLORATION_CHAPTERS[0];
+}
+
+function explorationChapterForTask(taskOrder: number) {
+  return EXPLORATION_CHAPTERS.find((chapter) => taskOrder >= chapter.taskStart && taskOrder <= chapter.taskEnd)
+    ?? EXPLORATION_CHAPTERS[0];
+}
+
+function explorationTasksForChapter(chapterId: ExplorationChapterId) {
+  return EXPLORATION_TASKS.filter((task) => task.chapterId === chapterId);
 }
 
 function explorationAutomaticWeaponPhase(weaponKey: WeaponKey, startedAt: number, now: number) {
@@ -1314,7 +1393,7 @@ function currentExplorationDailyProgress(progress: ExplorationDailyProgress) {
 }
 
 function explorationAchievementValue(achievement: ExplorationAchievementDefinition, progress: ExplorationAchievementProgress, clearedTasks: number[]) {
-  if (achievement.metric === "chapterOne") return EXPLORATION_TASKS.filter((task) => clearedTasks.includes(task.order)).length;
+  if (achievement.metric === "chapterOne") return EXPLORATION_TASKS.filter((task) => task.chapterId === 1 && clearedTasks.includes(task.order)).length;
   return progress[achievement.metric];
 }
 
@@ -1626,6 +1705,7 @@ type ExplorationProgress = {
   achievementProgress: ExplorationAchievementProgress;
   consumableInventory: ExplorationConsumableInventory;
   deployedConsumables: ExplorationConsumableKey[];
+  selectedChapterId: ExplorationChapterId;
 };
 
 function readExplorationProgress(): ExplorationProgress {
@@ -1644,6 +1724,7 @@ function readExplorationProgress(): ExplorationProgress {
     achievementProgress: freshExplorationAchievementProgress(),
     consumableInventory: EMPTY_EXPLORATION_CONSUMABLES(),
     deployedConsumables: [],
+    selectedChapterId: 1 as ExplorationChapterId,
   };
   try {
     if (typeof window === "undefined") return fallback;
@@ -1715,6 +1796,7 @@ function readExplorationProgress(): ExplorationProgress {
       achievementProgress,
       consumableInventory,
       deployedConsumables,
+      selectedChapterId: parsed.selectedChapterId === 2 || parsed.selectedChapterId === 3 ? parsed.selectedChapterId : 1,
     };
   } catch {
     return fallback;
@@ -9643,13 +9725,16 @@ export function DeadRoadGame() {
   const [explorationClearedTasks, setExplorationClearedTasks] = useState<number[]>([]);
   const [recruitTickets, setRecruitTickets] = useState(0);
   const [explorationVehicleLevel, setExplorationVehicleLevel] = useState(1);
+  const [selectedExplorationChapterId, setSelectedExplorationChapterId] = useState<ExplorationChapterId>(1);
   const [explorationTeamTab, setExplorationTeamTab] = useState<ExplorationTeamTab>("personnel");
   const [explorationTaskSystemTab, setExplorationTaskSystemTab] = useState<ExplorationTaskSystemTab>("daily");
   const [explorationDailyProgress, setExplorationDailyProgress] = useState<ExplorationDailyProgress>(freshExplorationDailyProgress);
   const [explorationAchievementProgress, setExplorationAchievementProgress] = useState<ExplorationAchievementProgress>(freshExplorationAchievementProgress);
   const [explorationConsumableInventory, setExplorationConsumableInventory] = useState<ExplorationConsumableInventory>(EMPTY_EXPLORATION_CONSUMABLES);
   const [deployedExplorationConsumables, setDeployedExplorationConsumables] = useState<ExplorationConsumableKey[]>([]);
-  const [selectedExplorationMemberId, setSelectedExplorationMemberId] = useState("civilian");
+  const [selectedExplorationMemberId, setSelectedExplorationMemberId] = useState<string | null>(null);
+  const selectedExplorationMemberIdRef = useRef<string | null>(null);
+  useEffect(() => { selectedExplorationMemberIdRef.current = selectedExplorationMemberId; }, [selectedExplorationMemberId]);
   const [deployedMemberIds, setDeployedMemberIds] = useState<string[]>(["civilian", "farmer"]);
   const [ownedMemberIds, setOwnedMemberIds] = useState<string[]>(["civilian", "farmer"]);
   const [recruitedMemberIds, setRecruitedMemberIds] = useState<string[]>([]);
@@ -9688,6 +9773,7 @@ export function DeadRoadGame() {
       setExplorationVouchers(progress.vouchers);
       setRecruitTickets(progress.recruitTickets);
       setExplorationVehicleLevel(progress.vehicleLevel);
+      setSelectedExplorationChapterId(progress.selectedChapterId);
       setExplorationMemberLevels(progress.memberLevels);
       setDeployedMemberIds(progress.deployedMemberIds);
       setOwnedMemberIds(progress.ownedMemberIds);
@@ -9718,8 +9804,9 @@ export function DeadRoadGame() {
       achievementProgress: explorationAchievementProgress,
       consumableInventory: explorationConsumableInventory,
       deployedConsumables: deployedExplorationConsumables,
+      selectedChapterId: selectedExplorationChapterId,
     } satisfies ExplorationProgress));
-  }, [deployedExplorationConsumables, deployedMemberIds, explorationAchievementProgress, explorationCoins, explorationConsumableInventory, explorationDailyProgress, explorationExperience, explorationMemberLevels, explorationVehicleLevel, explorationVouchers, ownedMemberIds, recruitTickets, recruitedMemberIds, starterPackPurchased]);
+  }, [deployedExplorationConsumables, deployedMemberIds, explorationAchievementProgress, explorationCoins, explorationConsumableInventory, explorationDailyProgress, explorationExperience, explorationMemberLevels, explorationVehicleLevel, explorationVouchers, ownedMemberIds, recruitTickets, recruitedMemberIds, selectedExplorationChapterId, starterPackPurchased]);
   const [shopTab, setShopTab] = useState<ShopTab>("weapons");
   // 靶场"僵尸生成"页签：各品种配置数量（0~30），纯 UI state，不进游戏快照
   const [spawnCounts, setSpawnCounts] = useState<Record<ZombieKind, number>>({
@@ -9817,6 +9904,19 @@ export function DeadRoadGame() {
 
   const closeExplorationSubscreen = useCallback(() => {
     sound.uiClick();
+    setSelectedExplorationMemberId(null);
+    changeScreen("exploration");
+  }, [changeScreen]);
+
+  const openExplorationMemberDetail = useCallback((memberId: string) => {
+    sound.uiClick();
+    setSelectedExplorationMemberId(memberId);
+  }, []);
+
+  const selectExplorationChapter = useCallback((chapterId: ExplorationChapterId) => {
+    sound.uiClick();
+    setSelectedExplorationChapterId(chapterId);
+    setExplorationNotice(null);
     changeScreen("exploration");
   }, [changeScreen]);
 
@@ -13457,7 +13557,13 @@ export function DeadRoadGame() {
           // 抽奖战斗演出期间锁定退出；待机/结果页可返回探索主界面
           event.preventDefault();
           if (!event.repeat) closeLottery();
-        } else if (screenRef.current === "explorationShop" || screenRef.current === "vehicleGarage" || screenRef.current === "explorationTeam" || screenRef.current === "explorationBattle") {
+        } else if (screenRef.current === "explorationTeam" && selectedExplorationMemberIdRef.current !== null) {
+          event.preventDefault();
+          if (!event.repeat) {
+            sound.uiClick();
+            setSelectedExplorationMemberId(null);
+          }
+        } else if (screenRef.current === "explorationShop" || screenRef.current === "vehicleGarage" || screenRef.current === "explorationTeam" || screenRef.current === "explorationChapters" || screenRef.current === "explorationBattle") {
           event.preventDefault();
           if (!event.repeat) closeExplorationSubscreen();
         } else if (screenRef.current === "loadout" && loadoutOpenRef.current !== null) {
@@ -14821,7 +14927,10 @@ export function DeadRoadGame() {
   const currentExplorationVehicleKind = explorationVehicleKind(explorationVehicleLevel);
   const currentExplorationVehicleMaxHp = explorationVehicleMaxHp(explorationVehicleLevel);
   const currentExplorationVehicleUpgradeCost = explorationVehicleUpgradeCost(explorationVehicleLevel);
+  const currentExplorationChapter = explorationChapterById(selectedExplorationChapterId);
+  const currentExplorationChapterTasks = explorationTasksForChapter(selectedExplorationChapterId);
   const currentExplorationBattleTaskConfig = explorationBattleTaskConfig(explorationBattle.taskOrder);
+  const explorationBattleChapter = explorationChapterForTask(explorationBattle.taskOrder);
   const explorationBattleWave = 1 + Math.floor(explorationBattle.elapsed / 20);
   const armySupportActive = explorationBattle.supportActiveUntil.armySupport > explorationSupportClock;
   const armySupportRemaining = explorationBattle.supportActiveUntil.armySupport - explorationSupportClock;
@@ -14845,7 +14954,9 @@ export function DeadRoadGame() {
   // 下栏只展示已拥有但未上阵，以及已招募、尚未用金币购买的角色；未招募角色不会提前泄露。
   const reserveExplorationMembers = EXPLORATION_MEMBERS.filter((member) => (
     ownedMemberIds.includes(member.id) && !deployedMemberIds.includes(member.id)
-  ) || recruitedMemberIds.includes(member.id));
+  ) || recruitedMemberIds.includes(member.id)).sort((left, right) => (
+    Number(ownedMemberIds.includes(right.id)) - Number(ownedMemberIds.includes(left.id))
+  ));
   const lotteryCinematic = screen === "lottery" && (lotteryPhase === "firing" || lotteryPhase === "flash");
   const lotteryOverlayActive = screen === "lottery" && lotteryPhase !== "idle";
   const spawnTotal = ZOMBIE_CONFIG_KINDS.reduce((sum, kind) => sum + spawnCounts[kind], 0);
@@ -15025,7 +15136,7 @@ export function DeadRoadGame() {
           )}
         </div>
         <div className="masthead-side">
-          <span className="edition">{majorMode === "classic" ? "经典模式 / 公路生存行动" : "探索模式 / 农田前哨"}</span>
+          <span className="edition">{majorMode === "classic" ? "经典模式 / 公路生存行动" : `探索模式 / ${currentExplorationChapter.name}`}</span>
           <AccountControl />
           <label className="volume-control" title={`主音量 ${volume}%`}>
             <input
@@ -15110,7 +15221,7 @@ export function DeadRoadGame() {
         )}
 
         {screen === "exploration" && (
-          <div className="exploration-panel overlay-panel">
+          <div className={`exploration-panel chapter-${currentExplorationChapter.theme} overlay-panel`}>
             <div className="exploration-scenery" aria-hidden="true">
               <span className="exploration-sun" />
               <span className="exploration-tree-line" />
@@ -15119,12 +15230,16 @@ export function DeadRoadGame() {
               <span className="exploration-windmill"><i /><b /></span>
               <span className="exploration-crops exploration-crops-a" />
               <span className="exploration-crops exploration-crops-b" />
+              <span className="exploration-suburb-houses"><i /><i /><i /><i /></span>
+              <span className="exploration-suburb-tower"><i /><b /></span>
+              <span className="exploration-desert-mesa" />
+              <span className="exploration-desert-cacti"><i /><i /><i /></span>
             </div>
 
             <div className="exploration-heading">
-              <p className="eyebrow">探索模式 · 第一片区域</p>
-              <h2>遗落农田</h2>
-              <small>沿农田小路推进任务 · 通关上一任务后解锁下一任务</small>
+              <p className="eyebrow">探索模式 · {currentExplorationChapter.regionLabel}</p>
+              <h2>{currentExplorationChapter.name}</h2>
+              <small>{currentExplorationChapter.description} · 通关上一任务后解锁下一任务</small>
             </div>
 
             <div className="exploration-wallet" aria-label="探索模式资源">
@@ -15136,7 +15251,7 @@ export function DeadRoadGame() {
             <nav className="exploration-rail exploration-rail-left" aria-label="探索模式左侧功能">
               <button type="button" onClick={() => { sound.uiClick(); setExplorationExchangeNotice(null); changeScreen("explorationShop"); }}><b>▣</b><span>商店</span><small>兑换招募券</small></button>
               <button type="button" onClick={() => { sound.uiClick(); changeScreen("vehicleGarage"); }}><b>▰</b><span>车辆改装</span><small>升级出战车辆</small></button>
-              <button type="button" onClick={() => { sound.uiClick(); setExplorationTeamTab("personnel"); changeScreen("explorationTeam"); }}><b>♟</b><span>队伍</span><small>查看出战成员</small></button>
+              <button type="button" onClick={() => { sound.uiClick(); setSelectedExplorationMemberId(null); setExplorationTeamTab("personnel"); changeScreen("explorationTeam"); }}><b>♟</b><span>队伍</span><small>查看出战成员</small></button>
             </nav>
 
             <nav className="exploration-rail exploration-rail-right" aria-label="探索模式右侧功能">
@@ -15147,31 +15262,45 @@ export function DeadRoadGame() {
 
             <div className="exploration-task-map" aria-label="探索任务地图">
               <svg className="exploration-route" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-                <polyline points={EXPLORATION_TASKS.map((task) => `${task.x},${task.y}`).join(" ")} />
+                <polyline points={currentExplorationChapterTasks.map((task) => `${task.x},${task.y}`).join(" ")} />
               </svg>
-              {EXPLORATION_TASKS.map((task) => {
+              {currentExplorationChapterTasks.map((task) => {
                 const unlocked = isExplorationTaskUnlocked(task.order, explorationClearedTasks);
                 const cleared = explorationClearedTasks.includes(task.order);
+                const enterable = unlocked && task.playable;
                 return (
                   <button
                     key={task.order}
                     type="button"
-                    className={`exploration-task-node ${unlocked ? "unlocked" : "locked"} ${cleared ? "cleared" : ""}`}
+                    className={`exploration-task-node ${enterable ? "unlocked" : "locked"} ${cleared ? "cleared" : ""} ${!task.playable ? "coming-soon" : ""}`}
                     style={{ "--task-x": `${task.x}%`, "--task-y": `${task.y}%` } as React.CSSProperties}
-                    disabled={!unlocked}
-                    aria-label={`${task.label}${unlocked ? cleared ? "，已通关，可重新进入" : "，可进入" : "，通关上一任务后解锁"}`}
+                    disabled={!enterable}
+                    aria-label={`${task.label}${!task.playable ? "，战斗内容待开放" : unlocked ? cleared ? "，已通关，可重新进入" : "，可进入" : "，通关上一任务后解锁"}`}
                     onClick={() => startExplorationBattle(task.order)}
                   >
                     <span>{String(task.order).padStart(2, "0")}</span>
                     <strong>{task.label}</strong>
-                    <small>{cleared ? "✓ 已通关" : unlocked ? "进入任务 →" : "🔒 未解锁"}</small>
+                    <small>{cleared ? "✓ 已通关" : !task.playable ? "◌ 内容待开放" : unlocked ? "进入任务 →" : "🔒 未解锁"}</small>
                   </button>
                 );
               })}
+              {currentExplorationChapter.specialTasks.map((task) => (
+                <button
+                  key={task.id}
+                  type="button"
+                  className="exploration-task-node exploration-special-task locked"
+                  style={{ "--task-x": `${task.x}%`, "--task-y": `${task.y}%` } as React.CSSProperties}
+                  disabled
+                  aria-label={`${task.label}，内容待开放`}
+                  title={task.description}
+                >
+                  <span>★</span><strong>{task.label}</strong><small>◌ 内容待开放</small>
+                </button>
+              ))}
             </div>
 
-            <button type="button" className="exploration-chapter-button" onClick={() => { sound.uiClick(); setExplorationNotice("章节选择将在后续更新中开放；当前为第一章「遗落农田」。"); }}>
-              <small>当前章节</small><strong>第一章 · 遗落农田</strong><b>章节 ▤</b>
+            <button type="button" className="exploration-chapter-button" onClick={() => { sound.uiClick(); changeScreen("explorationChapters"); }}>
+              <small>当前章节</small><strong>{currentExplorationChapter.regionLabel} · {currentExplorationChapter.name}</strong><b>章节 ▤</b>
             </button>
 
             {explorationNotice && (
@@ -15180,6 +15309,39 @@ export function DeadRoadGame() {
                 <button type="button" onClick={() => { sound.uiClick(); setExplorationNotice(null); }} aria-label="关闭提示">×</button>
               </div>
             )}
+          </div>
+        )}
+
+        {screen === "explorationChapters" && (
+          <div className="exploration-chapters-panel overlay-panel">
+            <button type="button" className="exploration-subscreen-back" onClick={closeExplorationSubscreen}>← 返回探索地图</button>
+            <div className="chapter-select-heading">
+              <p className="eyebrow">探索模式 · 区域选择</p>
+              <h2>章节</h2>
+              <small>从左向右选择行动区域，主界面与战斗场景会同步切换。</small>
+            </div>
+            <div className="chapter-card-list" aria-label="探索章节列表">
+              {EXPLORATION_CHAPTERS.map((chapter) => {
+                const chapterTasks = explorationTasksForChapter(chapter.id);
+                const clearedCount = chapterTasks.filter((task) => explorationClearedTasks.includes(task.order)).length;
+                return (
+                  <button
+                    type="button"
+                    key={chapter.id}
+                    className={`chapter-select-card chapter-card-${chapter.theme} ${selectedExplorationChapterId === chapter.id ? "selected" : ""}`}
+                    onClick={() => selectExplorationChapter(chapter.id)}
+                    aria-label={`选择${chapter.regionLabel}${chapter.name}`}
+                  >
+                    <span className="chapter-card-art" aria-hidden="true"><i /><i /><b /></span>
+                    <small>{chapter.regionLabel} · 任务 {chapter.taskStart}—{chapter.taskEnd}</small>
+                    <strong>{chapter.name}</strong>
+                    <p>{chapter.description}</p>
+                    <div><b>{clearedCount} / 10 主线</b><em>{chapter.specialTasks.length} 个特殊任务</em></div>
+                    <mark>{selectedExplorationChapterId === chapter.id ? "当前区域" : "选择章节 →"}</mark>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
 
@@ -15383,8 +15545,8 @@ export function DeadRoadGame() {
           <div className="exploration-team-panel overlay-panel">
             <button type="button" className="exploration-subscreen-back" onClick={closeExplorationSubscreen}>← 返回农田</button>
             <div className="team-mode-tabs" role="tablist" aria-label="队伍编成类型">
-              <button type="button" role="tab" aria-selected={explorationTeamTab === "personnel"} className={explorationTeamTab === "personnel" ? "active" : ""} onClick={() => { sound.uiClick(); setExplorationTeamTab("personnel"); }}>人员上阵</button>
-              <button type="button" role="tab" aria-selected={explorationTeamTab === "consumables"} className={explorationTeamTab === "consumables" ? "active" : ""} onClick={() => { sound.uiClick(); setExplorationTeamTab("consumables"); }}>消耗品上阵</button>
+              <button type="button" role="tab" aria-selected={explorationTeamTab === "personnel"} className={explorationTeamTab === "personnel" ? "active" : ""} onClick={() => { sound.uiClick(); setSelectedExplorationMemberId(null); setExplorationTeamTab("personnel"); }}>人员上阵</button>
+              <button type="button" role="tab" aria-selected={explorationTeamTab === "consumables"} className={explorationTeamTab === "consumables" ? "active" : ""} onClick={() => { sound.uiClick(); setSelectedExplorationMemberId(null); setExplorationTeamTab("consumables"); }}>消耗品上阵</button>
             </div>
             <div className="team-resource-strip"><span>车辆等级 <b>LV.{explorationVehicleLevel}</b></span><span>经验点数 <b>{explorationExperience}</b></span><span>金币 <b>{explorationCoins}</b></span></div>
 
@@ -15398,7 +15560,7 @@ export function DeadRoadGame() {
                       if (!member) return <div key={`empty-${index}`} className="team-empty-slot"><b>+</b><small>空栏位</small></div>;
                       const level = explorationMemberLevels[member.id] ?? 1;
                       return (
-                        <button key={member.id} type="button" className={`team-member-card rarity-${member.rarity} ${selectedExplorationMember.id === member.id ? "selected" : ""}`} onClick={() => setSelectedExplorationMemberId(member.id)} aria-label={`${member.name}，等级 ${level}，${WEAPONS[member.weapon].name}`}>
+                        <button key={member.id} type="button" className={`team-member-card rarity-${member.rarity}`} onClick={() => openExplorationMemberDetail(member.id)} aria-label={`${member.name}，等级 ${level}，${WEAPONS[member.weapon].name}，点击查看详情`}>
                           <ExplorationMemberPreview member={member} />
                         </button>
                       );
@@ -15413,15 +15575,20 @@ export function DeadRoadGame() {
                       {reserveExplorationMembers.length === 0 ? <p>暂无未上阵或待购买人员</p> : reserveExplorationMembers.map((member) => {
                         const owned = ownedMemberIds.includes(member.id);
                         return (
-                          <button key={member.id} type="button" className={`team-member-card rarity-${member.rarity} ${selectedExplorationMember.id === member.id ? "selected" : ""}`} onClick={() => setSelectedExplorationMemberId(member.id)} aria-label={`${member.name}，${owned ? "已拥有未上阵" : `待购买，${explorationMemberPurchaseCost(member)} 金币`}`}>
+                          <button key={member.id} type="button" className={`team-member-card rarity-${member.rarity} ${owned ? "reserve-owned" : "unpurchased"}`} onClick={() => openExplorationMemberDetail(member.id)} aria-label={`${member.name}，${owned ? "已拥有未上阵" : `待购买，${explorationMemberPurchaseCost(member)} 金币`}，点击查看详情`}>
                             <ExplorationMemberPreview member={member} />
+                            <small>{owned ? "未上阵" : "未购买"}</small>
                           </button>
                         );
                       })}
                     </div>
                   </section>
+                </div>
 
-                  <section className={`team-member-detail rarity-${selectedExplorationMember.rarity}`}>
+                {selectedExplorationMemberId !== null && (
+                  <div className="team-member-detail-backdrop" onClick={() => setSelectedExplorationMemberId(null)}>
+                    <section className={`team-member-detail rarity-${selectedExplorationMember.rarity}`} role="dialog" aria-modal="true" aria-label={`${selectedExplorationMember.name}人物详情`} onClick={(event) => event.stopPropagation()}>
+                      <button type="button" className="team-detail-close" onClick={() => setSelectedExplorationMemberId(null)} aria-label="关闭人物详情">×</button>
                     <div className="team-member-info">
                       <p>人物档案</p>
                       <h2>{selectedExplorationMember.name}</h2>
@@ -15453,8 +15620,9 @@ export function DeadRoadGame() {
                       </div>
                     </div>
                     <div className="team-member-model"><ExplorationMemberPreview member={selectedExplorationMember} /></div>
-                  </section>
-                </div>
+                    </section>
+                  </div>
+                )}
               </>
             ) : (
               <section className="team-consumables-section">
@@ -15476,8 +15644,8 @@ export function DeadRoadGame() {
         )}
 
         {screen === "explorationBattle" && (
-          <div className="exploration-battle-panel overlay-panel">
-            <div className="battle-farm-scenery" aria-hidden="true">
+          <div className={`exploration-battle-panel battle-panel-${explorationBattleChapter.theme} overlay-panel`}>
+            <div className={`battle-chapter-scenery battle-theme-${explorationBattleChapter.theme}`} aria-hidden="true">
               <span className="battle-sky-cloud cloud-a" />
               <span className="battle-sky-cloud cloud-b" />
               <span className="battle-sky-cloud cloud-c" />
@@ -15485,6 +15653,10 @@ export function DeadRoadGame() {
               <span className="battle-farm-barn"><i /><b /></span>
               <span className="battle-farm-silo"><i /></span>
               <span className="battle-farm-fence"><i /><i /><i /><i /></span>
+              <span className="battle-suburb-row"><i /><i /><i /><i /></span>
+              <span className="battle-suburb-lights"><i /><i /><i /></span>
+              <span className="battle-desert-mesa" />
+              <span className="battle-desert-cacti"><i /><i /><i /></span>
             </div>
             <div className="battle-road" aria-hidden="true"><i /><i /><i /></div>
             <div className="battle-command-bar">
@@ -15500,7 +15672,7 @@ export function DeadRoadGame() {
                 <div className="battle-vehicle-hp"><small>车辆 HP</small><strong>{Math.ceil(explorationBattle.vehicleHp)} / {currentExplorationVehicleMaxHp}</strong><i><b style={{ width: `${explorationBattle.vehicleHp / currentExplorationVehicleMaxHp * 100}%` }} /></i></div>
               </div>
             </div>
-            <div className="battle-observer-label">任务{EXPLORATION_TASK_NAMES[explorationBattle.taskOrder - 1]?.replace("任务", "")} · 第 {explorationBattleWave} 阶段 · {explorationBattle.elapsed}s · 农场道路 · 第三人称自动作战</div>
+            <div className="battle-observer-label">{EXPLORATION_TASK_NAMES[explorationBattle.taskOrder - 1]} · 第 {explorationBattleWave} 阶段 · {explorationBattle.elapsed}s · {explorationBattleChapter.battleLocation} · 第三人称自动作战</div>
 
             <div className={`battlefield ${explorationBattle.airstrikeEffects.some((effect) => effect.impacted && explorationSupportClock < effect.impactAt + ITEMS.airstrike.shakeMs) ? "airstrike-shaking" : ""}`} aria-label="探索模式自动战斗区域">
               <div className="battle-vehicle-position"><ExplorationVehicleModel kind={currentExplorationVehicleKind} compact /></div>
