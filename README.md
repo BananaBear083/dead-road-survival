@@ -34,6 +34,25 @@ the first deployment, set the repository's Pages source to **GitHub Actions** in
 The workflow supports both `owner.github.io` repositories and project sites
 served below `/<repository>/`.
 
+## Local co-op survival
+
+The main menu includes a **双人生存** entry for local same-screen play. Player
+1 uses keyboard and mouse. Player 2 uses the first connected standard USB or
+Bluetooth gamepad:
+
+- left stick: move
+- right stick: aim
+- right trigger (`RT`): fire or attack
+- `X`: reload
+- `Y`: switch weapon
+- right bumper (`RB`): kick
+
+Both players use the same survival character, weapon, animation, reload, sound,
+damage, and zombie systems, while keeping independent health and ammunition.
+Co-op survival spawns exactly twice the single-player zombie total each day.
+Connect the gamepad before starting the mode and press any gamepad button if the
+browser has not detected it yet.
+
 ## Player accounts and cloud saves
 
 The game supports optional email/password accounts backed by Supabase. Guest

@@ -998,18 +998,24 @@ button { -webkit-tap-highlight-color: transparent; }
 .primary-button:active { transform: translate(4px, 4px); box-shadow: 2px 2px 0 #6c5a22; }
 .primary-button b { font-size: 27px; line-height: 1; }
 .primary-button.compact { min-width: 260px; padding-block: 14px; }
-.range-button { min-width: 245px; display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto auto; align-content: center; column-gap: 18px; padding: 12px 18px 12px 22px; color: var(--paper); text-align: left; background: #17241e; border: 2px solid #6a8d77; box-shadow: 6px 6px 0 #24362d; cursor: pointer; transition: transform .16s, background .16s, box-shadow .16s; }
+.range-button, .coop-button, .level-button { min-width: 245px; display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto auto; align-content: center; column-gap: 18px; padding: 12px 18px 12px 22px; color: var(--paper); text-align: left; cursor: pointer; transition: transform .16s, background .16s, box-shadow .16s; }
+.range-button { background: #17241e; border: 2px solid #6a8d77; box-shadow: 6px 6px 0 #24362d; }
 .range-button:hover { background: #21372c; transform: translate(-2px, -2px); box-shadow: 9px 9px 0 #24362d; }
-.range-button > span { font-size: 16px; font-weight: 1000; letter-spacing: .09em; }
-.range-button > small { grid-column: 1; margin-top: 3px; color: #93b09f; font-size: 9px; font-weight: 900; }
-.range-button > b { grid-column: 2; grid-row: 1 / 3; align-self: center; color: var(--signal); font-size: 29px; }
+.range-button > span, .coop-button > span, .level-button > span { font-size: 16px; font-weight: 1000; letter-spacing: .09em; }
+.range-button > small, .coop-button > small, .level-button > small { grid-column: 1; margin-top: 3px; font-size: 9px; font-weight: 900; }
+.range-button > small { color: #93b09f; }
+.range-button > b, .coop-button > b, .level-button > b { grid-column: 2; grid-row: 1 / 3; align-self: center; color: var(--signal); font-size: 29px; }
+
+.coop-button { background: #15242c; border: 2px solid #4e9dc4; box-shadow: 6px 6px 0 #183748; }
+.coop-button:hover { background: #1d3542; transform: translate(-2px, -2px); box-shadow: 9px 9px 0 #183748; }
+.coop-button.connected { border-color: #64d6ff; box-shadow: 6px 6px 0 #21566e; }
+.coop-button > small { color: #8bc9e6; }
+.coop-button > b { color: #64d6ff; }
 
 /* 关卡模式入口：与 range-button 同构的菜单按钮，暗金色调区分于靶场的墨绿 */
-.level-button { min-width: 245px; display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto auto; align-content: center; column-gap: 18px; padding: 12px 18px 12px 22px; color: var(--paper); text-align: left; background: #241d17; border: 2px solid #a08444; box-shadow: 6px 6px 0 #36301f; cursor: pointer; transition: transform .16s, background .16s, box-shadow .16s; }
+.level-button { background: #241d17; border: 2px solid #a08444; box-shadow: 6px 6px 0 #36301f; }
 .level-button:hover { background: #332a1d; transform: translate(-2px, -2px); box-shadow: 9px 9px 0 #36301f; }
-.level-button > span { font-size: 16px; font-weight: 1000; letter-spacing: .09em; }
-.level-button > small { grid-column: 1; margin-top: 3px; color: #b0a08a; font-size: 9px; font-weight: 900; }
-.level-button > b { grid-column: 2; grid-row: 1 / 3; align-self: center; color: var(--signal); font-size: 29px; }
+.level-button > small { color: #b0a08a; }
 
 /* 关卡模式占位页：居中面板 + 占位关卡卡列表（预留关卡选择结构，卡片禁用态） */
 .levels-panel { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; overflow-y: auto; padding: 24px; background: rgba(7, 10, 8, .86); backdrop-filter: blur(2px); }
@@ -1288,8 +1294,8 @@ button { -webkit-tap-highlight-color: transparent; }
   .menu-panel h1 { font-size: 43px; }
   .menu-copy { line-height: 1.45; margin: 15px 0; }
   .menu-actions { gap: 8px; }
-  .primary-button, .range-button, .level-button { min-width: 0; flex: 1; padding: 13px 14px; font-size: 13px; }
-  .range-button > small, .level-button > small { display: none; }
+  .primary-button, .coop-button, .range-button, .level-button { min-width: 0; flex: 1; padding: 13px 14px; font-size: 13px; }
+  .coop-button > small, .range-button > small, .level-button > small { display: none; }
   .record-card { min-width: 105px; }
   .shop-heading { align-items: center; }
   .shop-tabs button { flex: 1; padding-inline: 6px; }

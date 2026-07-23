@@ -56,6 +56,7 @@ test("keeps the most advanced loadout while unioning unlocks and inventory", () 
     {
       progress: {
         version: 2,
+        coOp: false,
         nextDay: 5,
         kills: 90,
         coins: 400,
@@ -70,6 +71,7 @@ test("keeps the most advanced loadout while unioning unlocks and inventory", () 
     {
       progress: {
         version: 2,
+        coOp: true,
         nextDay: 9,
         kills: 150,
         coins: 250,
@@ -84,6 +86,8 @@ test("keeps the most advanced loadout while unioning unlocks and inventory", () 
   );
 
   assert.equal(merged.progress.nextDay, 9);
+  assert.equal(merged.progress.coOp, true);
+  assert.equal(merged.progress.version, 3);
   assert.equal(merged.progress.coins, 400);
   assert.deepEqual(merged.progress.loadout, ["pkm", "glock17"]);
   assert.equal(merged.progress.weapon, "pkm");

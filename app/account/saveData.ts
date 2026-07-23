@@ -117,7 +117,7 @@ export function mergeProgress(left: JsonObject | null, right: JsonObject | null)
   return {
     ...structuredClone(other),
     ...structuredClone(preferred),
-    version: Math.max(finiteNonNegative(left.version), finiteNonNegative(right.version), 2),
+    version: Math.max(finiteNonNegative(left.version), finiteNonNegative(right.version), 3),
     nextDay: Math.max(finiteNonNegative(left.nextDay), finiteNonNegative(right.nextDay), 1),
     coins: Math.max(finiteNonNegative(left.coins), finiteNonNegative(right.coins)),
     kills: Math.max(finiteNonNegative(left.kills), finiteNonNegative(right.kills)),

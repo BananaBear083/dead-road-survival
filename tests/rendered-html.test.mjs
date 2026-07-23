@@ -23,6 +23,8 @@ test("server-renders the finished Dead Road game", async () => {
   assert.match(html, /<title>死路求生 · 2D 僵尸射击<\/title>/i);
   assert.match(html, /死路求生/);
   assert.match(html, /生存模式/);
+  assert.match(html, /双人生存/);
+  assert.match(html, /键鼠 \+ 手柄 · 尸潮 ×2/);
   assert.match(html, /靶场模式/);
   assert.match(html, /最高存活/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape/);
@@ -309,7 +311,7 @@ test("fills any screen aspect ratio with a dynamic world width", async () => {
   assert.match(source, /const DEFAULT_WORLD_W = 1280/);
   assert.doesNotMatch(source, /const MIN_WORLD_W|const MAX_WORLD_W/);
   assert.match(source, /worldW: number/);
-  assert.match(source, /freshState = \(mode: GameMode = "survival", worldW: number = DEFAULT_WORLD_W\)/);
+  assert.match(source, /freshState = \(mode: GameMode = "survival", worldW: number = DEFAULT_WORLD_W, coOp = false\)/);
   assert.doesNotMatch(source, /const W = 1280/);
   // ResizeObserver：实测舞台比例 → 更新 worldW + 重映射实体 + 重设位图宽
   assert.match(source, /new ResizeObserver\(applyStageSize\)/);
@@ -324,8 +326,8 @@ test("fills any screen aspect ratio with a dynamic world width", async () => {
   assert.match(source, /g\.worldW = nextW/);
   assert.match(source, /width=\{canvasW\}/);
   // 开局/续档沿用当前世界宽度，背景与绘制走动态宽度
-  assert.match(source, /freshState\(mode, worldWRef\.current\)/);
-  assert.match(source, /freshState\("survival", worldWRef\.current\)/);
+  assert.match(source, /freshState\(mode, worldWRef\.current, coOp\)/);
+  assert.match(source, /freshState\("survival", worldWRef\.current, save\.coOp\)/);
   assert.match(source, /drawBackground\(ctx, g\.day, g\.worldW\)/);
   assert.match(source, /const W = g\.worldW/);
   // 生成位置/玩家钳制/鼠标换算随动态宽度
@@ -452,7 +454,7 @@ test("advertises a coming-soon campaign mode with its own screen and placeholder
   assert.match(css, /\.levels-panel \{/);
   assert.match(css, /\.level-card \{/);
   assert.match(css, /\.level-badge \{/);
-  assert.match(css, /\.primary-button, \.range-button, \.level-button \{/);
+  assert.match(css, /\.primary-button, \.coop-button, \.range-button, \.level-button \{/);
 });
 
 test("level mode: sequential unlock chain with persisted cleared-levels record", async () => {
@@ -1090,10 +1092,10 @@ test("level mode: occupy-building level with persistent squad, blackout floors a
 
 test("all modes: empty primary fire reloads while partial magazines require R", async () => {
   const source = await readFile(new URL("../app/DeadRoadGame.tsx", import.meta.url), "utf8");
-  const attackSource = source.slice(source.indexOf("const attack = useCallback"), source.indexOf("const reload = useCallback"));
-  const reloadSource = source.slice(source.indexOf("const reload = useCallback"), source.indexOf("// 搭档战斗逻辑"));
+  const attackSource = source.slice(source.indexOf("const attackPlayer = useCallback"), source.indexOf("const reloadPlayer = useCallback"));
+  const reloadSource = source.slice(source.indexOf("const reloadPlayer = useCallback"), source.indexOf("// 搭档战斗逻辑"));
 
-  assert.match(attackSource, /if \(p\.ammo\[p\.weapon\] <= 0\) \{\s+[^}]*reloadRef\.current\(now\);\s+return;/);
+  assert.match(attackSource, /if \(p\.ammo\[p\.weapon\] <= 0\) \{\s+[^}]*reloadRef\.current\(p, now\);\s+return;/);
   assert.doesNotMatch(attackSource, /p\.ammo\[p\.weapon\] < weapon\.magazine[\s\S]*reloadRef\.current/);
   assert.match(reloadSource, /p\.ammo\[p\.weapon\] === weapon\.magazine/);
   assert.doesNotMatch(reloadSource, /window\.setTimeout/);
@@ -1262,7 +1264,7 @@ test("expands the global arsenal, zombie roster, reload latch and physical explo
 
   assert.match(source, /emptyReloadLatch: boolean/);
   assert.match(source, /if \(p\.emptyReloadLatch\) return;/);
-  assert.match(source, /p\.emptyReloadLatch = true;\s*reloadRef\.current\(now\)/);
+  assert.match(source, /p\.emptyReloadLatch = true;\s*reloadRef\.current\(p, now\)/);
   assert.match(source, /onPointerUp[\s\S]*emptyReloadLatch = false/);
   assert.match(css, /\.select-grid \.weapon-card small \{[^}]*white-space: normal/);
 
@@ -1559,7 +1561,7 @@ test("adds escalating member upgrades, repeatable lottery rewards, shared hurt a
   assert.match(css, /\.starter-pack-page[^}]*border: 4px solid #d4ad3a/);
 
   assert.match(sound, /bodyHit\(options: PlayOptions = \{\}\)/);
-  assert.match(source, /sound\.bodyHit\(\{ volume: distanceVolume\(z\.x, g\.player\.x\) \* \.58 \}\)/);
+  assert.match(source, /sound\.bodyHit\(\{ volume: distanceVolume\(z\.x, sourcePlayer\.x\) \* \.58 \}\)/);
   assert.match(source, /sound\.playerHurt\(\{ volume: distanceVolume\(targetNpc\.field\.x, p\.x\) \* \.7 \}\)/);
   assert.match(source, /sound\.playerHurt\(\{ volume: \.62 \}\)/);
   assert.match(css, /\.battle-enemy-shared-model[^}]*width: 108px[^}]*height: 184px/);

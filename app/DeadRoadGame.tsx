@@ -6,6 +6,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AccountControl } from "./account/AccountControl";
 import { notifyLocalSaveChanged } from "./account/saveData";
+import {
+  EMPTY_COOP_GAMEPAD_BUTTONS,
+  readCoOpGamepad,
+  survivalWaveTotal,
+  type CoOpGamepadButtons,
+} from "./coOp";
 import { firearmReloadInsertionTimeline, soundManager as sound } from "./sound";
 import type { FirearmSoundKey } from "./sound";
 
@@ -593,7 +599,7 @@ const EMPTY_ITEM_INVENTORY = (): Record<ItemKey, number> => ({ molotov: 0, barri
 
 // 进度存档：带版本字段；读取时逐项校验，解析失败一律视为无存档
 const PROGRESS_KEY = "dead-road-progress";
-const PROGRESS_VERSION = 2;
+const PROGRESS_VERSION = 3;
 
 type ProgressSave = {
   version: number;
@@ -609,6 +615,7 @@ type ProgressSave = {
   itemInventory: Record<ItemKey, number>;
   ownedPartners: PartnerKey[];
   partner: PartnerKey | null;
+  coOp: boolean;
 };
 
 function readProgressSave(): ProgressSave | null {
@@ -617,7 +624,7 @@ function readProgressSave(): ProgressSave | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<ProgressSave>;
     // v1 旧档容错：缺少搭档字段时按空处理，其余校验一致
-    if (parsed.version !== 1 && parsed.version !== PROGRESS_VERSION) return null;
+    if (parsed.version !== 1 && parsed.version !== 2 && parsed.version !== PROGRESS_VERSION) return null;
     if (typeof parsed.nextDay !== "number" || !Number.isFinite(parsed.nextDay) || parsed.nextDay < 1) return null;
     if (typeof parsed.coins !== "number" || !Number.isFinite(parsed.coins) || parsed.coins < 0) return null;
     if (!Array.isArray(parsed.owned) || !Array.isArray(parsed.ownedArmors)) return null;
@@ -625,9 +632,10 @@ function readProgressSave(): ProgressSave | null {
     if (typeof parsed.melee !== "string" || typeof parsed.armor !== "string" || typeof parsed.weapon !== "string") return null;
     if (typeof parsed.itemInventory !== "object" || parsed.itemInventory === null) return null;
     return {
-      ...(parsed as Omit<ProgressSave, "ownedPartners" | "partner">),
+      ...(parsed as Omit<ProgressSave, "ownedPartners" | "partner" | "coOp">),
       ownedPartners: Array.isArray(parsed.ownedPartners) ? parsed.ownedPartners : [],
       partner: typeof parsed.partner === "string" ? parsed.partner : null,
+      coOp: parsed.coOp === true,
     };
   } catch {
     return null;
@@ -672,6 +680,36 @@ type Player = {
   invulnerableUntil: number;
   moving: boolean;
 };
+
+function freshPlayer(x = 220, y = 410): Player {
+  return {
+    x,
+    y,
+    hp: 100,
+    maxHp: 100,
+    armor: "civilian",
+    angle: 0,
+    weapon: "glock17",
+    ammo: {
+      glock17: 17, m1911: 7, pkm: 100, fruitknife: 1, combatknife: 1, crowbar: 1,
+      hammer: 1, fireaxe: 1, baseballbat: 1, sawedoff: 2, mac11: 32, mp5k: 30,
+      ak47: 30, m4: 30, m16: 30, scarh: 20, saiga12: 8, rem870: 7, awm: 5, m107: 10, flint66: 10,
+      m240l: 100, mg42: 100, rpg7: 1, m32: 6, gatling: 180, fists: 1,
+    },
+    lastShot: 0,
+    lastMuzzleFlash: 0,
+    recoilAt: 0,
+    recoilHeat: 0,
+    lastMeleeAttack: 0,
+    meleeMode: "slash",
+    lastKick: 0,
+    emptyReloadLatch: false,
+    reloadStartedAt: 0,
+    reloadingUntil: 0,
+    invulnerableUntil: 0,
+    moving: false,
+  };
+}
 
 // 僵尸服装款式：便装衬衫 / T 恤 / 破损西装 / 工装 / 汗背心 / 病号服 / 警服残片 / 连帽夹克（8 套，纯外观）
 type ZombieOutfitStyle = "shirt" | "tee" | "suit" | "work" | "vest" | "patient" | "police" | "jacket";
@@ -5894,6 +5932,7 @@ type ExplosiveProjectile = {
 
 type GameState = {
   mode: GameMode;
+  coOp: boolean;
   day: number;
   coins: number;
   kills: number;
@@ -5903,6 +5942,7 @@ type GameState = {
   /** 最近一次通关结算奖励（商店标题展示），进入下一天清零 */
   lastDayBonus: number;
   player: Player;
+  secondPlayer: Player | null;
   zombies: Zombie[];
   corpses: ZombieCorpse[];
   tracers: Tracer[];
@@ -5953,8 +5993,9 @@ type GameState = {
   npcs: LevelNpc[];
 };
 
-const freshState = (mode: GameMode = "survival", worldW: number = DEFAULT_WORLD_W): GameState => ({
+const freshState = (mode: GameMode = "survival", worldW: number = DEFAULT_WORLD_W, coOp = false): GameState => ({
   mode,
+  coOp: mode === "survival" && coOp,
   worldW,
   day: 1,
   coins: 0,
@@ -5962,33 +6003,8 @@ const freshState = (mode: GameMode = "survival", worldW: number = DEFAULT_WORLD_
   stats: { shotsHit: 0, headshots: 0, coinsEarned: 0, coinsSpent: 0, bonusEarned: 0 },
   dayKillCoins: 0,
   lastDayBonus: 0,
-  player: {
-    x: 220,
-    y: 410,
-    hp: 100,
-    maxHp: 100,
-    armor: "civilian",
-    angle: 0,
-    weapon: "glock17",
-    ammo: {
-      glock17: 17, m1911: 7, pkm: 100, fruitknife: 1, combatknife: 1, crowbar: 1,
-      hammer: 1, fireaxe: 1, baseballbat: 1, sawedoff: 2, mac11: 32, mp5k: 30,
-      ak47: 30, m4: 30, m16: 30, scarh: 20, saiga12: 8, rem870: 7, awm: 5, m107: 10, flint66: 10,
-      m240l: 100, mg42: 100, rpg7: 1, m32: 6, gatling: 180, fists: 1,
-    },
-    lastShot: 0,
-    lastMuzzleFlash: 0,
-    recoilAt: 0,
-    recoilHeat: 0,
-    lastMeleeAttack: 0,
-    meleeMode: "slash",
-    lastKick: 0,
-    emptyReloadLatch: false,
-    reloadStartedAt: 0,
-    reloadingUntil: 0,
-    invulnerableUntil: 0,
-    moving: false,
-  },
+  player: freshPlayer(),
+  secondPlayer: mode === "survival" && coOp ? freshPlayer(310, 470) : null,
   zombies: [],
   corpses: [],
   tracers: [],
@@ -6016,7 +6032,7 @@ const freshState = (mode: GameMode = "survival", worldW: number = DEFAULT_WORLD_
   ownedPartners: new Set<PartnerKey>(),
   partner: null,
   partnerField: freshPartnerField(),
-  waveTotal: 6,
+  waveTotal: survivalWaveTotal(1, mode === "survival" && coOp),
   spawned: 0,
   nextSpawnAt: 0,
   startedAt: performance.now(),
@@ -6028,6 +6044,26 @@ const freshState = (mode: GameMode = "survival", worldW: number = DEFAULT_WORLD_
   obstacles: [],
   npcs: [],
 });
+
+function survivalPlayers(game: GameState) {
+  return game.coOp && game.secondPlayer ? [game.player, game.secondPlayer] : [game.player];
+}
+
+function livingSurvivalPlayers(game: GameState) {
+  return survivalPlayers(game).filter((player) => player.hp > 0);
+}
+
+function gameStillContainsPlayer(game: GameState, player: Player) {
+  return game.player === player || game.secondPlayer === player;
+}
+
+function equipPlayerArmor(player: Player, key: ArmorKey) {
+  const previousMaxHp = player.maxHp;
+  const nextMaxHp = ARMORS[key].maxHp;
+  player.armor = key;
+  player.maxHp = nextMaxHp;
+  player.hp = Math.min(nextMaxHp, player.hp + Math.max(0, nextMaxHp - previousMaxHp));
+}
 
 // ESC 暂停恢复时整体平移游戏内时间戳：暂停期间不计时，恢复后所有冷却/粒子/弹道/击退姿态不发生跳变
 function shiftTimeline(g: GameState, delta: number) {
@@ -6045,15 +6081,16 @@ function shiftTimeline(g: GameState, delta: number) {
     g.level.vehicleLastShot += delta;
     g.level.vehicleReloadUntil += delta;
   }
-  const p = g.player;
-  p.lastShot += delta;
-  p.lastMuzzleFlash += delta;
-  p.recoilAt += delta;
-  p.lastMeleeAttack += delta;
-  p.lastKick += delta;
-  p.reloadStartedAt += delta;
-  p.reloadingUntil += delta;
-  p.invulnerableUntil += delta;
+  for (const player of survivalPlayers(g)) {
+    player.lastShot += delta;
+    player.lastMuzzleFlash += delta;
+    player.recoilAt += delta;
+    player.lastMeleeAttack += delta;
+    player.lastKick += delta;
+    player.reloadStartedAt += delta;
+    player.reloadingUntil += delta;
+    player.invulnerableUntil += delta;
+  }
   for (const z of g.zombies) {
     z.lastHit += delta;
     z.knockedDownAt += delta;
@@ -6672,6 +6709,7 @@ function drawBackground(ctx: CanvasRenderingContext2D, day: number, worldW: numb
 function remapWorldX(g: GameState, factor: number) {
   if (!Number.isFinite(factor) || factor <= 0 || factor === 1) return;
   g.player.x *= factor;
+  if (g.secondPlayer) g.secondPlayer.x *= factor;
   for (const z of g.zombies) z.x *= factor;
   for (const corpse of g.corpses) corpse.zombie.x *= factor;
   for (const barricade of g.barricades) barricade.x *= factor;
@@ -9731,7 +9769,9 @@ export function DeadRoadGame() {
   const screenRef = useRef<Screen>("menu");
   const keysRef = useRef(new Set<string>());
   const mouseRef = useRef({ x: 880, y: 400, down: false });
-  const reloadRef = useRef<(now: number) => void>(() => {});
+  const gamepadButtonsRef = useRef<CoOpGamepadButtons>({ ...EMPTY_COOP_GAMEPAD_BUTTONS });
+  const gamepadConnectedRef = useRef(false);
+  const reloadRef = useRef<(player: Player, now: number) => void>(() => {});
   const rafRef = useRef(0);
   const lastFrameRef = useRef(0);
   const lotteryFireTimerRef = useRef<number | null>(null);
@@ -9871,13 +9911,15 @@ export function DeadRoadGame() {
   const [bestDay, setBestDay] = useState(0);
   const [muted, setMuted] = useState(false);
   const [volume, setVolume] = useState(85);
+  const [gamepadConnected, setGamepadConnected] = useState(false);
   const [paused, setPaused] = useState(false);
-  const [saveInfo, setSaveInfo] = useState<{ nextDay: number } | null>(null);
+  const [saveInfo, setSaveInfo] = useState<{ nextDay: number; coOp: boolean } | null>(null);
   const pausedRef = useRef(false);
   const pausedAtRef = useRef(0);
   const hiddenAtRef = useRef<number | null>(null);
   const [snapshot, setSnapshot] = useState({
-    mode: "survival" as GameMode, day: 1, coins: 0, kills: 0, hp: 100, maxHp: 100, weapon: "glock17" as WeaponKey,
+    mode: "survival" as GameMode, coOp: false, day: 1, coins: 0, kills: 0, hp: 100, maxHp: 100, weapon: "glock17" as WeaponKey,
+    secondHp: null as number | null, secondMaxHp: null as number | null,
     owned: ["glock17", "sawedoff", "fruitknife"] as WeaponKey[],
     loadout: ["glock17", "sawedoff"] as [WeaponKey, WeaponKey],
     melee: "fruitknife" as WeaponKey,
@@ -9911,6 +9953,23 @@ export function DeadRoadGame() {
     };
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, []);
+
+  useEffect(() => {
+    const updateGamepadConnection = () => {
+      const connected = typeof navigator.getGamepads === "function"
+        && Array.from(navigator.getGamepads()).some((gamepad) => gamepad?.connected && gamepad.mapping === "standard");
+      gamepadConnectedRef.current = connected;
+      setGamepadConnected(connected);
+      if (!connected) gamepadButtonsRef.current = { ...EMPTY_COOP_GAMEPAD_BUTTONS };
+    };
+    updateGamepadConnection();
+    window.addEventListener("gamepadconnected", updateGamepadConnection);
+    window.addEventListener("gamepaddisconnected", updateGamepadConnection);
+    return () => {
+      window.removeEventListener("gamepadconnected", updateGamepadConnection);
+      window.removeEventListener("gamepaddisconnected", updateGamepadConnection);
+    };
   }, []);
 
   const changeScreen = useCallback((next: Screen) => {
@@ -11302,7 +11361,7 @@ export function DeadRoadGame() {
       const saved = Number(window.localStorage.getItem(SAVE_KEY) || 0);
       setBestDay(Number.isFinite(saved) ? saved : 0);
       const progress = readProgressSave();
-      setSaveInfo(progress ? { nextDay: progress.nextDay } : null);
+      setSaveInfo(progress ? { nextDay: progress.nextDay, coOp: progress.coOp } : null);
     });
     return () => { active = false; };
   }, []);
@@ -11329,7 +11388,8 @@ export function DeadRoadGame() {
   const syncSnapshot = useCallback(() => {
     const g = stateRef.current;
     setSnapshot({
-      mode: g.mode, day: g.day, coins: g.coins, kills: g.kills, hp: g.player.hp, maxHp: g.player.maxHp,
+      mode: g.mode, coOp: g.coOp, day: g.day, coins: g.coins, kills: g.kills, hp: g.player.hp, maxHp: g.player.maxHp,
+      secondHp: g.secondPlayer?.hp ?? null, secondMaxHp: g.secondPlayer?.maxHp ?? null,
       weapon: g.player.weapon, owned: Array.from(g.owned), loadout: [...g.loadout] as [WeaponKey, WeaponKey], melee: g.melee,
       armor: g.armor, ownedArmors: Array.from(g.ownedArmors),
       ownedPartners: Array.from(g.ownedPartners), partner: g.partner,
@@ -12359,8 +12419,9 @@ export function DeadRoadGame() {
         ownedPartners: Array.from(g.ownedPartners),
         partner: g.partner,
         itemInventory: { ...g.itemInventory },
+        coOp: g.coOp,
       });
-      setSaveInfo({ nextDay: Math.max(1, nextDay) });
+      setSaveInfo({ nextDay: Math.max(1, nextDay), coOp: g.coOp });
     }
     setPausedState(false);
     sound.uiClick();
@@ -12375,7 +12436,7 @@ export function DeadRoadGame() {
       return;
     }
     sound.uiClick();
-    const g = freshState("survival", worldWRef.current);
+    const g = freshState("survival", worldWRef.current, save.coOp);
     g.day = Math.max(0, save.nextDay - 1);
     g.coins = Math.max(0, Math.floor(save.coins));
     g.kills = Math.max(0, Math.floor(save.kills ?? 0));
@@ -12393,6 +12454,13 @@ export function DeadRoadGame() {
     g.player.hp = g.player.maxHp;
     g.player.weapon = g.loadout.includes(save.weapon) ? save.weapon : g.loadout[0];
     for (const key of g.owned) g.player.ammo[key] = WEAPONS[key].magazine;
+    if (g.secondPlayer) {
+      g.secondPlayer.armor = g.armor;
+      g.secondPlayer.maxHp = ARMORS[g.armor].maxHp;
+      g.secondPlayer.hp = g.secondPlayer.maxHp;
+      g.secondPlayer.weapon = g.player.weapon;
+      for (const key of g.owned) g.secondPlayer.ammo[key] = WEAPONS[key].magazine;
+    }
     g.itemInventory = { ...EMPTY_ITEM_INVENTORY() };
     for (const key of ITEM_KEYS) {
       const count = Number(save.itemInventory[key]);
@@ -12429,6 +12497,13 @@ export function DeadRoadGame() {
     }
     g.player.reloadStartedAt = 0;
     g.player.reloadingUntil = 0;
+    if (g.secondPlayer) {
+      if (g.secondPlayer.weapon !== g.loadout[0] && g.secondPlayer.weapon !== g.loadout[1] && !MELEE_WEAPONS.has(g.secondPlayer.weapon)) {
+        g.secondPlayer.weapon = g.loadout[0];
+      }
+      g.secondPlayer.reloadStartedAt = 0;
+      g.secondPlayer.reloadingUntil = 0;
+    }
     syncSnapshot();
   }, [syncSnapshot]);
 
@@ -12443,6 +12518,7 @@ export function DeadRoadGame() {
     sound.uiClick();
     g.melee = key;
     if (MELEE_WEAPONS.has(g.player.weapon)) g.player.weapon = key;
+    if (g.secondPlayer && MELEE_WEAPONS.has(g.secondPlayer.weapon)) g.secondPlayer.weapon = key;
     syncSnapshot();
   }, [syncSnapshot]);
 
@@ -12454,15 +12530,12 @@ export function DeadRoadGame() {
       g.ownedArmors.add(key);
     }
     sound.uiClick();
-    const previousMaxHp = g.player.maxHp;
     g.armor = key;
-    g.player.armor = key;
-    g.player.maxHp = ARMORS[key].maxHp;
-    g.player.hp = Math.min(ARMORS[key].maxHp, g.player.hp + Math.max(0, ARMORS[key].maxHp - previousMaxHp));
+    for (const player of survivalPlayers(g)) equipPlayerArmor(player, key);
     syncSnapshot();
   }, [syncSnapshot]);
 
-  const startGame = useCallback((mode: GameMode) => {
+  const startGame = useCallback((mode: GameMode, coOp = false) => {
     if (mode === "survival") {
       sound.waveStart();
       clearProgressSave();
@@ -12470,7 +12543,8 @@ export function DeadRoadGame() {
     } else {
       sound.uiClick();
     }
-    stateRef.current = freshState(mode, worldWRef.current);
+    stateRef.current = freshState(mode, worldWRef.current, coOp);
+    gamepadButtonsRef.current = { ...EMPTY_COOP_GAMEPAD_BUTTONS };
     lastFrameRef.current = performance.now();
     stateRef.current.nextSpawnAt = performance.now() + 500;
     syncSnapshot();
@@ -12543,7 +12617,7 @@ export function DeadRoadGame() {
     const g = stateRef.current;
     sound.waveStart();
     g.day += 1;
-    g.waveTotal = 5 + Math.ceil(g.day * 2.2);
+    g.waveTotal = survivalWaveTotal(g.day, g.coOp);
     g.spawned = 0;
     g.zombies = [];
     g.corpses = [];
@@ -12562,12 +12636,22 @@ export function DeadRoadGame() {
     g.dayKillCoins = 0;
     g.lastDayBonus = 0;
     g.nextSpawnAt = performance.now() + 600;
-    g.player.hp = Math.min(g.player.maxHp, g.player.hp + 28);
+    g.player.hp = Math.min(g.player.maxHp, Math.max(1, g.player.hp) + 28);
     g.player.x = 220;
     g.player.y = 410;
     g.player.reloadStartedAt = 0;
     g.player.reloadingUntil = 0;
     g.player.ammo[g.player.weapon] = WEAPONS[g.player.weapon].magazine;
+    if (g.secondPlayer) {
+      g.secondPlayer.hp = Math.min(g.secondPlayer.maxHp, Math.max(1, g.secondPlayer.hp) + 28);
+      g.secondPlayer.x = 310;
+      g.secondPlayer.y = 470;
+      g.secondPlayer.reloadStartedAt = 0;
+      g.secondPlayer.reloadingUntil = 0;
+      g.secondPlayer.emptyReloadLatch = false;
+      if (![g.loadout[0], g.loadout[1], g.melee].includes(g.secondPlayer.weapon)) g.secondPlayer.weapon = g.loadout[0];
+      g.secondPlayer.ammo[g.secondPlayer.weapon] = WEAPONS[g.secondPlayer.weapon].magazine;
+    }
     // 搭档每天开局回到玩家身边，攻击/换弹计时清零
     g.partnerField = freshPartnerField(g.player.x - 50, g.player.y + 30);
     setLoadoutOpen(null);
@@ -12586,6 +12670,7 @@ export function DeadRoadGame() {
       }
       g.owned.add(key);
       g.player.ammo[key] = weapon.magazine;
+      if (g.secondPlayer) g.secondPlayer.ammo[key] = weapon.magazine;
       sound.purchase();
     } else {
       sound.uiClick();
@@ -12604,6 +12689,12 @@ export function DeadRoadGame() {
     }
     g.player.reloadStartedAt = 0;
     g.player.reloadingUntil = 0;
+    if (g.secondPlayer) {
+      const carry: WeaponKey[] = [g.loadout[0], g.loadout[1], g.melee];
+      if (!carry.includes(g.secondPlayer.weapon)) g.secondPlayer.weapon = g.loadout[0];
+      g.secondPlayer.reloadStartedAt = 0;
+      g.secondPlayer.reloadingUntil = 0;
+    }
     syncSnapshot();
   }, [syncSnapshot]);
 
@@ -12621,23 +12712,21 @@ export function DeadRoadGame() {
       sound.uiClick();
     }
     if (!g.ownedArmors.has(key)) return;
-    const previousMaxHp = g.player.maxHp;
     g.armor = key;
-    g.player.armor = key;
-    g.player.maxHp = armor.maxHp;
-    g.player.hp = Math.min(armor.maxHp, g.player.hp + Math.max(0, armor.maxHp - previousMaxHp));
+    for (const player of survivalPlayers(g)) equipPlayerArmor(player, key);
     syncSnapshot();
   }, [syncSnapshot]);
 
   const buyMedkit = useCallback(() => {
     const g = stateRef.current;
-    if (g.player.hp >= g.player.maxHp) return;
+    const players = survivalPlayers(g);
+    if (players.every((player) => player.hp >= player.maxHp)) return;
     if (!completePurchase(g, MEDKIT_PRICE)) {
       sound.purchaseFail();
       return;
     }
     sound.purchase();
-    g.player.hp = Math.min(g.player.maxHp, g.player.hp + MEDKIT_HEAL);
+    for (const player of players) player.hp = Math.min(player.maxHp, player.hp + MEDKIT_HEAL);
     syncSnapshot();
   }, [syncSnapshot]);
 
@@ -12752,28 +12841,32 @@ export function DeadRoadGame() {
     syncSnapshot();
   }, [syncSnapshot]);
 
-  const cycleWeapon = useCallback(() => {
+  const cyclePlayerWeapon = useCallback((player: Player) => {
     const g = stateRef.current;
+    if (!gameStillContainsPlayer(g, player) || player.hp <= 0) return;
     sound.weaponSwitch();
     const carry: WeaponKey[] = [g.loadout[0], g.loadout[1], g.melee];
-    const current = carry.indexOf(g.player.weapon);
-    g.player.weapon = carry[(current + 1 + carry.length) % carry.length];
-    g.player.emptyReloadLatch = false;
-    g.player.reloadStartedAt = 0;
-    g.player.reloadingUntil = 0;
+    const current = carry.indexOf(player.weapon);
+    player.weapon = carry[(current + 1 + carry.length) % carry.length];
+    player.emptyReloadLatch = false;
+    player.reloadStartedAt = 0;
+    player.reloadingUntil = 0;
     syncSnapshot();
   }, [syncSnapshot]);
 
-  const kick = useCallback((now: number) => {
+  const cycleWeapon = useCallback(() => {
+    cyclePlayerWeapon(stateRef.current.player);
+  }, [cyclePlayerWeapon]);
+
+  const kickPlayer = useCallback((p: Player, now: number) => {
     const g = stateRef.current;
-    if (levelInputFrozen(g)) return;
-    const p = g.player;
+    if (!gameStillContainsPlayer(g, p) || p.hp <= 0 || levelInputFrozen(g)) return;
     if (now - p.lastKick < KICK_COOLDOWN_MS) return;
     p.lastKick = now;
     sound.kick();
     const kickAngle = p.angle;
     window.setTimeout(() => {
-      if (stateRef.current.player !== p || screenRef.current !== "playing") return;
+      if (!gameStillContainsPlayer(stateRef.current, p) || screenRef.current !== "playing") return;
       let connected = false;
       for (const z of g.zombies) {
         const dx = z.x - p.x;
@@ -12834,12 +12927,16 @@ export function DeadRoadGame() {
     }, KICK_IMPACT_DELAY_MS);
   }, []);
 
-  const damageZombie = useCallback((g: GameState, z: Zombie, damage: number, now: number, angle: number, hit?: ZombieHit, sourceWeapon?: WeaponKey, bypassReduction = false, sourceOverride?: DamageSourceOverride): boolean => {
+  const kick = useCallback((now: number) => {
+    kickPlayer(stateRef.current.player, now);
+  }, [kickPlayer]);
+
+  const damageZombie = useCallback((g: GameState, z: Zombie, damage: number, now: number, angle: number, hit?: ZombieHit, sourceWeapon?: WeaponKey, bypassReduction = false, sourceOverride?: DamageSourceOverride, sourcePlayer: Player = g.player): boolean => {
     const region = hit?.region ?? "body";
     // 盔甲/盾牌格挡判定（仅枪械实弹；爆炸与火焰不传 sourceWeapon、近战为劈砍，均不经此判定）：
     // 摩托头盔只露眼缝可爆头；盾兵只有观察窗能命中；重甲只有胸口能造成伤害——被挡下时冒金属火花、无伤害
     if (hit && (sourceOverride || (sourceWeapon && !MELEE_WEAPONS.has(sourceWeapon))) && z.hp > 0) {
-      const faceDir = g.player.x < z.x ? -1 : 1;
+      const faceDir = sourcePlayer.x < z.x ? -1 : 1;
       const blockKind = zombieProjectileBlockKind(z.kind, region, hit.localX, hit.localY, faceDir, z.shieldIntact);
       if (blockKind) {
         // 燧石66 磷燃弹：格挡只挡直接伤害，挡不住点燃——被头盔/盾牌/重甲挡下同样灼烧致死
@@ -12856,9 +12953,9 @@ export function DeadRoadGame() {
           });
           if (z.shieldDents.length > 14) z.shieldDents.shift();
           if (z.shieldHp <= 0) shatterZombieShield(g, z, now, angle);
-          else sound.armorClank({ volume: distanceVolume(z.x, g.player.x) });
+          else sound.armorClank({ volume: distanceVolume(z.x, sourcePlayer.x) });
         } else {
-          sound.armorClank({ volume: distanceVolume(z.x, g.player.x) });
+          sound.armorClank({ volume: distanceVolume(z.x, sourcePlayer.x) });
         }
         return true;
       }
@@ -12892,7 +12989,7 @@ export function DeadRoadGame() {
     const bossReduction = giantMutantDamageReduction(z, region);
     const reduction = bypassReduction ? 0 : Math.max(armorReduction, bossReduction);
     z.hp -= damage * damageMultiplier * (1 - reduction);
-    sound.bodyHit({ volume: distanceVolume(z.x, g.player.x) * .58 });
+    sound.bodyHit({ volume: distanceVolume(z.x, sourcePlayer.x) * .58 });
     // 打腿 50% 概率倒地（重甲僵尸与第六关巨型 Boss 免疫此机制）
     if (region === "legs" && z.kind !== "juggernaut" && z.bossKind !== "giantMutant" && Math.random() < .5) {
       const currentPose = zombieKnockPose(z, now);
@@ -12909,7 +13006,7 @@ export function DeadRoadGame() {
         z.knockStartRecoveryProgress = currentPose.recoveryProgress;
       }
       z.knockedDownUntil = Math.max(z.knockedDownUntil, now + 3000);
-      sound.zombieFall({ volume: distanceVolume(z.x, g.player.x) });
+      sound.zombieFall({ volume: distanceVolume(z.x, sourcePlayer.x) });
     }
     // 制动力：命中武器按 stopping 系数产生击退位移与短暂减速停滞（爆炸类不传 sourceWeapon，由爆炸击退负责）
     const stopping = sourceOverride?.stopping ?? (sourceWeapon ? WEAPON_HANDLING[sourceWeapon].stopping : 0);
@@ -12996,10 +13093,10 @@ export function DeadRoadGame() {
     }
   }, [damageZombie]);
 
-  const attack = useCallback((now: number) => {
+  const attackPlayer = useCallback((p: Player, now: number, aimPoint?: { x: number; y: number }) => {
     const g = stateRef.current;
-    if (levelInputFrozen(g)) return;
-    if (isLevel8Driving(g) && g.level) {
+    if (!gameStillContainsPlayer(g, p) || p.hp <= 0 || levelInputFrozen(g)) return;
+    if (p === g.player && isLevel8Driving(g) && g.level) {
       const level = g.level;
       if (now < level.vehicleReloadUntil || now - level.vehicleLastShot < LEVEL8_HMG_FIRE_MS) return;
       if (level.vehicleAmmo <= 0) {
@@ -13043,7 +13140,6 @@ export function DeadRoadGame() {
       sound.gunshot("m240l", { fireRateMs: LEVEL8_HMG_FIRE_MS });
       return;
     }
-    const p = g.player;
     const weapon = WEAPONS[p.weapon];
     if (p.emptyReloadLatch) return;
     const origin = playerGunOrigin(p);
@@ -13057,7 +13153,7 @@ export function DeadRoadGame() {
       const attackMode = HEAVY_MELEE_WEAPONS.has(p.weapon) ? "heavy" : p.meleeMode;
       sound.meleeSwing(attackMode);
       window.setTimeout(() => {
-        if (stateRef.current.player !== p || screenRef.current !== "playing") return;
+        if (!gameStillContainsPlayer(stateRef.current, p) || screenRef.current !== "playing") return;
         let nearest: Zombie | undefined;
         let nearestDist = Infinity;
         // 判定范围 = 手臂前伸基础距 + 武器真实长度换算的世界像素（长武器范围更大）
@@ -13073,7 +13169,7 @@ export function DeadRoadGame() {
           }
         }
         if (nearest) {
-          damageZombie(g, nearest, weaponDamage(p.weapon), performance.now(), attackAngle, undefined, p.weapon);
+          damageZombie(g, nearest, weaponDamage(p.weapon), performance.now(), attackAngle, undefined, p.weapon, false, undefined, p);
           sound.meleeHit(attackMode === "heavy");
           if (attackMode === "heavy") nearest.x += Math.cos(attackAngle) * 35;
         }
@@ -13084,7 +13180,7 @@ export function DeadRoadGame() {
     if (p.ammo[p.weapon] <= 0) {
       // 所有模式统一：空弹匣时左键与 R 键都启动换弹；仍有余弹时左键只负责射击。
       p.emptyReloadLatch = true;
-      reloadRef.current(now);
+      reloadRef.current(p, now);
       return;
     }
     p.lastShot = now;
@@ -13119,14 +13215,15 @@ export function DeadRoadGame() {
     if (weapon.explosionRadius) {
       const blastKind = weapon.blastKind ?? "grenade";
       const angle = p.angle + (Math.random() - .5) * (weapon.spread || 0);
-      const pointerWorldX = mouseRef.current.x + g.cameraX;
-      const cursorDistance = Math.hypot(pointerWorldX - origin.x, mouseRef.current.y - origin.y);
+      const pointerWorldX = aimPoint?.x ?? mouseRef.current.x + g.cameraX;
+      const pointerWorldY = aimPoint?.y ?? mouseRef.current.y;
+      const cursorDistance = Math.hypot(pointerWorldX - origin.x, pointerWorldY - origin.y);
       const distance = Math.min(weapon.range, Math.max(120, cursorDistance));
       let targetX = origin.x + Math.cos(angle) * distance;
       let targetY = origin.y + Math.sin(angle) * distance;
       let nearest: { zombie: Zombie; impact: ZombieHit } | undefined;
       for (const z of g.zombies) {
-        const impact = hitZombieRegion(origin.x, origin.y, targetX, targetY, z, now, g.player.x);
+        const impact = hitZombieRegion(origin.x, origin.y, targetX, targetY, z, now, p.x);
         if (impact && (!nearest || impact.t < nearest.impact.t)) nearest = { zombie: z, impact };
       }
       if (nearest) { targetX = nearest.impact.x; targetY = nearest.impact.y; }
@@ -13162,7 +13259,7 @@ export function DeadRoadGame() {
       const wallBlock = level3WallBlock(g, origin.x, origin.y, endX, endY);
       const wallT = wallBlock ? (wallBlock.x - origin.x) / (endX - origin.x || 1e-6) : Infinity;
       const hits = g.zombies
-        .map((z) => ({ z, impact: hitZombieRegion(origin.x, origin.y, endX, endY, z, now, g.player.x) }))
+        .map((z) => ({ z, impact: hitZombieRegion(origin.x, origin.y, endX, endY, z, now, p.x) }))
         .filter((entry): entry is { z: Zombie; impact: ZombieHit } => entry.impact !== null && entry.impact.t < wallT)
         .sort((a, b) => a.impact.t - b.impact.t)
         .slice(0, weapon.penetration);
@@ -13171,7 +13268,7 @@ export function DeadRoadGame() {
       for (const [index, { z, impact }] of hits.entries()) {
         // 旧的 20%/目标衰减保留，但高穿透武器后续目标至少造成 10%，绝不产生负伤害给僵尸回血。
         const penetrationDamageFactor = Math.max(.1, 1 - index * .2);
-        const blocked = damageZombie(g, z, weaponDamage(p.weapon) * penetrationDamageFactor, now, angle, impact, p.weapon);
+        const blocked = damageZombie(g, z, weaponDamage(p.weapon) * penetrationDamageFactor, now, angle, impact, p.weapon, false, undefined, p);
         if (blocked) { stoppedAt = { x: impact.x, y: impact.y }; break; }
       }
       if (wallBlock && stoppedAt === wallBlock) {
@@ -13193,7 +13290,7 @@ export function DeadRoadGame() {
       const wallT = wallBlock ? (wallBlock.x - origin.x) / (endX - origin.x || 1e-6) : Infinity;
       let hit: { zombie: Zombie; impact: ZombieHit } | undefined;
       for (const z of g.zombies) {
-        const impact = hitZombieRegion(origin.x, origin.y, endX, endY, z, now, g.player.x);
+        const impact = hitZombieRegion(origin.x, origin.y, endX, endY, z, now, p.x);
         if (impact && impact.t < wallT && (!hit || impact.t < hit.impact.t)) hit = { zombie: z, impact };
       }
       const tracerEndX = hit ? hit.impact.x : wallBlock?.x ?? endX;
@@ -13203,21 +13300,26 @@ export function DeadRoadGame() {
       }
       const muzzle = weaponMuzzleOffset(p.weapon);
       g.tracers.push({ x1: origin.x + Math.cos(angle) * muzzle, y1: origin.y + Math.sin(angle) * muzzle, x2: tracerEndX, y2: tracerEndY, until: now + 75, color: weapon.color });
-      if (hit) damageZombie(g, hit.zombie, weaponDamage(p.weapon), now, angle, hit.impact, p.weapon);
+      if (hit) damageZombie(g, hit.zombie, weaponDamage(p.weapon), now, angle, hit.impact, p.weapon, false, undefined, p);
     }
     g.screenShakeUntil = now + (weapon.pellets ? 135 : ["scarh", "m240l", "pkm"].includes(p.weapon) ? 92 : ["ak47", "m16"].includes(p.weapon) ? 72 : 45);
   }, [damageZombie]);
 
-  const reload = useCallback((now: number) => {
+  const attack = useCallback((now: number) => {
     const g = stateRef.current;
-    if (isLevel8Driving(g) && g.level) {
+    attackPlayer(g.player, now, { x: mouseRef.current.x + g.cameraX, y: mouseRef.current.y });
+  }, [attackPlayer]);
+
+  const reloadPlayer = useCallback((p: Player, now: number) => {
+    const g = stateRef.current;
+    if (!gameStillContainsPlayer(g, p) || p.hp <= 0) return;
+    if (p === g.player && isLevel8Driving(g) && g.level) {
       if (g.level.vehicleAmmo >= LEVEL8_HMG_MAGAZINE || now < g.level.vehicleReloadUntil) return;
       g.level.vehicleReloadUntil = now + LEVEL8_HMG_RELOAD_MS;
       dropLevel8AmmoBox(g, g.level, now);
       sound.reload("m240l", LEVEL8_HMG_RELOAD_MS);
       return;
     }
-    const p = g.player;
     const weapon = WEAPONS[p.weapon];
     if (MELEE_WEAPONS.has(p.weapon) || p.ammo[p.weapon] === weapon.magazine || now < p.reloadingUntil) return;
     p.reloadStartedAt = now;
@@ -13249,7 +13351,12 @@ export function DeadRoadGame() {
       });
     }
   }, []);
-  useEffect(() => { reloadRef.current = reload; }, [reload]);
+
+  const reload = useCallback((now: number) => {
+    reloadPlayer(stateRef.current.player, now);
+  }, [reloadPlayer]);
+
+  useEffect(() => { reloadRef.current = reloadPlayer; }, [reloadPlayer]);
 
   // 搭档战斗逻辑：每帧驱动猎犬/警察/无人机的移动与自动攻击；搭档不会死亡、不被僵尸选为目标
   const updatePartner = useCallback((g: GameState, now: number, dt: number) => {
@@ -13806,9 +13913,9 @@ export function DeadRoadGame() {
       }
     }
 
-    const p = g.player;
-    // 第三关开场演出（睡卧/起身阶段）：隐藏玩家模型，由床铺演出人物接管
-    const cutsceneHidden = levelPlayerHidden(g, now);
+    for (const p of survivalPlayers(g)) {
+    // 第三关开场演出（睡卧/起身阶段）：隐藏玩家模型，由床铺演出人物接管；倒下的双人角色只保留状态标记。
+    const cutsceneHidden = (p === g.player && levelPlayerHidden(g, now)) || p.hp <= 0;
     if (!cutsceneHidden) {
     const armor = ARMORS[p.armor];
     const reloadProgress = p.reloadingUntil > now && p.reloadStartedAt > 0
@@ -14133,7 +14240,12 @@ export function DeadRoadGame() {
     ctx.restore();
     ctx.restore();
     }
+    if (g.coOp) {
+      drawText(ctx, p.hp > 0 ? (p === g.player ? "P1 · 键鼠" : "P2 · 手柄") : (p === g.player ? "P1 已倒下" : "P2 已倒下"), p.x, p.y - 150, 12, p.hp > 0 ? (p === g.player ? "#f1c643" : "#64d6ff") : "#e4574f", "center");
+    }
+    }
 
+    const p = g.player;
     // 搭档绘制：猎犬 / 警察 / 无人机（紧随玩家之后，僵尸与特效在上层）
     if (g.partner === "hound") drawHound(ctx, g.partnerField, now);
     else if (g.partner === "officer") drawOfficer(ctx, g.partnerField, now);
@@ -14354,7 +14466,7 @@ export function DeadRoadGame() {
     ctx.fillStyle = "rgba(8,11,9,.9)";
     roundedRect(ctx, 26, 24, 306, 91, 13);
     ctx.fill();
-    drawText(ctx, g.mode === "range" ? "靶场模式" : g.mode === "level" ? levelTitleById(g.level?.levelId ?? null) : `第 ${g.day} 天`, 47, 60, 27, "#f1c643");
+    drawText(ctx, g.mode === "range" ? "靶场模式" : g.mode === "level" ? levelTitleById(g.level?.levelId ?? null) : `第 ${g.day} 天${g.coOp ? " · 双人" : ""}`, 47, 60, g.coOp ? 20 : 27, "#f1c643");
     // 靶场 HUD：endless 显示无尽文案；batch 显示批次清剿进度，队列与场上全空后提示按 B 配置下一批
     const rangeHudLine = g.rangeSpawnMode === "batch"
       ? g.rangeSpawnQueue.length === 0 && g.zombies.length === 0
@@ -14372,7 +14484,21 @@ export function DeadRoadGame() {
     ctx.fillStyle = hp > 35 ? "#d84c3f" : "#ff332d";
     roundedRect(ctx, 181, 48, 127 * (hp / p.maxHp), 17, 8);
     ctx.fill();
-    drawText(ctx, `${Math.ceil(hp)} / ${p.maxHp} HP`, 244, 62, 11, "#fff", "center");
+    drawText(ctx, `${g.coOp ? "P1 " : ""}${Math.ceil(hp)} / ${p.maxHp} HP`, 244, 62, 11, "#fff", "center");
+    if (g.coOp && g.secondPlayer) {
+      const secondHp = Math.max(0, g.secondPlayer.hp);
+      ctx.fillStyle = "rgba(8,11,9,.9)";
+      roundedRect(ctx, 26, 122, 306, 46, 13);
+      ctx.fill();
+      drawText(ctx, "P2 · 手柄", 47, 151, 15, "#64d6ff");
+      ctx.fillStyle = "#262b27";
+      roundedRect(ctx, 181, 136, 127, 17, 8);
+      ctx.fill();
+      ctx.fillStyle = secondHp > 35 ? "#318fc1" : "#e4574f";
+      roundedRect(ctx, 181, 136, 127 * (secondHp / g.secondPlayer.maxHp), 17, 8);
+      ctx.fill();
+      drawText(ctx, `${Math.ceil(secondHp)} / ${g.secondPlayer.maxHp} HP`, 244, 150, 11, "#fff", "center");
+    }
     ctx.restore();
 
     ctx.save();
@@ -14396,6 +14522,17 @@ export function DeadRoadGame() {
       : MELEE_WEAPONS.has(p.weapon) ? "∞" : `${p.ammo[p.weapon]} / ${weapon.magazine}`;
     drawText(ctx, drivingArmoredVehicle ? "车载重机枪" : weapon.name, W - 48, 57, 17, drivingArmoredVehicle ? "#e3c461" : weapon.color, "right");
     drawText(ctx, drivingArmoredVehicle && now < (g.level?.vehicleReloadUntil ?? 0) ? "换弹中…" : now < p.reloadingUntil ? "换弹中…" : ammoText, W - 48, 91, 25, "#fff", "right");
+    if (g.coOp && g.secondPlayer) {
+      const secondWeapon = WEAPONS[g.secondPlayer.weapon];
+      const secondAmmoText = MELEE_WEAPONS.has(g.secondPlayer.weapon)
+        ? "∞"
+        : `${g.secondPlayer.ammo[g.secondPlayer.weapon]} / ${secondWeapon.magazine}`;
+      ctx.fillStyle = "rgba(8,11,9,.9)";
+      roundedRect(ctx, W - 337, 122, 311, 46, 13);
+      ctx.fill();
+      drawText(ctx, `P2 · ${secondWeapon.name}`, W - 312, 151, 14, secondWeapon.color);
+      drawText(ctx, now < g.secondPlayer.reloadingUntil ? "换弹中…" : secondAmmoText, W - 48, 152, 19, "#fff", "right");
+    }
     ctx.restore();
 
     // 关卡剧情对话框（最顶层，屏幕坐标）
@@ -14415,15 +14552,36 @@ export function DeadRoadGame() {
           g.corpses = g.corpses.filter((corpse) => now < corpse.removeAt);
         if (screenRef.current === "playing") {
           const p = g.player;
-          sound.setHeartbeat(p.hp > 0 && p.hp <= 35 ? p.hp : null);
-          sound.setGatlingSpin(mouseRef.current.down && ((p.weapon === "gatling" && p.ammo.gatling > 0 && now >= p.reloadingUntil)
-            || (isLevel8Driving(g) && (g.level?.vehicleAmmo ?? 0) > 0 && now >= (g.level?.vehicleReloadUntil ?? 0))));
+          const secondPlayer = g.coOp ? g.secondPlayer : null;
+          const gamepadInput = readCoOpGamepad(
+            typeof navigator.getGamepads === "function" ? Array.from(navigator.getGamepads()) : [],
+            gamepadButtonsRef.current,
+          );
+          gamepadButtonsRef.current = gamepadInput.buttons;
+          if (gamepadConnectedRef.current !== gamepadInput.connected) {
+            gamepadConnectedRef.current = gamepadInput.connected;
+            setGamepadConnected(gamepadInput.connected);
+          }
+          const lowestLivingHp = livingSurvivalPlayers(g).reduce<number | null>(
+            (lowest, player) => lowest === null ? player.hp : Math.min(lowest, player.hp),
+            null,
+          );
+          sound.setHeartbeat(lowestLivingHp !== null && lowestLivingHp <= 35 ? lowestLivingHp : null);
+          sound.setGatlingSpin(
+            (mouseRef.current.down && (
+              (p.weapon === "gatling" && p.ammo.gatling > 0 && now >= p.reloadingUntil)
+              || (isLevel8Driving(g) && (g.level?.vehicleAmmo ?? 0) > 0 && now >= (g.level?.vehicleReloadUntil ?? 0))
+            ))
+            || Boolean(secondPlayer && gamepadInput.fireHeld && secondPlayer.weapon === "gatling"
+              && secondPlayer.ammo.gatling > 0 && now >= secondPlayer.reloadingUntil),
+          );
           const keys = keysRef.current;
           // 携带重量影响移速：轻装 5kg 内全速，每多 1kg 减 0.7%（最低 72%）
           const speed = 250 * playerSpeedFactor(g);
           let dx = (keys.has("d") ? 1 : 0) - (keys.has("a") ? 1 : 0);
           let dy = (keys.has("s") ? 1 : 0) - (keys.has("w") ? 1 : 0);
           if (dx && dy) { dx *= 0.707; dy *= 0.707; }
+          if (p.hp <= 0) { dx = 0; dy = 0; }
           p.moving = dx !== 0 || dy !== 0;
           // 关卡对话中：冻结移动与射击（剧情演出）；第三关开场演出（睡卧/起身）同样挂起操控
           const levelDialogOpen = g.mode === "level" && g.level?.dialog != null;
@@ -14489,6 +14647,37 @@ export function DeadRoadGame() {
             p.ammo[p.weapon] = WEAPONS[p.weapon].magazine;
             p.reloadingUntil = 0;
             p.reloadStartedAt = 0;
+          }
+          if (secondPlayer) {
+            let secondDx = secondPlayer.hp > 0 ? gamepadInput.moveX : 0;
+            let secondDy = secondPlayer.hp > 0 ? gamepadInput.moveY : 0;
+            if (secondDx && secondDy) {
+              const length = Math.hypot(secondDx, secondDy);
+              if (length > 1) { secondDx /= length; secondDy /= length; }
+            }
+            secondPlayer.moving = secondDx !== 0 || secondDy !== 0;
+            secondPlayer.x = Math.max(52, Math.min(g.worldW - 52, secondPlayer.x + secondDx * speed * dt));
+            secondPlayer.y = Math.max(minimumPlayerFootY, Math.min(ROAD_BOTTOM - 18, secondPlayer.y + secondDy * speed * dt));
+            if (gamepadInput.aimX !== 0 || gamepadInput.aimY !== 0) {
+              secondPlayer.angle = Math.atan2(gamepadInput.aimY, gamepadInput.aimX);
+            }
+            if (gamepadInput.switchWeaponPressed) cyclePlayerWeapon(secondPlayer);
+            if (gamepadInput.reloadPressed) reloadPlayer(secondPlayer, now);
+            if (gamepadInput.kickPressed) kickPlayer(secondPlayer, now);
+            const secondWeapon = WEAPONS[secondPlayer.weapon];
+            if (gamepadInput.firePressed || (gamepadInput.fireHeld && secondWeapon.automatic)) {
+              const aimRange = Math.max(180, secondWeapon.range);
+              attackPlayer(secondPlayer, now, {
+                x: secondPlayer.x + Math.cos(secondPlayer.angle) * aimRange,
+                y: secondPlayer.y - 92 * CHARACTER_SCALE + Math.sin(secondPlayer.angle) * aimRange,
+              });
+            }
+            if (!gamepadInput.fireHeld) secondPlayer.emptyReloadLatch = false;
+            if (now >= secondPlayer.reloadingUntil && secondPlayer.reloadingUntil !== 0) {
+              secondPlayer.ammo[secondPlayer.weapon] = secondWeapon.magazine;
+              secondPlayer.reloadingUntil = 0;
+              secondPlayer.reloadStartedAt = 0;
+            }
           }
 
           // 靶场：endless 维持自动刷；batch 仅从配置队列取指定种类，队列耗尽即停（场上 30 上限两种模式共用）
@@ -14595,14 +14784,23 @@ export function DeadRoadGame() {
             if (z.ignitedAt > 0) z.hp -= IGNITE_DPS * dt;
             if (zombieKnockPose(z, now).active) continue;
             if (Math.random() < dt * 0.05) sound.zombieGrowl({ volume: distanceVolume(z.x, p.x) });
+            const livingPlayers = livingSurvivalPlayers(g);
+            let targetPlayer = livingPlayers[0] ?? p;
+            let nearestTargetDistance = Math.hypot(targetPlayer.x - z.x, targetPlayer.y - z.y);
+            for (const candidate of livingPlayers.slice(1)) {
+              const candidateDistance = Math.hypot(candidate.x - z.x, candidate.y - z.y);
+              if (candidateDistance < nearestTargetDistance) {
+                targetPlayer = candidate;
+                nearestTargetDistance = candidateDistance;
+              }
+            }
             const barricade = g.barricades
-              .filter((entry) => entry.hp > 0 && entry.x <= z.x + z.radius && entry.x > p.x && Math.abs(entry.y - z.y) < ITEMS.barricade.radius)
+              .filter((entry) => entry.hp > 0 && entry.x <= z.x + z.radius && entry.x > targetPlayer.x && Math.abs(entry.y - z.y) < ITEMS.barricade.radius)
               // 同 x 并列（第三关围墙判定段）时取 y 最近的一段：僵尸沿墙散开各自攻击就近墙体
               .sort((a, b) => (b.x - a.x) || (Math.abs(a.y - z.y) - Math.abs(b.y - z.y)))[0];
             // 第六关可攻击队友与玩家按距离共同参与仇恨选择；防御结构仍拥有最高优先级。
             let targetNpc: LevelNpc | undefined;
             if (!barricade) {
-              let nearestTargetDistance = Math.hypot(p.x - z.x, p.y - z.y);
               for (const npc of g.npcs) {
                 if (!npc.targetable || npc.hp <= 0) continue;
                 const npcDistance = Math.hypot(npc.field.x - z.x, npc.field.y - z.y);
@@ -14612,8 +14810,8 @@ export function DeadRoadGame() {
                 }
               }
             }
-            const targetX = barricade?.x ?? targetNpc?.field.x ?? p.x;
-            const targetY = barricade?.y ?? targetNpc?.field.y ?? p.y;
+            const targetX = barricade?.x ?? targetNpc?.field.x ?? targetPlayer.x;
+            const targetY = barricade?.y ?? targetNpc?.field.y ?? targetPlayer.y;
             const zx = targetX - z.x;
             const zy = targetY - z.y;
             const dist = Math.hypot(zx, zy);
@@ -14770,9 +14968,9 @@ export function DeadRoadGame() {
                   });
                   sound.armorClank({ volume: 1 });
                 } else {
-                  if (now <= p.invulnerableUntil) continue;
-                  p.hp -= attackDamage;
-                  p.invulnerableUntil = now + 260;
+                  if (now <= targetPlayer.invulnerableUntil) continue;
+                  targetPlayer.hp -= attackDamage;
+                  targetPlayer.invulnerableUntil = now + 260;
                   sound.playerHurt();
                 }
                 g.screenShakeUntil = now + 160;
@@ -14805,9 +15003,10 @@ export function DeadRoadGame() {
               const a = Math.random() * Math.PI * 2;
               g.particles.push({ x: spit.targetX, y: spit.targetY - 4, vx: Math.cos(a) * (30 + Math.random() * 90), vy: -30 - Math.random() * 80, until: now + 380, color: i % 2 ? "#8fce4a" : "#5e9a2e", size: 2.5 + Math.random() * 4 });
             }
-            if (Math.hypot(p.x - spit.targetX, p.y - spit.targetY) < splashRadius && now > p.invulnerableUntil) {
-              p.hp -= spitDamage;
-              p.invulnerableUntil = now + 260;
+            for (const targetPlayer of livingSurvivalPlayers(g)) {
+              if (Math.hypot(targetPlayer.x - spit.targetX, targetPlayer.y - spit.targetY) >= splashRadius || now <= targetPlayer.invulnerableUntil) continue;
+              targetPlayer.hp -= spitDamage;
+              targetPlayer.invulnerableUntil = now + 260;
               sound.playerHurt();
               g.screenShakeUntil = now + 160;
             }
@@ -14934,7 +15133,7 @@ export function DeadRoadGame() {
           g.groundProps = g.groundProps.filter((prop) => now < prop.removeAt);
           g.bloodStains = g.bloodStains.filter((stain) => now < stain.removeAt);
 
-          if (p.hp <= 0) {
+          if (livingSurvivalPlayers(g).length === 0) {
             sound.gameOver();
             if (g.mode === "survival") {
               saveBest(g.day);
@@ -14971,7 +15170,7 @@ export function DeadRoadGame() {
     };
     rafRef.current = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [attack, changeScreen, damageZombie, damageZombieFromExplosion, drawWorld, saveBest, spawnZombie, syncSnapshot, updateLevelNpcs, updateLevelTasks, updatePartner]);
+  }, [attack, attackPlayer, changeScreen, cyclePlayerWeapon, damageZombie, damageZombieFromExplosion, drawWorld, kickPlayer, reloadPlayer, saveBest, spawnZombie, syncSnapshot, updateLevelNpcs, updateLevelTasks, updatePartner]);
 
   const rangeFree = snapshot.mode === "range";
   const lotteryHighlight = highestLotteryRarity(lotteryRewards);
@@ -15261,9 +15460,12 @@ export function DeadRoadGame() {
             <p className="menu-copy">尸潮一天比一天凶猛，在生存模式里守住公路、多活一天；在靶场把每一把枪练到顺手；或沿封锁公路逐关推进，杀出 17 号区——三条路，通向同一个天亮</p>
             <div className="menu-actions">
               {saveInfo && (
-                <button className="primary-button continue-button" onClick={continueProgress}><span>继续 · 第 {saveInfo.nextDay} 天</span><b>↻</b></button>
+                <button className="primary-button continue-button" onClick={continueProgress}><span>继续{saveInfo.coOp ? "双人" : ""} · 第 {saveInfo.nextDay} 天</span><b>↻</b></button>
               )}
               <button className="primary-button" onClick={() => startGame("survival")}><span>生存模式</span><b>→</b></button>
+              <button className={`coop-button ${gamepadConnected ? "connected" : ""}`} onClick={() => startGame("survival", true)}>
+                <span>双人生存</span><small>{gamepadConnected ? "✓ 手柄已连接 · 尸潮 ×2" : "键鼠 + 手柄 · 尸潮 ×2"}</small><b>Ⅱ</b>
+              </button>
               <button className="range-button" onClick={() => startGame("range")}><span>靶场模式</span><small>装备免费 · 无尽僵尸</small><b>◎</b></button>
               <button className="level-button" onClick={openLevels}><span>关卡模式</span><small>独立关卡 · 剧情推进</small><b>⚑</b></button>
               <button className="codex-book-button" onClick={() => openCodex("menu")} aria-label="打开僵尸图鉴">
@@ -16207,11 +16409,11 @@ export function DeadRoadGame() {
               <div className="shop-content" role="tabpanel">
                 <div className="shop-section-label"><b>医疗补给</b><span>急救包购买后立即使用，不占武器栏位</span></div>
                 <div className="supply-grid">
-                  <button className="supply-card" onClick={buyMedkit} disabled={!canPurchase(snapshot.mode, snapshot.coins, MEDKIT_PRICE) || snapshot.hp >= snapshot.maxHp}>
+                  <button className="supply-card" onClick={buyMedkit} disabled={!canPurchase(snapshot.mode, snapshot.coins, MEDKIT_PRICE) || (snapshot.hp >= snapshot.maxHp && (snapshot.secondHp === null || snapshot.secondHp >= (snapshot.secondMaxHp ?? 0)))}>
                     <span className="medkit-icon" aria-hidden="true"><i /><b /></span>
-                    <span className="supply-copy"><strong>战地急救包</strong><em>立即恢复 {MEDKIT_HEAL} HP</em><small>当前生命 {Math.ceil(snapshot.hp)} / {snapshot.maxHp} HP</small></span>
+                    <span className="supply-copy"><strong>战地急救包</strong><em>{snapshot.coOp ? "全队" : "立即"}恢复 {MEDKIT_HEAL} HP</em><small>P1 {Math.ceil(snapshot.hp)} / {snapshot.maxHp} HP{snapshot.secondHp !== null ? ` · P2 ${Math.ceil(snapshot.secondHp)} / ${snapshot.secondMaxHp} HP` : ""}</small></span>
                     <span className="supply-price">{shopPriceLabel(snapshot.mode, MEDKIT_PRICE, true)}</span>
-                    <span className="supply-action">{snapshot.hp >= snapshot.maxHp ? "生命值已满" : !canPurchase(snapshot.mode, snapshot.coins, MEDKIT_PRICE) ? "金币不足" : "领取并使用"}</span>
+                    <span className="supply-action">{snapshot.hp >= snapshot.maxHp && (snapshot.secondHp === null || snapshot.secondHp >= (snapshot.secondMaxHp ?? 0)) ? "生命值已满" : !canPurchase(snapshot.mode, snapshot.coins, MEDKIT_PRICE) ? "金币不足" : "领取并使用"}</span>
                   </button>
                 </div>
               </div>
@@ -16550,7 +16752,7 @@ export function DeadRoadGame() {
                 </>
               )}
             </div>
-            <div className="end-actions"><button className="primary-button" onClick={() => startGame(snapshot.mode)}><span>{rangeFree ? "重新训练" : "再次出发"}</span><b>↻</b></button><button className="ghost-button" onClick={() => changeScreen("menu")}>返回菜单</button></div>
+            <div className="end-actions"><button className="primary-button" onClick={() => startGame(snapshot.mode, snapshot.coOp)}><span>{rangeFree ? "重新训练" : snapshot.coOp ? "再次双人出发" : "再次出发"}</span><b>↻</b></button><button className="ghost-button" onClick={() => changeScreen("menu")}>返回菜单</button></div>
               </>
             )}
           </div>
@@ -16602,6 +16804,7 @@ export function DeadRoadGame() {
         <div><kbd>G</kbd><span>关卡丢弃武器</span></div>
         <div><kbd>鼠标右键</kbd><span>关卡拾取武器</span></div>
         <div><kbd>M</kbd><span>静音开关</span></div>
+        {snapshot.coOp && <div><kbd>P2 手柄</kbd><span>左摇杆移动 · 右摇杆瞄准 · RT 射击 · X 换弹 · Y 切枪 · RB 踢击</span></div>}
         <p>提示：路障与阔剑雷仅能放在人物身前；绿色圆圈表示投掷物落点</p>
       </footer>
     </main>
