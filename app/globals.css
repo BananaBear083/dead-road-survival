@@ -1413,9 +1413,3 @@ button { -webkit-tap-highlight-color: transparent; }
 .ability-taser b { position:absolute; right:50%; top:50%; width:150px; height:2px; transform-origin:right center; background:linear-gradient(90deg,transparent,#82e8ff); box-shadow:0 0 7px #6ee7ff; }
 @keyframes battle-member-blast { from { transform:scale(.18); opacity:1; } to { transform:scale(1.85); opacity:0; } }
 .lottery-reward-card .team-member-preview { width:92px; height:120px; margin:-8px auto -3px; object-fit:contain; }
-.battle-squad-bar.test-roster { display:flex; min-height:106px; max-height:124px; overflow-x:auto; overflow-y:hidden; scrollbar-color:#77877a #111713; scrollbar-width:thin; }
-.battle-squad-bar.test-roster .battle-squad-heading { flex:0 0 150px; position:sticky; left:0; z-index:3; background:#111713; }
-.battle-squad-bar.test-roster button { flex:0 0 184px; min-height:92px; }
-.test-placement-field { cursor:crosshair; }
-.battle-test-placement-marker { position:absolute; z-index:100; transform:translate(-50%,50%); padding:5px 8px; color:#efffe8; background:rgba(38,93,51,.88); border:1px solid #8ff0a7; border-radius:3px; box-shadow:0 0 0 7px rgba(90,229,122,.12),0 0 18px rgba(90,229,122,.45); font-size:9px; font-weight:1000; white-space:nowrap; pointer-events:none; }
-.battle-test-placement-marker::after { content:""; position:absolute; left:50%; top:100%; width:1px; height:20px; background:#8ff0a7; }

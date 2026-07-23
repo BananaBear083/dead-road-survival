@@ -1417,7 +1417,7 @@ test("adds the exploration exchange shop, vehicle upgrades and courage auto-batt
   assert.match(source, /const EXPLORATION_TASK1_EXPERIENCE = 157/);
   assert.match(source, /const EXPLORATION_PROGRESS_KEY = "dead-road-exploration-progress"/);
   assert.match(source, /const \[explorationExperience, setExplorationExperience\] = useState\(0\)/);
-  assert.match(source, /function freshExplorationBattle\(vehicleHp: number, taskOrder: number, rewardEligible = false, testMode = false\)/);
+  assert.match(source, /function freshExplorationBattle\(vehicleHp: number, taskOrder: number, rewardEligible = false\)/);
   assert.match(source, /1: \{ openingZombieKinds: \["normal", "normal", "normal"\], finite: true, reward: "resources"/);
   assert.match(source, /kind: "normal"/);
   assert.match(source, /setExplorationCoins\(\(coins\) => coins \+ taskConfig\.rewardCoins\)/);
@@ -1466,7 +1466,7 @@ test("adds the exploration six-slot team roster with shared character and weapon
   assert.match(source, /speedFactor: member\.speedFactor/);
   assert.match(source, /setExplorationExperience\(\(experience\) => experience - upgradeCost\)/);
   assert.match(source, /recruitedMemberIds\.includes\(member\.id\)/);
-  assert.match(source, /explorationBattle\.testMode \? EXPLORATION_MEMBERS\.map\(\(member\) => member\.id\) : deployedMemberIds/);
+  assert.match(source, /deployedMemberIds\.map\(\(memberId\) =>/);
   assert.match(source, /resolveExplorationProjectileHit\(candidate, firearmWeapon!, penetratedDamage/);
   assert.match(source, /type ExplorationBattlePendingMeleeHit =/);
   assert.match(source, /impactAt: supportNow \+ Math\.min\(320/);
@@ -1477,7 +1477,8 @@ test("adds the exploration six-slot team roster with shared character and weapon
   assert.match(source, /const pellets = weapon\.pellets \?\? 1/);
   assert.match(source, /const pelletHitChance = weapon\.pellets/);
   assert.match(source, /if \(Math\.random\(\) > pelletHitChance\) continue/);
-  assert.match(source, /if \(region === "legs"\)[\s\S]*zombie\.kind !== "juggernaut" && Math\.random\(\) < \.5/);
+  assert.doesNotMatch(source, /if \(region === "legs"\) \{[\s\S]{0,400}zombie\.knockedDownRemaining/);
+  assert.doesNotMatch(source, /state\.legDamage|damageState\?\.knockedDownRemaining/);
   assert.match(source, /zombie\.knockedDownRemaining = Math\.max/);
   assert.match(source, /bone: zombie\.wounds\.filter\(\(wound\) => wound\.region === region\)\.length >= 2/);
   assert.match(source, /battle-unit-shared-model[\s\S]*<ExplorationMemberPreview member=\{member\}/);
@@ -1586,13 +1587,13 @@ test("adds midnight-reset daily missions and permanent exploration achievements"
   assert.match(source, /dailyProgress: explorationDailyProgress/);
 
   assert.equal((achievementBlock.match(/\{ id:/g) ?? []).length, 16);
-  assert.match(achievementBlock, /farm-clear[\s\S]*target: 10, rewardVouchers: 1000/);
-  assert.match(achievementBlock, /zombie-kills-50[\s\S]*rewardVouchers: 200/);
-  assert.match(achievementBlock, /zombie-kills-500[\s\S]*rewardVouchers: 1000/);
-  assert.match(achievementBlock, /lottery-1[\s\S]*rewardVouchers: 200/);
-  assert.match(achievementBlock, /lottery-50[\s\S]*rewardVouchers: 500/);
-  assert.match(achievementBlock, /spend-500[\s\S]*rewardVouchers: 100/);
-  assert.match(achievementBlock, /spend-4000[\s\S]*rewardVouchers: 1000/);
+  assert.match(achievementBlock, /farm-clear[\s\S]*target: 10, rewardVouchers: 500/);
+  assert.match(achievementBlock, /zombie-kills-50[\s\S]*rewardVouchers: 100/);
+  assert.match(achievementBlock, /zombie-kills-500[\s\S]*rewardVouchers: 500/);
+  assert.match(achievementBlock, /lottery-1[\s\S]*rewardVouchers: 100/);
+  assert.match(achievementBlock, /lottery-50[\s\S]*rewardVouchers: 250/);
+  assert.match(achievementBlock, /spend-500[\s\S]*rewardVouchers: 50/);
+  assert.match(achievementBlock, /spend-4000[\s\S]*rewardVouchers: 500/);
   assert.match(source, /recordExplorationDailyMetric\("mainlineCompletions"\)/);
   assert.match(source, /recordExplorationDailyMetric\("recruitDraws", count\)/);
   assert.match(source, /lotteryDraws: progress\.lotteryDraws \+ count/);
@@ -1825,7 +1826,7 @@ test("supports paid supplies, repeat summons and a stable two-dimensional explor
   assert.match(source, /召唤勇气值[\s\S]*selectedExplorationMember\.courageCost/);
   assert.match(source, /nextUnitId/);
   assert.match(source, /member-\$\{memberId\}-\$\{battle\.nextUnitId\}/);
-  assert.match(source, /courage: testMode \? battle\.courage : battle\.courage - member\.courageCost/);
+  assert.match(source, /courage: battle\.courage - member\.courageCost/);
   assert.doesNotMatch(source, /battle\.deployed\.includes\(id\)/);
   assert.match(source, /explorationCoins < item\.price/);
   assert.match(source, /setExplorationCoins\(\(coins\) => coins - item\.price\)/);
@@ -1893,7 +1894,7 @@ test("recruits a rare police officer through the task two roadside cinematic", a
   assert.match(css, /\.recruit-reward-card[^{]*\{[^}]*#4ea8ff/);
 });
 
-test("defines the complete lottery-only exploration roster and test range", async () => {
+test("defines the complete lottery-only exploration roster without a test mode", async () => {
   const source = await readFile(new URL("../app/DeadRoadGame.tsx", import.meta.url), "utf8");
   const lotteryOnlyMembers = [
     "伐木工", "机械师", "工程师", "格斗警察", "警长", "盾牌防爆警察", "电棍警察", "特警",
@@ -1907,9 +1908,10 @@ test("defines the complete lottery-only exploration roster and test range", asyn
   }
   assert.match(source, /lotteryOnly: true/g);
   assert.match(source, /const EXPLORATION_LOTTERY_MEMBERS/);
-  assert.match(source, /screen === "explorationTest"/);
-  assert.match(source, /测试模式/);
-  assert.match(source, /testMode: boolean/);
+  assert.doesNotMatch(source, /explorationTest|测试模式|testMode: boolean/);
+  assert.match(source, /function explorationMemberPurchaseCost\(member: ExplorationMemberDefinition\) \{ return member\.purchaseCost \* 2; \}/);
+  assert.match(source, /const rewards = Array\.from\(\{ length: count \}, \(\) => rollExplorationLotteryMember\(\)\)/);
+  assert.doesNotMatch(source, /EXPLORATION_LOTTERY_MEMBERS\.filter\([^)]*owned/);
   assert.match(source, /shieldHp/);
   assert.match(source, /stunSeconds/);
   assert.match(source, /spitImmune/);
