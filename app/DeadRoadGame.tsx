@@ -721,6 +721,17 @@ type CoOpGear = {
 
 type PlayerSlot = 1 | 2;
 
+const PLAYER_HUD_STYLE: Record<PlayerSlot, {
+  playerLabel: string;
+  controls: string;
+  placeAction: string;
+  throwAction: string;
+  color: string;
+}> = {
+  1: { playerLabel: "P1", controls: "键盘", placeAction: "左键放置", throwAction: "左键投掷", color: "#f1c643" },
+  2: { playerLabel: "P2", controls: "手柄", placeAction: "A 放置", throwAction: "A 投掷", color: "#64d6ff" },
+};
+
 function freshCoOpGear(): CoOpGear {
   return {
     coins: 0,
@@ -8745,6 +8756,179 @@ function itemTargetInFront(game: GameState, pointer: { x: number; y: number }, k
   };
 }
 
+function playerItemAimPoint(player: Player, key: ItemKey) {
+  const aimRange = ITEMS[key].delivery === "place" ? 250 : 440;
+  return {
+    x: player.x + Math.cos(player.angle) * aimRange,
+    y: player.y + Math.sin(player.angle) * aimRange,
+  };
+}
+
+function drawSelectedItemPreview(
+  ctx: CanvasRenderingContext2D,
+  game: GameState,
+  slot: PlayerSlot,
+  pointer: { x: number; y: number },
+) {
+  const key = selectedItemForSlot(game, slot);
+  if (!key || key === "airstrike") return;
+  const hud = PLAYER_HUD_STYLE[slot];
+  const target = itemTargetInFront(game, pointer, key, slot);
+  ctx.save();
+  ctx.translate(target.x, target.y);
+  if (key === "barricade") {
+    drawBarricadeModel(ctx, true);
+  } else if (key === "claymore") {
+    ctx.fillStyle = "rgba(78,232,127,.08)";
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(190, -85);
+    ctx.lineTo(190, 85);
+    ctx.closePath();
+    ctx.fill();
+    drawClaymoreModel(ctx, true);
+  } else {
+    ctx.strokeStyle = "rgba(91,239,139,.95)";
+    ctx.lineWidth = 4;
+    ctx.fillStyle = "rgba(70,218,119,.12)";
+    ctx.beginPath();
+    ctx.ellipse(0, 0, ITEMS[key].radius * .72, ITEMS[key].radius * .28, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-13, 0);
+    ctx.lineTo(13, 0);
+    ctx.moveTo(0, -13);
+    ctx.lineTo(0, 13);
+    ctx.stroke();
+  }
+  const action = ITEMS[key].delivery === "place" ? hud.placeAction : hud.throwAction;
+  drawText(ctx, game.coOp ? `${hud.playerLabel} · ${action}` : action, 0, -82, 15, "#8df3ad", "center");
+  ctx.restore();
+}
+
+function drawSecondPlayerAimReticle(
+  ctx: CanvasRenderingContext2D,
+  player: Player,
+  cameraX: number,
+  viewWidth: number,
+  now: number,
+) {
+  const origin = playerGunOrigin(player);
+  const weapon = WEAPONS[player.weapon];
+  const desiredDistance = MELEE_WEAPONS.has(player.weapon)
+    ? 165
+    : Math.min(310, Math.max(205, weapon.range * .34));
+  const aimX = Math.cos(player.angle);
+  const aimY = Math.sin(player.angle);
+  const minimumX = cameraX + 24;
+  const maximumX = cameraX + viewWidth - 24;
+  const minimumY = 28;
+  const maximumY = H - 28;
+  let clippedDistance = desiredDistance;
+  if (aimX > 0) clippedDistance = Math.min(clippedDistance, (maximumX - origin.x) / aimX);
+  else if (aimX < 0) clippedDistance = Math.min(clippedDistance, (minimumX - origin.x) / aimX);
+  if (aimY > 0) clippedDistance = Math.min(clippedDistance, (maximumY - origin.y) / aimY);
+  else if (aimY < 0) clippedDistance = Math.min(clippedDistance, (minimumY - origin.y) / aimY);
+  clippedDistance = Math.max(0, clippedDistance);
+  const x = origin.x + aimX * clippedDistance;
+  const y = origin.y + aimY * clippedDistance;
+  const pulse = 1 + Math.sin(now / 90) * .08;
+
+  ctx.save();
+  ctx.globalAlpha = .38;
+  ctx.strokeStyle = "#64d6ff";
+  ctx.lineWidth = 2;
+  ctx.setLineDash([8, 7]);
+  ctx.beginPath();
+  ctx.moveTo(origin.x + Math.cos(player.angle) * 42, origin.y + Math.sin(player.angle) * 42);
+  ctx.lineTo(x, y);
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(pulse, pulse);
+  ctx.strokeStyle = "#64d6ff";
+  ctx.shadowColor = "rgba(65,183,255,.9)";
+  ctx.shadowBlur = 12;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(0, 0, 14, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(-23, 0);
+  ctx.lineTo(-7, 0);
+  ctx.moveTo(7, 0);
+  ctx.lineTo(23, 0);
+  ctx.moveTo(0, -23);
+  ctx.lineTo(0, -7);
+  ctx.moveTo(0, 7);
+  ctx.lineTo(0, 23);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = "#64d6ff";
+  ctx.beginPath();
+  ctx.arc(0, 0, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+  drawText(ctx, "P2", 0, 38, 11, "#64d6ff", "center");
+  ctx.restore();
+}
+
+function drawItemInventoryColumn(
+  ctx: CanvasRenderingContext2D,
+  game: GameState,
+  slot: PlayerSlot,
+  viewWidth: number,
+) {
+  const inventory = itemInventoryForSlot(game, slot);
+  const selectedItem = selectedItemForSlot(game, slot);
+  const hud = PLAYER_HUD_STYLE[slot];
+  const itemBarWidth = ITEM_KEYS.length * 106;
+  const columnWidth = game.coOp ? (viewWidth - 24) / 2 : viewWidth - 16;
+  const columnLeft = slot === 1 ? 8 : viewWidth / 2 + 4;
+  const columnCenter = game.coOp ? columnLeft + columnWidth / 2 : viewWidth / 2;
+  const itemBarScale = Math.min(1, columnWidth / itemBarWidth);
+  const itemBarX = columnCenter - itemBarWidth / 2;
+
+  ctx.save();
+  ctx.translate(columnCenter, H);
+  ctx.scale(itemBarScale, itemBarScale);
+  ctx.translate(-columnCenter, -H);
+  const columnLabel = `${hud.playerLabel} 道具 · ${hud.controls}`;
+  const selectedLabel = selectedItem ? ` · ${ITEMS[selectedItem].name} ×${inventory[selectedItem]}` : "";
+  drawText(
+    ctx,
+    game.coOp ? `${columnLabel}${selectedLabel}` : selectedItem && selectedItem !== "airstrike"
+      ? `${ITEMS[selectedItem].name} 已就绪 · ${ITEMS[selectedItem].delivery === "place" ? "左键放置" : "左键投掷"}`
+      : "",
+    columnCenter,
+    H - 72,
+    game.coOp ? 12 : 14,
+    game.coOp ? hud.color : "#8df3ad",
+    "center",
+  );
+  for (let index = 0; index < ITEM_KEYS.length; index++) {
+    const key = ITEM_KEYS[index];
+    const item = ITEMS[key];
+    const x = itemBarX + index * 106;
+    const selected = selectedItem === key;
+    ctx.fillStyle = selected ? "rgba(37,92,54,.96)" : "rgba(8,11,9,.91)";
+    roundedRect(ctx, x, H - 59, 100, 42, 6);
+    ctx.fill();
+    ctx.strokeStyle = selected ? "#72ef9a" : inventory[key] > 0 ? item.color : "#394039";
+    ctx.lineWidth = selected ? 4 : 2;
+    ctx.stroke();
+    ctx.fillStyle = item.color;
+    roundedRect(ctx, x + 5, H - 53, 24, 28, 4);
+    ctx.fill();
+    drawText(ctx, item.hotkey, x + 17, H - 34, 13, "#111713", "center");
+    drawText(ctx, item.name, x + 35, H - 42, 10, "#e8e4d7");
+    drawText(ctx, `库存 ×${inventory[key]}`, x + 35, H - 27, 9, inventory[key] > 0 ? "#f1c643" : "#747c74");
+  }
+  ctx.restore();
+}
+
 function densestZombiePoint(zombies: Zombie[], clusterRadius = 235) {
   const living = zombies.filter((zombie) => zombie.hp > 0);
   if (living.length === 0) return null;
@@ -9975,6 +10159,7 @@ export function DeadRoadGame() {
   const gamepadButtonsRef = useRef<CoOpGamepadButtons>({ ...EMPTY_COOP_GAMEPAD_BUTTONS });
   const gamepadPauseHeldRef = useRef(false);
   const gamepadConnectedRef = useRef(false);
+  const gamepadAimActiveRef = useRef(false);
   const reloadRef = useRef<(player: Player, now: number) => void>(() => {});
   const rafRef = useRef(0);
   const lastFrameRef = useRef(0);
@@ -14641,6 +14826,9 @@ export function DeadRoadGame() {
     }
 
     const p = g.player;
+    if (g.coOp && g.secondPlayer && g.secondPlayer.hp > 0 && gamepadAimActiveRef.current && !pausedRef.current) {
+      drawSecondPlayerAimReticle(ctx, g.secondPlayer, g.cameraX, W, now);
+    }
     // 搭档绘制：P1/P2 各自拥有一名搭档，复用同一套猎犬/警察/无人机模型和动作。
     for (const slot of (g.coOp ? [1, 2] : [1]) as PlayerSlot[]) {
       const partner = partnerForSlot(g, slot);
@@ -14650,21 +14838,13 @@ export function DeadRoadGame() {
       else if (partner === "drone") drawDrone(ctx, field, now);
     }
 
-    if (g.selectedItem && g.selectedItem !== "airstrike") {
-      const target = itemTargetInFront(g, mouseRef.current, g.selectedItem);
-      ctx.save(); ctx.translate(target.x, target.y);
-      if (g.selectedItem === "barricade") drawBarricadeModel(ctx, true);
-      else if (g.selectedItem === "claymore") {
-        ctx.fillStyle = "rgba(78,232,127,.08)"; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(190, -85); ctx.lineTo(190, 85); ctx.closePath(); ctx.fill();
-        drawClaymoreModel(ctx, true);
-      } else {
-        ctx.strokeStyle = "rgba(91,239,139,.95)"; ctx.lineWidth = 4;
-        ctx.fillStyle = "rgba(70,218,119,.12)";
-        ctx.beginPath(); ctx.ellipse(0, 0, ITEMS[g.selectedItem].radius * .72, ITEMS[g.selectedItem].radius * .28, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(-13, 0); ctx.lineTo(13, 0); ctx.moveTo(0, -13); ctx.lineTo(0, 13); ctx.stroke();
+    drawSelectedItemPreview(ctx, g, 1, mouseRef.current);
+    if (g.coOp && g.secondPlayer && g.secondGear) {
+      const secondSelectedItem = selectedItemForSlot(g, 2);
+      if (secondSelectedItem && secondSelectedItem !== "airstrike") {
+        const secondItemAim = playerItemAimPoint(g.secondPlayer, secondSelectedItem);
+        drawSelectedItemPreview(ctx, g, 2, secondItemAim);
       }
-      drawText(ctx, ITEMS[g.selectedItem].delivery === "place" ? "左键放置" : "左键投掷", 0, -82, 15, "#8df3ad", "center");
-      ctx.restore();
     }
 
     for (const item of g.deployedItems) {
@@ -14831,32 +15011,10 @@ export function DeadRoadGame() {
     // HUD 缩放兜底：世界宽度小于 700 时（极端窄屏/手机竖屏），顶栏与快捷栏按比例缩小，避免重叠或溢出画面；
     // 位图比例始终与舞台恒等（不拉伸画布本身），只缩放 HUD 绘制
     const hudScale = Math.min(1, W / 700);
-    const itemBarWidth = ITEM_KEYS.length * 106;
-    const itemBarScale = Math.min(1, (W - 16) / itemBarWidth);
-    const itemBarX = (W - itemBarWidth) / 2;
     // 关卡模式：无道具经济，隐藏底部道具快捷栏
     if (g.mode !== "level") {
-    ctx.save();
-    ctx.translate(W / 2, H);
-    ctx.scale(itemBarScale, itemBarScale);
-    ctx.translate(-W / 2, -H);
-    for (let index = 0; index < ITEM_KEYS.length; index++) {
-      const key = ITEM_KEYS[index];
-      const item = ITEMS[key];
-      const x = itemBarX + index * 106;
-      const selected = g.selectedItem === key;
-      ctx.fillStyle = selected ? "rgba(37,92,54,.96)" : "rgba(8,11,9,.91)"; roundedRect(ctx, x, H - 59, 100, 42, 6); ctx.fill();
-      ctx.strokeStyle = selected ? "#72ef9a" : g.itemInventory[key] > 0 ? item.color : "#394039"; ctx.lineWidth = selected ? 4 : 2; ctx.stroke();
-      ctx.fillStyle = item.color; roundedRect(ctx, x + 5, H - 53, 24, 28, 4); ctx.fill();
-      drawText(ctx, item.hotkey, x + 17, H - 34, 13, "#111713", "center");
-      drawText(ctx, item.name, x + 35, H - 42, 10, "#e8e4d7");
-      drawText(ctx, `库存 ×${g.itemInventory[key]}`, x + 35, H - 27, 9, g.itemInventory[key] > 0 ? "#f1c643" : "#747c74");
-    }
-    if (g.selectedItem && g.selectedItem !== "airstrike") {
-      const selected = ITEMS[g.selectedItem];
-      drawText(ctx, `${selected.name} 已就绪 · ${selected.delivery === "place" ? "左键放置" : "左键投掷"}`, W / 2, H - 72, 14, "#8df3ad", "center");
-    }
-    ctx.restore();
+      drawItemInventoryColumn(ctx, g, 1, W);
+      if (g.coOp && g.secondGear) drawItemInventoryColumn(ctx, g, 2, W);
     }
 
     ctx.save();
@@ -14979,6 +15137,8 @@ export function DeadRoadGame() {
             gamepadButtonsRef.current,
           );
           gamepadButtonsRef.current = gamepadInput.buttons;
+          gamepadAimActiveRef.current = Boolean(secondPlayer && gamepadInput.connected
+            && (gamepadInput.aimX !== 0 || gamepadInput.aimY !== 0));
           if (gamepadConnectedRef.current !== gamepadInput.connected) {
             gamepadConnectedRef.current = gamepadInput.connected;
             setGamepadConnected(gamepadInput.connected);
@@ -15093,11 +15253,7 @@ export function DeadRoadGame() {
               if (selectedItem === "airstrike") {
                 callAirstrike(now, 2);
               } else if (selectedItem) {
-                const itemAimRange = ITEMS[selectedItem].delivery === "place" ? 250 : 440;
-                deploySelectedItem(now, 2, {
-                  x: secondPlayer.x + Math.cos(secondPlayer.angle) * itemAimRange,
-                  y: secondPlayer.y + Math.sin(secondPlayer.angle) * itemAimRange,
-                });
+                deploySelectedItem(now, 2, playerItemAimPoint(secondPlayer, selectedItem));
               }
             }
             const secondWeapon = WEAPONS[secondPlayer.weapon];

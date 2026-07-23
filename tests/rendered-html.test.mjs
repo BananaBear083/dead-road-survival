@@ -46,6 +46,33 @@ test("co-op keeps separate wallets and hands shopping from keyboard to gamepad",
   assert.match(source, /const rewardOwner = g\.coOp \? z\.rewardOwner \?\? 1 : 1/);
   assert.match(source, /drawText\(ctx, `P1 ◉ \$\{g\.coins\}`/);
   assert.match(source, /drawText\(ctx, `P2 ◉ \$\{g\.secondGear\.coins\}`/);
+  // 战斗 HUD：双人模式在底部左右分别显示 P1/P2 的完整独立道具库存与选择状态
+  assert.match(source, /function drawItemInventoryColumn/);
+  assert.match(source, /const inventory = itemInventoryForSlot\(game, slot\)/);
+  assert.match(source, /const columnLeft = slot === 1 \? 8 : viewWidth \/ 2 \+ 4/);
+  assert.match(source, /const PLAYER_HUD_STYLE: Record<PlayerSlot/);
+  assert.match(source, /1: \{ playerLabel: "P1", controls: "键盘", placeAction: "左键放置"/);
+  assert.match(source, /2: \{ playerLabel: "P2", controls: "手柄", placeAction: "A 放置"/);
+  assert.match(source, /const columnLabel = `\$\{hud\.playerLabel\} 道具 · \$\{hud\.controls\}`/);
+  assert.match(source, /game\.coOp \? hud\.color : "#8df3ad"/);
+  assert.match(source, /drawItemInventoryColumn\(ctx, g, 1, W\)/);
+  assert.match(source, /drawItemInventoryColumn\(ctx, g, 2, W\)/);
+  // P2 道具预览复用 P1 的绿色投掷/放置范围；实际使用与预览共用同一瞄准点
+  assert.match(source, /function drawSelectedItemPreview/);
+  assert.match(source, /drawSelectedItemPreview\(ctx, g, 1, mouseRef\.current/);
+  assert.match(source, /const secondItemAim = playerItemAimPoint\(g\.secondPlayer, secondSelectedItem\)/);
+  assert.match(source, /drawSelectedItemPreview\(ctx, g, 2, secondItemAim/);
+  assert.match(source, /deploySelectedItem\(now, 2, playerItemAimPoint\(secondPlayer, selectedItem\)\)/);
+  assert.match(source, /rgba\(91,239,139,\.95\)/);
+  // 右摇杆越过死区时显示蓝色 P2 准星，松开摇杆后隐藏
+  assert.match(source, /const gamepadAimActiveRef = useRef\(false\)/);
+  assert.match(source, /gamepadAimActiveRef\.current = Boolean\(secondPlayer && gamepadInput\.connected/);
+  assert.match(source, /function drawSecondPlayerAimReticle/);
+  assert.match(source, /drawSecondPlayerAimReticle\(ctx, g\.secondPlayer, g\.cameraX, W, now\)/);
+  assert.match(source, /strokeStyle = "#64d6ff"/);
+  assert.match(source, /clippedDistance = Math\.min\(clippedDistance, \(maximumX - origin\.x\) \/ aimX\)/);
+  assert.match(source, /const x = origin\.x \+ aimX \* clippedDistance/);
+  assert.match(source, /game\.coOp \? `\$\{hud\.playerLabel\} · \$\{action\}` : action/);
   assert.match(source, />P1 准备</);
   assert.match(source, /\{gamepadShopping \? "P2 继续"/);
   assert.match(source, /data-gamepad-panel/);
@@ -379,7 +406,7 @@ test("fills any screen aspect ratio with a dynamic world width", async () => {
   assert.match(source, /\* canvas\.width/);
   // 极端窄屏：HUD 与快捷栏缩放兜底（画布本身不拉伸）；聚焦不触发页面滚动
   assert.match(source, /const hudScale = Math\.min\(1, W \/ 700\)/);
-  assert.match(source, /const itemBarScale = Math\.min\(1, \(W - 16\) \/ itemBarWidth\)/);
+  assert.match(source, /const itemBarScale = Math\.min\(1, columnWidth \/ itemBarWidth\)/);
   assert.match(source, /focus\(\{ preventScroll: true \}\)/);
   // CSS：舞台填满网格区域且不设 16:9/宽度上限（黑边消除）；画布绝对定位不撑破轨道（无页面滚动）
   assert.match(css, /\.game-stage \{[^}]*width: 100%;[^}]*height: 100%;[^}]*min-width: 0;[^}]*min-height: 0;/);
