@@ -12,10 +12,18 @@ export type GamepadLike = {
 };
 
 export type CoOpGamepadButtons = {
+  confirm: boolean;
+  back: boolean;
   fire: boolean;
   kick: boolean;
   reload: boolean;
   switchWeapon: boolean;
+  previousTab: boolean;
+  menu: boolean;
+  up: boolean;
+  down: boolean;
+  left: boolean;
+  right: boolean;
 };
 
 export type CoOpGamepadInput = {
@@ -30,15 +38,41 @@ export type CoOpGamepadInput = {
   kickPressed: boolean;
   reloadPressed: boolean;
   switchWeaponPressed: boolean;
+  confirmPressed: boolean;
+  backPressed: boolean;
+  previousTabPressed: boolean;
+  menuPressed: boolean;
+  upPressed: boolean;
+  downPressed: boolean;
+  leftPressed: boolean;
+  rightPressed: boolean;
   buttons: CoOpGamepadButtons;
 };
 
 export const EMPTY_COOP_GAMEPAD_BUTTONS: CoOpGamepadButtons = {
+  confirm: false,
+  back: false,
   fire: false,
   kick: false,
   reload: false,
   switchWeapon: false,
+  previousTab: false,
+  menu: false,
+  up: false,
+  down: false,
+  left: false,
+  right: false,
 };
+
+export function creditPlayerCoins(
+  balances: readonly [number, number],
+  player: 1 | 2,
+  amount: number,
+): [number, number] {
+  return player === 1
+    ? [Math.max(0, balances[0] + amount), balances[1]]
+    : [balances[0], Math.max(0, balances[1] + amount)];
+}
 
 const GAMEPAD_DEADZONE = 0.2;
 
@@ -78,16 +112,33 @@ export function readCoOpGamepad(
       kickPressed: false,
       reloadPressed: false,
       switchWeaponPressed: false,
+      confirmPressed: false,
+      backPressed: false,
+      previousTabPressed: false,
+      menuPressed: false,
+      upPressed: false,
+      downPressed: false,
+      leftPressed: false,
+      rightPressed: false,
       buttons: { ...EMPTY_COOP_GAMEPAD_BUTTONS },
     };
   }
 
-  // Standard Gamepad mapping: RT=7, RB=5, X=2, Y=3.
+  // Standard Gamepad mapping: A=0, B=1, X=2, Y=3, LB=4, RB=5,
+  // RT=7, Menu=9, D-pad=12–15.
   const buttons: CoOpGamepadButtons = {
+    confirm: buttonPressed(gamepad, 0),
+    back: buttonPressed(gamepad, 1),
     fire: buttonPressed(gamepad, 7),
     kick: buttonPressed(gamepad, 5),
     reload: buttonPressed(gamepad, 2),
     switchWeapon: buttonPressed(gamepad, 3),
+    previousTab: buttonPressed(gamepad, 4),
+    menu: buttonPressed(gamepad, 9),
+    up: buttonPressed(gamepad, 12),
+    down: buttonPressed(gamepad, 13),
+    left: buttonPressed(gamepad, 14),
+    right: buttonPressed(gamepad, 15),
   };
 
   return {
@@ -102,6 +153,14 @@ export function readCoOpGamepad(
     kickPressed: buttons.kick && !previous.kick,
     reloadPressed: buttons.reload && !previous.reload,
     switchWeaponPressed: buttons.switchWeapon && !previous.switchWeapon,
+    confirmPressed: buttons.confirm && !previous.confirm,
+    backPressed: buttons.back && !previous.back,
+    previousTabPressed: buttons.previousTab && !previous.previousTab,
+    menuPressed: buttons.menu && !previous.menu,
+    upPressed: buttons.up && !previous.up,
+    downPressed: buttons.down && !previous.down,
+    leftPressed: buttons.left && !previous.left,
+    rightPressed: buttons.right && !previous.right,
     buttons,
   };
 }

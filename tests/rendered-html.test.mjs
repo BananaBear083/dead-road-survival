@@ -30,6 +30,27 @@ test("server-renders the finished Dead Road game", async () => {
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape/);
 });
 
+test("co-op keeps separate wallets and hands shopping from keyboard to gamepad", async () => {
+  const source = await readFile(new URL("../app/DeadRoadGame.tsx", import.meta.url), "utf8");
+  const gamepad = await readFile(new URL("../app/coOp.ts", import.meta.url), "utf8");
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+
+  assert.match(source, /secondGear: CoOpGear \| null/);
+  assert.match(source, /const rewardOwner = g\.coOp \? z\.rewardOwner \?\? 1 : 1/);
+  assert.match(source, /drawText\(ctx, `P1 ◉ \$\{g\.coins\}`/);
+  assert.match(source, /drawText\(ctx, `P2 ◉ \$\{g\.secondGear\.coins\}`/);
+  assert.match(source, />P1 准备</);
+  assert.match(source, /\{gamepadShopping \? "P2 继续"/);
+  assert.match(source, /data-gamepad-panel/);
+  assert.match(source, /coOpShopperRef\.current === 2/);
+  assert.match(css, /\.shop-panel\.controller-turn \{ pointer-events: none; \}/);
+  assert.match(source, /const focusScope = shopDetail[\s\S]*?\[role="dialog"\]/);
+  assert.match(source, /onClick=\{gamepadShopping \? undefined : closeDetail\}/);
+  for (const action of ["confirmPressed", "backPressed", "previousTabPressed", "menuPressed", "upPressed", "downPressed", "leftPressed", "rightPressed"]) {
+    assert.match(gamepad, new RegExp(`${action}:`));
+  }
+});
+
 test("keeps staged environments and articulated knockdown recovery", async () => {
   const source = await readFile(new URL("../app/DeadRoadGame.tsx", import.meta.url), "utf8");
 
@@ -352,7 +373,7 @@ test("expands menu/shop/loadout panels by hiding the key-hint bar outside battle
 
   // 非战斗界面隐藏底栏 + 紧凑页头，舞台面板向下扩展；战斗/暂停（screen === "playing"）几何不变
   assert.match(source, /const panelMode = screen !== "playing"/);
-  assert.match(source, /className=\{`game-shell \$\{panelMode \? "panel-mode" : ""\} \$\{lotteryCinematic \? "lottery-cinematic" : ""\}`\}/);
+  assert.match(source, /className=\{`game-shell \$\{panelMode \? "panel-mode" : ""\} \$\{lotteryCinematic \? "lottery-cinematic" : ""\} \$\{gamepadShopping \? "controller-lock" : ""\}`\}/);
   assert.match(css, /\.panel-mode \.controls-bar \{ display: none; \}/);
   assert.match(css, /\.panel-mode \.masthead \{ height: 52px; \}/);
   // 底栏按键条全局压缩（60px）
@@ -1071,7 +1092,7 @@ test("level mode: occupy-building level with persistent squad, blackout floors a
   assert.match(source, /kickDamageReduction\(z, "legs"\)/);
   assert.match(source, /z\.hp -= burnDamage;/);
   assert.match(source, /z\.hp -= IGNITE_DPS \* dt;/);
-  assert.match(source, /damageZombie\(g, z, damage, now, angle, undefined, undefined, true\)/);
+  assert.match(source, /damageZombie\(g, z, damage, now, angle, undefined, undefined, true, undefined, playerForSlot\(g, owner\)\)/);
   assert.match(source, /region === "legs" && z\.kind !== "juggernaut" && z\.bossKind !== "giantMutant"/);
   assert.match(source, /missingLegs > 0 && z\.bossKind !== "giantMutant"/);
   assert.match(source, /if \(z\.hp > 0 && z\.bossKind !== "giantMutant"\) \{/);

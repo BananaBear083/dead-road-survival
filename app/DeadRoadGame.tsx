@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AccountControl } from "./account/AccountControl";
 import { notifyLocalSaveChanged } from "./account/saveData";
 import {
+  creditPlayerCoins,
   EMPTY_COOP_GAMEPAD_BUTTONS,
   readCoOpGamepad,
   survivalWaveTotal,
@@ -552,12 +553,13 @@ function freshPartnerField(x = 170, y = 440): PartnerField {
 
 // 携带总重量（主副武器 + 近战 + 战斗服）与移速系数：
 // speedFactor = max(0.72, 1 - 0.007 × (总重kg - 5))——轻装 5kg 以内 100%，每多 1kg 减 0.7%，全重装（约 40kg）≈ 75%
-function carriedWeightKg(g: GameState) {
-  return WEAPON_HANDLING[g.loadout[0]].weightKg + WEAPON_HANDLING[g.loadout[1]].weightKg
-    + WEAPON_HANDLING[g.melee].weightKg + ARMORS[g.armor].weightKg;
+function carriedWeightKg(g: GameState, slot: PlayerSlot = 1) {
+  const loadout = loadoutForSlot(g, slot);
+  return WEAPON_HANDLING[loadout[0]].weightKg + WEAPON_HANDLING[loadout[1]].weightKg
+    + WEAPON_HANDLING[meleeForSlot(g, slot)].weightKg + ARMORS[armorForSlot(g, slot)].weightKg;
 }
-function playerSpeedFactor(g: GameState) {
-  return Math.max(0.72, Math.min(1, 1 - 0.007 * (carriedWeightKg(g) - 5)));
+function playerSpeedFactor(g: GameState, slot: PlayerSlot = 1) {
+  return Math.max(0.72, Math.min(1, 1 - 0.007 * (carriedWeightKg(g, slot) - 5)));
 }
 
 type ItemKey = "molotov" | "barricade" | "frag" | "claymore" | "flashbang" | "airstrike" | "impact";
@@ -599,7 +601,17 @@ const EMPTY_ITEM_INVENTORY = (): Record<ItemKey, number> => ({ molotov: 0, barri
 
 // 进度存档：带版本字段；读取时逐项校验，解析失败一律视为无存档
 const PROGRESS_KEY = "dead-road-progress";
-const PROGRESS_VERSION = 3;
+const PROGRESS_VERSION = 4;
+
+type CoOpGearSave = {
+  coins: number;
+  owned: WeaponKey[];
+  loadout: [WeaponKey, WeaponKey];
+  melee: WeaponKey;
+  weapon: WeaponKey;
+  armor: ArmorKey;
+  ownedArmors: ArmorKey[];
+};
 
 type ProgressSave = {
   version: number;
@@ -616,6 +628,7 @@ type ProgressSave = {
   ownedPartners: PartnerKey[];
   partner: PartnerKey | null;
   coOp: boolean;
+  secondPlayer: CoOpGearSave | null;
 };
 
 function readProgressSave(): ProgressSave | null {
@@ -624,7 +637,7 @@ function readProgressSave(): ProgressSave | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<ProgressSave>;
     // v1 旧档容错：缺少搭档字段时按空处理，其余校验一致
-    if (parsed.version !== 1 && parsed.version !== 2 && parsed.version !== PROGRESS_VERSION) return null;
+    if (parsed.version !== 1 && parsed.version !== 2 && parsed.version !== 3 && parsed.version !== PROGRESS_VERSION) return null;
     if (typeof parsed.nextDay !== "number" || !Number.isFinite(parsed.nextDay) || parsed.nextDay < 1) return null;
     if (typeof parsed.coins !== "number" || !Number.isFinite(parsed.coins) || parsed.coins < 0) return null;
     if (!Array.isArray(parsed.owned) || !Array.isArray(parsed.ownedArmors)) return null;
@@ -632,10 +645,13 @@ function readProgressSave(): ProgressSave | null {
     if (typeof parsed.melee !== "string" || typeof parsed.armor !== "string" || typeof parsed.weapon !== "string") return null;
     if (typeof parsed.itemInventory !== "object" || parsed.itemInventory === null) return null;
     return {
-      ...(parsed as Omit<ProgressSave, "ownedPartners" | "partner" | "coOp">),
+      ...(parsed as Omit<ProgressSave, "ownedPartners" | "partner" | "coOp" | "secondPlayer">),
       ownedPartners: Array.isArray(parsed.ownedPartners) ? parsed.ownedPartners : [],
       partner: typeof parsed.partner === "string" ? parsed.partner : null,
       coOp: parsed.coOp === true,
+      secondPlayer: parsed.secondPlayer && typeof parsed.secondPlayer === "object"
+        ? parsed.secondPlayer as CoOpGearSave
+        : null,
     };
   } catch {
     return null;
@@ -680,6 +696,32 @@ type Player = {
   invulnerableUntil: number;
   moving: boolean;
 };
+
+type CoOpGear = {
+  coins: number;
+  dayKillCoins: number;
+  lastDayBonus: number;
+  owned: Set<WeaponKey>;
+  loadout: [WeaponKey, WeaponKey];
+  melee: WeaponKey;
+  armor: ArmorKey;
+  ownedArmors: Set<ArmorKey>;
+};
+
+type PlayerSlot = 1 | 2;
+
+function freshCoOpGear(): CoOpGear {
+  return {
+    coins: 0,
+    dayKillCoins: 0,
+    lastDayBonus: 0,
+    owned: new Set<WeaponKey>(["glock17", "sawedoff", "fruitknife"]),
+    loadout: ["glock17", "sawedoff"],
+    melee: "fruitknife",
+    armor: "civilian",
+    ownedArmors: new Set<ArmorKey>(["civilian"]),
+  };
+}
 
 function freshPlayer(x = 220, y = 410): Player {
   return {
@@ -5702,6 +5744,8 @@ function armorPenBypass(sourceWeapon: WeaponKey) {
 
 type Zombie = {
   id: number;
+  /** 双人生存中，最后一次有效伤害来自哪名玩家；用于独立结算金币。 */
+  rewardOwner?: PlayerSlot;
   /** 种类：normal/brute 为既有体系；runner/spitter/helmet/mutant/army/shield/juggernaut 为扩展种类（见 ZOMBIE_KIND_SPECS） */
   kind: ZombieKind;
   /** 第六关中央大厅专属巨型变异体；基础种类仍为 mutant，以复用同一套姿势、损伤与断肢系统。 */
@@ -5916,6 +5960,7 @@ type BlastEffect = {
 
 type ExplosiveProjectile = {
   id: number;
+  owner: PlayerSlot;
   weapon: "rpg7" | "m32";
   kind: "rocket" | "grenade";
   startX: number;
@@ -5943,6 +5988,7 @@ type GameState = {
   lastDayBonus: number;
   player: Player;
   secondPlayer: Player | null;
+  secondGear: CoOpGear | null;
   zombies: Zombie[];
   corpses: ZombieCorpse[];
   tracers: Tracer[];
@@ -6005,6 +6051,7 @@ const freshState = (mode: GameMode = "survival", worldW: number = DEFAULT_WORLD_
   lastDayBonus: 0,
   player: freshPlayer(),
   secondPlayer: mode === "survival" && coOp ? freshPlayer(310, 470) : null,
+  secondGear: mode === "survival" && coOp ? freshCoOpGear() : null,
   zombies: [],
   corpses: [],
   tracers: [],
@@ -6055,6 +6102,53 @@ function livingSurvivalPlayers(game: GameState) {
 
 function gameStillContainsPlayer(game: GameState, player: Player) {
   return game.player === player || game.secondPlayer === player;
+}
+
+function slotForPlayer(game: GameState, player: Player): PlayerSlot {
+  return game.secondPlayer === player ? 2 : 1;
+}
+
+function playerForSlot(game: GameState, slot: PlayerSlot) {
+  return slot === 2 && game.secondPlayer ? game.secondPlayer : game.player;
+}
+
+function coinsForSlot(game: GameState, slot: PlayerSlot) {
+  return slot === 2 ? game.secondGear?.coins ?? 0 : game.coins;
+}
+
+function addCoinsForSlot(game: GameState, slot: PlayerSlot, amount: number) {
+  const [first, second] = creditPlayerCoins([game.coins, game.secondGear?.coins ?? 0], slot, amount);
+  game.coins = first;
+  if (game.secondGear) game.secondGear.coins = second;
+}
+
+function dayKillCoinsForSlot(game: GameState, slot: PlayerSlot) {
+  return slot === 2 ? game.secondGear?.dayKillCoins ?? 0 : game.dayKillCoins;
+}
+
+function addDayKillCoinsForSlot(game: GameState, slot: PlayerSlot, amount: number) {
+  if (slot === 2 && game.secondGear) game.secondGear.dayKillCoins += amount;
+  else game.dayKillCoins += amount;
+}
+
+function ownedWeaponsForSlot(game: GameState, slot: PlayerSlot) {
+  return slot === 2 && game.secondGear ? game.secondGear.owned : game.owned;
+}
+
+function loadoutForSlot(game: GameState, slot: PlayerSlot) {
+  return slot === 2 && game.secondGear ? game.secondGear.loadout : game.loadout;
+}
+
+function meleeForSlot(game: GameState, slot: PlayerSlot) {
+  return slot === 2 && game.secondGear ? game.secondGear.melee : game.melee;
+}
+
+function armorForSlot(game: GameState, slot: PlayerSlot) {
+  return slot === 2 && game.secondGear ? game.secondGear.armor : game.armor;
+}
+
+function ownedArmorsForSlot(game: GameState, slot: PlayerSlot) {
+  return slot === 2 && game.secondGear ? game.secondGear.ownedArmors : game.ownedArmors;
 }
 
 function equipPlayerArmor(player: Player, key: ArmorKey) {
@@ -6134,10 +6228,10 @@ function canPurchase(mode: GameMode, coins: number, listedPrice: number) {
   return coins >= shopCost(mode, listedPrice);
 }
 
-function completePurchase(game: GameState, listedPrice: number) {
+function completePurchase(game: GameState, listedPrice: number, slot: PlayerSlot = 1) {
   const cost = shopCost(game.mode, listedPrice);
-  if (game.coins < cost) return false;
-  game.coins -= cost;
+  if (coinsForSlot(game, slot) < cost) return false;
+  addCoinsForSlot(game, slot, -cost);
   game.stats.coinsSpent += cost;
   return true;
 }
@@ -6146,6 +6240,49 @@ function shopPriceLabel(mode: GameMode, listedPrice: number, detailed = false) {
   if (mode === "range") return "靶场免费";
   if (listedPrice === 0) return "免费";
   return detailed ? `◉ ${listedPrice} 金币` : `◉ ${listedPrice}`;
+}
+
+type GamepadFocusDirection = "up" | "down" | "left" | "right";
+
+function gamepadButtonsIn(panel: HTMLElement) {
+  return Array.from(panel.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"))
+    .filter((button) => button.getClientRects().length > 0 && button.getAttribute("aria-hidden") !== "true");
+}
+
+function focusGamepadButton(button: HTMLButtonElement | undefined) {
+  if (!button) return;
+  button.focus({ preventScroll: true });
+  button.scrollIntoView({ block: "nearest", inline: "nearest" });
+}
+
+function moveGamepadFocus(panel: HTMLElement, direction: GamepadFocusDirection) {
+  const buttons = gamepadButtonsIn(panel);
+  if (buttons.length === 0) return;
+  const current = document.activeElement instanceof HTMLButtonElement && panel.contains(document.activeElement)
+    ? document.activeElement
+    : null;
+  if (!current) {
+    focusGamepadButton(buttons[0]);
+    return;
+  }
+  const origin = current.getBoundingClientRect();
+  const originX = origin.left + origin.width / 2;
+  const originY = origin.top + origin.height / 2;
+  const vertical = direction === "up" || direction === "down";
+  const sign = direction === "up" || direction === "left" ? -1 : 1;
+  const candidates = buttons
+    .filter((button) => button !== current)
+    .map((button) => {
+      const rect = button.getBoundingClientRect();
+      const dx = rect.left + rect.width / 2 - originX;
+      const dy = rect.top + rect.height / 2 - originY;
+      const forward = (vertical ? dy : dx) * sign;
+      const sideways = Math.abs(vertical ? dx : dy);
+      return { button, forward, score: forward * 3 + sideways };
+    })
+    .filter((entry) => entry.forward > 2)
+    .sort((left, right) => left.score - right.score);
+  focusGamepadButton(candidates[0]?.button ?? buttons[(buttons.indexOf(current) + sign + buttons.length) % buttons.length]);
 }
 
 function roundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
@@ -6445,6 +6582,7 @@ type ExplosionDamageApplier = (
   distance: number,
   radius: number,
   kind: BlastKind,
+  owner?: PlayerSlot,
 ) => void;
 
 function detonateExplosiveProjectile(game: GameState, projectile: ExplosiveProjectile, now: number, applyDamage: ExplosionDamageApplier) {
@@ -6454,7 +6592,7 @@ function detonateExplosiveProjectile(game: GameState, projectile: ExplosiveProje
     const distance = Math.hypot(zombie.x - blastX, zombieBodyY(zombie) - blastY);
     if (distance > projectile.radius) continue;
     const falloff = .45 + .55 * (1 - distance / projectile.radius);
-    applyDamage(game, zombie, projectile.damage * falloff, now, blastX, blastY, distance, projectile.radius, projectile.kind);
+    applyDamage(game, zombie, projectile.damage * falloff, now, blastX, blastY, distance, projectile.radius, projectile.kind, projectile.owner);
     const blastAngle = Math.atan2(zombie.y - blastY, zombie.x - blastX);
     zombie.x += Math.cos(blastAngle) * (projectile.kind === "rocket" ? 54 : 38);
     zombie.y += Math.sin(blastAngle) * (projectile.kind === "rocket" ? 34 : 24);
@@ -9770,6 +9908,7 @@ export function DeadRoadGame() {
   const keysRef = useRef(new Set<string>());
   const mouseRef = useRef({ x: 880, y: 400, down: false });
   const gamepadButtonsRef = useRef<CoOpGamepadButtons>({ ...EMPTY_COOP_GAMEPAD_BUTTONS });
+  const gamepadPauseHeldRef = useRef(false);
   const gamepadConnectedRef = useRef(false);
   const reloadRef = useRef<(player: Player, now: number) => void>(() => {});
   const rafRef = useRef(0);
@@ -9878,6 +10017,12 @@ export function DeadRoadGame() {
     } satisfies ExplorationProgress));
   }, [deployedExplorationConsumables, deployedMemberIds, explorationAchievementProgress, explorationCoins, explorationConsumableInventory, explorationDailyProgress, explorationExperience, explorationMemberLevels, explorationVehicleLevel, explorationVouchers, ownedMemberIds, recruitTickets, recruitedMemberIds, selectedExplorationChapterId, starterPackPurchased]);
   const [shopTab, setShopTab] = useState<ShopTab>("weapons");
+  const [coOpShopper, setCoOpShopperState] = useState<PlayerSlot>(1);
+  const coOpShopperRef = useRef<PlayerSlot>(1);
+  const setCoOpShopper = useCallback((slot: PlayerSlot) => {
+    coOpShopperRef.current = slot;
+    setCoOpShopperState(slot);
+  }, []);
   // 靶场"僵尸生成"页签：各品种配置数量（0~30），纯 UI state，不进游戏快照
   const [spawnCounts, setSpawnCounts] = useState<Record<ZombieKind, number>>({
     normal: 6, brute: 0, runner: 0, spitter: 0, largeSpitter: 0, zombieDog: 0,
@@ -9920,6 +10065,10 @@ export function DeadRoadGame() {
   const [snapshot, setSnapshot] = useState({
     mode: "survival" as GameMode, coOp: false, day: 1, coins: 0, kills: 0, hp: 100, maxHp: 100, weapon: "glock17" as WeaponKey,
     secondHp: null as number | null, secondMaxHp: null as number | null,
+    secondCoins: null as number | null, secondWeapon: null as WeaponKey | null,
+    secondOwned: [] as WeaponKey[], secondLoadout: null as [WeaponKey, WeaponKey] | null,
+    secondMelee: null as WeaponKey | null, secondArmor: null as ArmorKey | null,
+    secondOwnedArmors: [] as ArmorKey[], secondLastDayBonus: 0,
     owned: ["glock17", "sawedoff", "fruitknife"] as WeaponKey[],
     loadout: ["glock17", "sawedoff"] as [WeaponKey, WeaponKey],
     melee: "fruitknife" as WeaponKey,
@@ -9935,6 +10084,7 @@ export function DeadRoadGame() {
     rangeBatchTotal: 0,
     levelId: null as string | null,
   });
+  const gamepadShopping = snapshot.coOp && coOpShopper === 2;
 
   // 浏览器标签页隐藏时 RAF 会暂停。恢复可见时整体平移游戏时间轴，确保“坚持 20 秒”
   // 只计算实际游玩时间，也避免隐藏期间跳过刷怪、冷却、投掷物与动画过程。
@@ -11390,6 +11540,12 @@ export function DeadRoadGame() {
     setSnapshot({
       mode: g.mode, coOp: g.coOp, day: g.day, coins: g.coins, kills: g.kills, hp: g.player.hp, maxHp: g.player.maxHp,
       secondHp: g.secondPlayer?.hp ?? null, secondMaxHp: g.secondPlayer?.maxHp ?? null,
+      secondCoins: g.secondGear?.coins ?? null, secondWeapon: g.secondPlayer?.weapon ?? null,
+      secondOwned: g.secondGear ? Array.from(g.secondGear.owned) : [],
+      secondLoadout: g.secondGear ? [...g.secondGear.loadout] as [WeaponKey, WeaponKey] : null,
+      secondMelee: g.secondGear?.melee ?? null, secondArmor: g.secondGear?.armor ?? null,
+      secondOwnedArmors: g.secondGear ? Array.from(g.secondGear.ownedArmors) : [],
+      secondLastDayBonus: g.secondGear?.lastDayBonus ?? 0,
       weapon: g.player.weapon, owned: Array.from(g.owned), loadout: [...g.loadout] as [WeaponKey, WeaponKey], melee: g.melee,
       armor: g.armor, ownedArmors: Array.from(g.ownedArmors),
       ownedPartners: Array.from(g.ownedPartners), partner: g.partner,
@@ -12420,6 +12576,15 @@ export function DeadRoadGame() {
         partner: g.partner,
         itemInventory: { ...g.itemInventory },
         coOp: g.coOp,
+        secondPlayer: g.secondGear && g.secondPlayer ? {
+          coins: g.secondGear.coins,
+          owned: Array.from(g.secondGear.owned),
+          loadout: [...g.secondGear.loadout] as [WeaponKey, WeaponKey],
+          melee: g.secondGear.melee,
+          weapon: g.secondPlayer.weapon,
+          armor: g.secondGear.armor,
+          ownedArmors: Array.from(g.secondGear.ownedArmors),
+        } : null,
       });
       setSaveInfo({ nextDay: Math.max(1, nextDay), coOp: g.coOp });
     }
@@ -12455,11 +12620,38 @@ export function DeadRoadGame() {
     g.player.weapon = g.loadout.includes(save.weapon) ? save.weapon : g.loadout[0];
     for (const key of g.owned) g.player.ammo[key] = WEAPONS[key].magazine;
     if (g.secondPlayer) {
-      g.secondPlayer.armor = g.armor;
-      g.secondPlayer.maxHp = ARMORS[g.armor].maxHp;
+      const secondSave = save.secondPlayer;
+      const secondOwned = (secondSave?.owned ?? save.owned)
+        .filter((key): key is WeaponKey => typeof key === "string" && key in WEAPONS);
+      const secondOwnedGuns = secondOwned.filter((key) => !MELEE_WEAPONS.has(key));
+      const secondLoadout = (secondSave?.loadout ?? save.loadout)
+        .filter((key): key is WeaponKey => typeof key === "string" && secondOwned.includes(key) && !MELEE_WEAPONS.has(key));
+      const secondOwnedArmors = (secondSave?.ownedArmors ?? save.ownedArmors)
+        .filter((key): key is ArmorKey => typeof key === "string" && key in ARMORS);
+      const secondMelee = secondSave?.melee ?? save.melee;
+      const secondArmor = secondSave?.armor ?? save.armor;
+      g.secondGear = {
+        coins: Math.max(0, Math.floor(secondSave?.coins ?? save.coins)),
+        dayKillCoins: 0,
+        lastDayBonus: 0,
+        owned: new Set<WeaponKey>(secondOwned.length > 0 ? secondOwned : ["glock17"]),
+        loadout: [
+          secondLoadout[0] ?? secondOwnedGuns[0] ?? "glock17",
+          secondLoadout[1] ?? secondOwnedGuns[1] ?? secondLoadout[0] ?? secondOwnedGuns[0] ?? "glock17",
+        ],
+        melee: secondOwned.includes(secondMelee) && MELEE_WEAPONS.has(secondMelee)
+          ? secondMelee
+          : secondOwned.find((key) => MELEE_WEAPONS.has(key)) ?? "fruitknife",
+        armor: secondOwnedArmors.includes(secondArmor) ? secondArmor : "civilian",
+        ownedArmors: new Set<ArmorKey>(secondOwnedArmors.length > 0 ? secondOwnedArmors : ["civilian"]),
+      };
+      g.secondPlayer.armor = g.secondGear.armor;
+      g.secondPlayer.maxHp = ARMORS[g.secondGear.armor].maxHp;
       g.secondPlayer.hp = g.secondPlayer.maxHp;
-      g.secondPlayer.weapon = g.player.weapon;
-      for (const key of g.owned) g.secondPlayer.ammo[key] = WEAPONS[key].magazine;
+      g.secondPlayer.weapon = g.secondGear.loadout.includes(secondSave?.weapon as WeaponKey)
+        ? secondSave!.weapon
+        : g.secondGear.loadout[0];
+      for (const key of g.secondGear.owned) g.secondPlayer.ammo[key] = WEAPONS[key].magazine;
     }
     g.itemInventory = { ...EMPTY_ITEM_INVENTORY() };
     for (const key of ITEM_KEYS) {
@@ -12475,63 +12667,67 @@ export function DeadRoadGame() {
     syncSnapshot();
     setShopDetail(null);
     setShopTab("weapons");
+    setCoOpShopper(1);
     changeScreen("shop");
-  }, [changeScreen, syncSnapshot]);
+  }, [changeScreen, setCoOpShopper, syncSnapshot]);
 
   // 装备界面：主/副武器位调整（重复选择自动交换，保证两位不同枪）
-  const assignLoadoutSlot = useCallback((slot: 0 | 1, key: WeaponKey) => {
+  const assignLoadoutSlot = useCallback((equipmentSlot: 0 | 1, key: WeaponKey) => {
     const g = stateRef.current;
     if (MELEE_WEAPONS.has(key)) return;
+    const shopperSlot = g.coOp ? coOpShopperRef.current : 1;
+    const owned = ownedWeaponsForSlot(g, shopperSlot);
+    const loadout = loadoutForSlot(g, shopperSlot);
+    const player = playerForSlot(g, shopperSlot);
     // 靶场模式：装备界面直接选用任意武器，自动免费入列并补满弹药
-    if (!g.owned.has(key)) {
+    if (!owned.has(key)) {
       if (g.mode !== "range") return;
-      g.owned.add(key);
-      g.player.ammo[key] = WEAPONS[key].magazine;
+      owned.add(key);
+      player.ammo[key] = WEAPONS[key].magazine;
     }
     sound.uiClick();
-    const other = slot === 0 ? 1 : 0;
-    if (g.loadout[other] === key) g.loadout[other] = g.loadout[slot];
-    g.loadout[slot] = key;
-    if (g.player.weapon !== g.loadout[0] && g.player.weapon !== g.loadout[1] && !MELEE_WEAPONS.has(g.player.weapon)) {
-      g.player.weapon = g.loadout[0];
+    const other = equipmentSlot === 0 ? 1 : 0;
+    if (loadout[other] === key) loadout[other] = loadout[equipmentSlot];
+    loadout[equipmentSlot] = key;
+    if (player.weapon !== loadout[0] && player.weapon !== loadout[1] && !MELEE_WEAPONS.has(player.weapon)) {
+      player.weapon = loadout[0];
     }
-    g.player.reloadStartedAt = 0;
-    g.player.reloadingUntil = 0;
-    if (g.secondPlayer) {
-      if (g.secondPlayer.weapon !== g.loadout[0] && g.secondPlayer.weapon !== g.loadout[1] && !MELEE_WEAPONS.has(g.secondPlayer.weapon)) {
-        g.secondPlayer.weapon = g.loadout[0];
-      }
-      g.secondPlayer.reloadStartedAt = 0;
-      g.secondPlayer.reloadingUntil = 0;
-    }
+    player.reloadStartedAt = 0;
+    player.reloadingUntil = 0;
     syncSnapshot();
   }, [syncSnapshot]);
 
   const assignMelee = useCallback((key: WeaponKey) => {
     const g = stateRef.current;
     if (!MELEE_WEAPONS.has(key)) return;
-    if (!g.owned.has(key)) {
+    const shopperSlot = g.coOp ? coOpShopperRef.current : 1;
+    const owned = ownedWeaponsForSlot(g, shopperSlot);
+    const player = playerForSlot(g, shopperSlot);
+    if (!owned.has(key)) {
       if (g.mode !== "range") return;
-      g.owned.add(key);
-      g.player.ammo[key] = WEAPONS[key].magazine;
+      owned.add(key);
+      player.ammo[key] = WEAPONS[key].magazine;
     }
     sound.uiClick();
-    g.melee = key;
-    if (MELEE_WEAPONS.has(g.player.weapon)) g.player.weapon = key;
-    if (g.secondPlayer && MELEE_WEAPONS.has(g.secondPlayer.weapon)) g.secondPlayer.weapon = key;
+    if (shopperSlot === 2 && g.secondGear) g.secondGear.melee = key;
+    else g.melee = key;
+    if (MELEE_WEAPONS.has(player.weapon)) player.weapon = key;
     syncSnapshot();
   }, [syncSnapshot]);
 
   // 换装血量上限逻辑与商店购买一致：上限差额立即补足，且不超新上限
   const assignArmor = useCallback((key: ArmorKey) => {
     const g = stateRef.current;
-    if (!g.ownedArmors.has(key)) {
+    const shopperSlot = g.coOp ? coOpShopperRef.current : 1;
+    const ownedArmors = ownedArmorsForSlot(g, shopperSlot);
+    if (!ownedArmors.has(key)) {
       if (g.mode !== "range") return;
-      g.ownedArmors.add(key);
+      ownedArmors.add(key);
     }
     sound.uiClick();
-    g.armor = key;
-    for (const player of survivalPlayers(g)) equipPlayerArmor(player, key);
+    if (shopperSlot === 2 && g.secondGear) g.secondGear.armor = key;
+    else g.armor = key;
+    equipPlayerArmor(playerForSlot(g, shopperSlot), key);
     syncSnapshot();
   }, [syncSnapshot]);
 
@@ -12544,6 +12740,7 @@ export function DeadRoadGame() {
       sound.uiClick();
     }
     stateRef.current = freshState(mode, worldWRef.current, coOp);
+    setCoOpShopper(1);
     gamepadButtonsRef.current = { ...EMPTY_COOP_GAMEPAD_BUTTONS };
     lastFrameRef.current = performance.now();
     stateRef.current.nextSpawnAt = performance.now() + 500;
@@ -12558,7 +12755,7 @@ export function DeadRoadGame() {
       changeScreen("playing");
       canvasRef.current?.focus({ preventScroll: true });
     }
-  }, [changeScreen, syncSnapshot]);
+  }, [changeScreen, setCoOpShopper, syncSnapshot]);
 
   const resumeRange = useCallback(() => {
     const g = stateRef.current;
@@ -12635,6 +12832,10 @@ export function DeadRoadGame() {
     // 新一天击杀累计清零，通关结算奖励重新计算
     g.dayKillCoins = 0;
     g.lastDayBonus = 0;
+    if (g.secondGear) {
+      g.secondGear.dayKillCoins = 0;
+      g.secondGear.lastDayBonus = 0;
+    }
     g.nextSpawnAt = performance.now() + 600;
     g.player.hp = Math.min(g.player.maxHp, Math.max(1, g.player.hp) + 28);
     g.player.x = 220;
@@ -12643,95 +12844,175 @@ export function DeadRoadGame() {
     g.player.reloadingUntil = 0;
     g.player.ammo[g.player.weapon] = WEAPONS[g.player.weapon].magazine;
     if (g.secondPlayer) {
+      const secondLoadout = loadoutForSlot(g, 2);
+      const secondMelee = meleeForSlot(g, 2);
       g.secondPlayer.hp = Math.min(g.secondPlayer.maxHp, Math.max(1, g.secondPlayer.hp) + 28);
       g.secondPlayer.x = 310;
       g.secondPlayer.y = 470;
       g.secondPlayer.reloadStartedAt = 0;
       g.secondPlayer.reloadingUntil = 0;
       g.secondPlayer.emptyReloadLatch = false;
-      if (![g.loadout[0], g.loadout[1], g.melee].includes(g.secondPlayer.weapon)) g.secondPlayer.weapon = g.loadout[0];
+      if (![secondLoadout[0], secondLoadout[1], secondMelee].includes(g.secondPlayer.weapon)) g.secondPlayer.weapon = secondLoadout[0];
       g.secondPlayer.ammo[g.secondPlayer.weapon] = WEAPONS[g.secondPlayer.weapon].magazine;
     }
     // 搭档每天开局回到玩家身边，攻击/换弹计时清零
     g.partnerField = freshPartnerField(g.player.x - 50, g.player.y + 30);
+    setCoOpShopper(1);
     setLoadoutOpen(null);
     syncSnapshot();
     changeScreen("playing");
     canvasRef.current?.focus({ preventScroll: true });
-  }, [changeScreen, syncSnapshot]);
+  }, [changeScreen, setCoOpShopper, syncSnapshot]);
+
+  const readyKeyboardPlayer = useCallback(() => {
+    const g = stateRef.current;
+    if (!g.coOp || !g.secondPlayer || !g.secondGear) {
+      startNextDay();
+      return;
+    }
+    sound.uiClick();
+    setCoOpShopper(2);
+    setShopDetail(null);
+    setShopTab("weapons");
+    setLoadoutOpen(null);
+    syncSnapshot();
+    changeScreen("shop");
+  }, [changeScreen, setCoOpShopper, startNextDay, syncSnapshot]);
+
+  useEffect(() => {
+    if (!gamepadShopping || (screen !== "shop" && screen !== "loadout")) return;
+    let frameId = 0;
+    const pollMenuGamepad = () => {
+      const input = readCoOpGamepad(
+        typeof navigator.getGamepads === "function" ? Array.from(navigator.getGamepads()) : [],
+        gamepadButtonsRef.current,
+      );
+      gamepadButtonsRef.current = input.buttons;
+      const panel = document.querySelector<HTMLElement>("[data-gamepad-panel]");
+      if (panel) {
+        const focusScope = shopDetail
+          ? panel.querySelector<HTMLElement>('[role="dialog"]') ?? panel
+          : panel;
+        if (!(document.activeElement instanceof HTMLButtonElement) || !focusScope.contains(document.activeElement)) {
+          focusGamepadButton(gamepadButtonsIn(focusScope)[0]);
+        }
+        const direction: GamepadFocusDirection | null = input.upPressed ? "up"
+          : input.downPressed ? "down"
+            : input.leftPressed ? "left"
+              : input.rightPressed ? "right"
+                : null;
+        if (direction) {
+          sound.uiClick();
+          moveGamepadFocus(focusScope, direction);
+        }
+        if (input.confirmPressed) {
+          const focused = document.activeElement;
+          if (focused instanceof HTMLButtonElement && focusScope.contains(focused) && !focused.disabled) {
+            focused.click();
+          } else {
+            focusGamepadButton(gamepadButtonsIn(focusScope)[0]);
+          }
+        }
+        if (input.backPressed) {
+          sound.uiClick();
+          if (shopDetail) setShopDetail(null);
+          else if (loadoutOpen !== null) setLoadoutOpen(null);
+          else if (screen === "loadout") changeScreen("shop");
+        }
+        if ((input.previousTabPressed || input.kickPressed) && screen === "shop" && !shopDetail) {
+          const tabs = Array.from(panel.querySelectorAll<HTMLButtonElement>('[role="tab"]:not(:disabled)'));
+          const current = Math.max(0, tabs.findIndex((tab) => tab.getAttribute("aria-selected") === "true"));
+          const delta = input.previousTabPressed ? -1 : 1;
+          const next = tabs[(current + delta + tabs.length) % tabs.length];
+          next?.click();
+          focusGamepadButton(next);
+        }
+        if (input.menuPressed && !shopDetail) {
+          const primary = Array.from(panel.querySelectorAll<HTMLButtonElement>(".shop-footer .primary-button:not(:disabled)")).at(-1);
+          primary?.click();
+        }
+      }
+      frameId = requestAnimationFrame(pollMenuGamepad);
+    };
+    frameId = requestAnimationFrame(pollMenuGamepad);
+    return () => cancelAnimationFrame(frameId);
+  }, [changeScreen, gamepadShopping, loadoutOpen, screen, shopDetail]);
 
   const buyWeapon = useCallback((key: WeaponKey) => {
     const g = stateRef.current;
+    const shopperSlot = g.coOp ? coOpShopperRef.current : 1;
+    const owned = ownedWeaponsForSlot(g, shopperSlot);
+    const loadout = loadoutForSlot(g, shopperSlot);
+    const player = playerForSlot(g, shopperSlot);
     const weapon = WEAPONS[key];
-    if (!g.owned.has(key)) {
-      if (!completePurchase(g, weapon.price)) {
+    if (!owned.has(key)) {
+      if (!completePurchase(g, weapon.price, shopperSlot)) {
         sound.purchaseFail();
         return;
       }
-      g.owned.add(key);
-      g.player.ammo[key] = weapon.magazine;
-      if (g.secondPlayer) g.secondPlayer.ammo[key] = weapon.magazine;
+      owned.add(key);
+      player.ammo[key] = weapon.magazine;
       sound.purchase();
     } else {
       sound.uiClick();
     }
-    if (!g.owned.has(key)) return;
+    if (!owned.has(key)) return;
     if (MELEE_WEAPONS.has(key)) {
-      g.melee = key;
-      g.player.weapon = key;
-    } else if (g.loadout.includes(key)) {
-      g.player.weapon = key;
+      if (shopperSlot === 2 && g.secondGear) g.secondGear.melee = key;
+      else g.melee = key;
+      player.weapon = key;
+    } else if (loadout.includes(key)) {
+      player.weapon = key;
     } else {
-      const currentSlot = !MELEE_WEAPONS.has(g.player.weapon) ? g.loadout.indexOf(g.player.weapon) : -1;
+      const currentSlot = !MELEE_WEAPONS.has(player.weapon) ? loadout.indexOf(player.weapon) : -1;
       const replaceSlot = currentSlot >= 0 ? currentSlot : 1;
-      g.loadout[replaceSlot] = key;
-      g.player.weapon = key;
+      loadout[replaceSlot] = key;
+      player.weapon = key;
     }
-    g.player.reloadStartedAt = 0;
-    g.player.reloadingUntil = 0;
-    if (g.secondPlayer) {
-      const carry: WeaponKey[] = [g.loadout[0], g.loadout[1], g.melee];
-      if (!carry.includes(g.secondPlayer.weapon)) g.secondPlayer.weapon = g.loadout[0];
-      g.secondPlayer.reloadStartedAt = 0;
-      g.secondPlayer.reloadingUntil = 0;
-    }
+    player.reloadStartedAt = 0;
+    player.reloadingUntil = 0;
     syncSnapshot();
   }, [syncSnapshot]);
 
   const buyArmor = useCallback((key: ArmorKey) => {
     const g = stateRef.current;
+    const shopperSlot = g.coOp ? coOpShopperRef.current : 1;
+    const ownedArmors = ownedArmorsForSlot(g, shopperSlot);
     const armor = ARMORS[key];
-    if (!g.ownedArmors.has(key)) {
-      if (!completePurchase(g, armor.price)) {
+    if (!ownedArmors.has(key)) {
+      if (!completePurchase(g, armor.price, shopperSlot)) {
         sound.purchaseFail();
         return;
       }
-      g.ownedArmors.add(key);
+      ownedArmors.add(key);
       sound.purchase();
     } else {
       sound.uiClick();
     }
-    if (!g.ownedArmors.has(key)) return;
-    g.armor = key;
-    for (const player of survivalPlayers(g)) equipPlayerArmor(player, key);
+    if (!ownedArmors.has(key)) return;
+    if (shopperSlot === 2 && g.secondGear) g.secondGear.armor = key;
+    else g.armor = key;
+    equipPlayerArmor(playerForSlot(g, shopperSlot), key);
     syncSnapshot();
   }, [syncSnapshot]);
 
   const buyMedkit = useCallback(() => {
     const g = stateRef.current;
-    const players = survivalPlayers(g);
-    if (players.every((player) => player.hp >= player.maxHp)) return;
-    if (!completePurchase(g, MEDKIT_PRICE)) {
+    const shopperSlot = g.coOp ? coOpShopperRef.current : 1;
+    const player = playerForSlot(g, shopperSlot);
+    if (player.hp >= player.maxHp) return;
+    if (!completePurchase(g, MEDKIT_PRICE, shopperSlot)) {
       sound.purchaseFail();
       return;
     }
     sound.purchase();
-    for (const player of players) player.hp = Math.min(player.maxHp, player.hp + MEDKIT_HEAL);
+    player.hp = Math.min(player.maxHp, player.hp + MEDKIT_HEAL);
     syncSnapshot();
   }, [syncSnapshot]);
 
   const buyItem = useCallback((key: ItemKey) => {
     const g = stateRef.current;
+    if (g.coOp && coOpShopperRef.current === 2) return;
     const item = ITEMS[key];
     if (!completePurchase(g, item.price)) {
       sound.purchaseFail();
@@ -12745,6 +13026,7 @@ export function DeadRoadGame() {
   // 搭档购买：未拥有先扣款，随后自动装备为随行搭档（场上仅 1 个）
   const buyPartner = useCallback((key: PartnerKey) => {
     const g = stateRef.current;
+    if (g.coOp && coOpShopperRef.current === 2) return;
     const partner = PARTNERS[key];
     if (!g.ownedPartners.has(key)) {
       if (!completePurchase(g, partner.price)) {
@@ -12765,6 +13047,7 @@ export function DeadRoadGame() {
   // 装备/卸下搭档（生存模式仅允许已拥有的；靶场模式自动免费入列）
   const assignPartner = useCallback((key: PartnerKey | null) => {
     const g = stateRef.current;
+    if (g.coOp && coOpShopperRef.current === 2) return;
     if (key !== null && !g.ownedPartners.has(key)) {
       if (g.mode !== "range") return;
       g.ownedPartners.add(key);
@@ -12845,7 +13128,9 @@ export function DeadRoadGame() {
     const g = stateRef.current;
     if (!gameStillContainsPlayer(g, player) || player.hp <= 0) return;
     sound.weaponSwitch();
-    const carry: WeaponKey[] = [g.loadout[0], g.loadout[1], g.melee];
+    const slot = slotForPlayer(g, player);
+    const loadout = loadoutForSlot(g, slot);
+    const carry: WeaponKey[] = [loadout[0], loadout[1], meleeForSlot(g, slot)];
     const current = carry.indexOf(player.weapon);
     player.weapon = carry[(current + 1 + carry.length) % carry.length];
     player.emptyReloadLatch = false;
@@ -12879,6 +13164,7 @@ export function DeadRoadGame() {
           const impactX = z.x;
           const impactY = z.y - 40 * scale;
           z.hp -= survivalKickDamage(g.day) * (1 - kickDamageReduction(z, "legs"));
+          if (g.coOp) z.rewardOwner = slotForPlayer(g, p);
           z.wounds.push({ x: 0, y: -40, region: "legs", size: 4.5 });
           if (z.wounds.length > 7) z.wounds.shift();
           z.x += Math.cos(kickAngle) * KICK_KNOCKBACK_WORLD_X;
@@ -12989,6 +13275,7 @@ export function DeadRoadGame() {
     const bossReduction = giantMutantDamageReduction(z, region);
     const reduction = bypassReduction ? 0 : Math.max(armorReduction, bossReduction);
     z.hp -= damage * damageMultiplier * (1 - reduction);
+    if (g.coOp && damage > 0) z.rewardOwner = slotForPlayer(g, sourcePlayer);
     sound.bodyHit({ volume: distanceVolume(z.x, sourcePlayer.x) * .58 });
     // 打腿 50% 概率倒地（重甲僵尸与第六关巨型 Boss 免疫此机制）
     if (region === "legs" && z.kind !== "juggernaut" && z.bossKind !== "giantMutant" && Math.random() < .5) {
@@ -13058,10 +13345,11 @@ export function DeadRoadGame() {
     distance: number,
     radius: number,
     kind: BlastKind,
+    owner: PlayerSlot = 1,
   ) => {
     const angle = Math.atan2(z.y - blastY, z.x - blastX);
     // 全模式统一规则：爆炸冲击直接绕过僵尸自身与 Boss 的全部减伤。
-    damageZombie(g, z, damage, now, angle, undefined, undefined, true);
+    damageZombie(g, z, damage, now, angle, undefined, undefined, true, undefined, playerForSlot(g, owner));
     // 爆炸冲击波全额震伤完好盾牌（爆炸是破盾的硬 counter；金属盾不怕火焰，燃烧瓶/点燃不伤盾）；
     // 归零即碎裂——若同一发爆炸同时击杀僵尸，死亡结算时 shieldIntact 已为 false，不会再掉落完整盾牌
     if (z.shieldIntact) {
@@ -13234,6 +13522,7 @@ export function DeadRoadGame() {
       const flightMs = Math.max(180, travelDistance / (blastKind === "rocket" ? 980 : 610) * 1000);
       g.explosiveProjectiles.push({
         id: Math.floor(now * 1000 + Math.random() * 999),
+        owner: slotForPlayer(g, p),
         weapon: p.weapon === "rpg7" ? "rpg7" : "m32",
         kind: blastKind,
         startX,
@@ -13702,6 +13991,10 @@ export function DeadRoadGame() {
   useEffect(() => {
     const keyDown = (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
+      if (coOpShopperRef.current === 2 && (screenRef.current === "shop" || screenRef.current === "loadout")) {
+        event.preventDefault();
+        return;
+      }
       if (["w", "a", "s", "d", "f", "g", "q", "r", "b", "m", "1", "2", "3", "4", "5", "6", "7", " "].includes(key)) event.preventDefault();
       if (key === "escape") {
         if (screenRef.current === "playing") {
@@ -14512,9 +14805,14 @@ export function DeadRoadGame() {
       const elapsed = Math.max(0, Math.floor((now - g.level.startedAt) / 1000));
       drawText(ctx, `⏱ ${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}`, W - 312, 62, 25, "#f1c643");
     } else {
-      drawText(ctx, `◉ ${g.coins}`, W - 312, 62, 25, "#f1c643");
+      if (g.coOp && g.secondGear) {
+        drawText(ctx, `P1 ◉ ${g.coins}`, W - 312, 53, 18, "#f1c643");
+        drawText(ctx, `P2 ◉ ${g.secondGear.coins}`, W - 312, 80, 18, "#64d6ff");
+      } else {
+        drawText(ctx, `◉ ${g.coins}`, W - 312, 62, 25, "#f1c643");
+      }
     }
-    drawText(ctx, `击杀 ${g.kills}`, W - 312, 91, 17, "#c4c9bf");
+    drawText(ctx, `击杀 ${g.kills}`, W - 312, g.coOp ? 105 : 91, g.coOp ? 14 : 17, "#c4c9bf");
     const drivingArmoredVehicle = isLevel8Driving(g) && g.level;
     const weapon = WEAPONS[p.weapon];
     const ammoText = drivingArmoredVehicle
@@ -14546,6 +14844,12 @@ export function DeadRoadGame() {
       const g = stateRef.current;
       const dt = Math.min(0.034, (now - lastFrameRef.current) / 1000);
       lastFrameRef.current = now;
+      const standardGamepad = typeof navigator.getGamepads === "function"
+        ? Array.from(navigator.getGamepads()).find((gamepad) => gamepad?.connected && gamepad.mapping === "standard")
+        : null;
+      const menuHeld = Boolean(standardGamepad?.buttons[9]?.pressed);
+      if (g.coOp && screenRef.current === "playing" && menuHeld && !gamepadPauseHeldRef.current) togglePause();
+      gamepadPauseHeldRef.current = menuHeld;
 
       if (ctx) {
         if (!pausedRef.current) {
@@ -14577,7 +14881,7 @@ export function DeadRoadGame() {
           );
           const keys = keysRef.current;
           // 携带重量影响移速：轻装 5kg 内全速，每多 1kg 减 0.7%（最低 72%）
-          const speed = 250 * playerSpeedFactor(g);
+          const speed = 250 * playerSpeedFactor(g, 1);
           let dx = (keys.has("d") ? 1 : 0) - (keys.has("a") ? 1 : 0);
           let dy = (keys.has("s") ? 1 : 0) - (keys.has("w") ? 1 : 0);
           if (dx && dy) { dx *= 0.707; dy *= 0.707; }
@@ -14649,6 +14953,7 @@ export function DeadRoadGame() {
             p.reloadStartedAt = 0;
           }
           if (secondPlayer) {
+            const secondSpeed = 250 * playerSpeedFactor(g, 2);
             let secondDx = secondPlayer.hp > 0 ? gamepadInput.moveX : 0;
             let secondDy = secondPlayer.hp > 0 ? gamepadInput.moveY : 0;
             if (secondDx && secondDy) {
@@ -14656,8 +14961,8 @@ export function DeadRoadGame() {
               if (length > 1) { secondDx /= length; secondDy /= length; }
             }
             secondPlayer.moving = secondDx !== 0 || secondDy !== 0;
-            secondPlayer.x = Math.max(52, Math.min(g.worldW - 52, secondPlayer.x + secondDx * speed * dt));
-            secondPlayer.y = Math.max(minimumPlayerFootY, Math.min(ROAD_BOTTOM - 18, secondPlayer.y + secondDy * speed * dt));
+            secondPlayer.x = Math.max(52, Math.min(g.worldW - 52, secondPlayer.x + secondDx * secondSpeed * dt));
+            secondPlayer.y = Math.max(minimumPlayerFootY, Math.min(ROAD_BOTTOM - 18, secondPlayer.y + secondDy * secondSpeed * dt));
             if (gamepadInput.aimX !== 0 || gamepadInput.aimY !== 0) {
               secondPlayer.angle = Math.atan2(gamepadInput.aimY, gamepadInput.aimX);
             }
@@ -14728,6 +15033,7 @@ export function DeadRoadGame() {
                   const burnDamage = itemDefinition.damage * dt * (1 - distance / (itemDefinition.radius * 2));
                   // 全模式统一规则：燃烧伤害直接绕过所有护甲与 Boss 减伤。
                   z.hp -= burnDamage;
+                  if (g.coOp && burnDamage > 0) z.rewardOwner = 1;
                 }
               }
               if (Math.random() < .72) g.particles.push({ x: item.x - 82 + Math.random() * 164, y: item.y + 25 - Math.random() * 45, vx: -14 + Math.random() * 28, vy: -85 - Math.random() * 110, until: now + 620, color: Math.random() > .45 ? "#ef6a27" : "#e5c346", size: 5 + Math.random() * 9 });
@@ -15037,9 +15343,10 @@ export function DeadRoadGame() {
             // 通关时再发结算奖励补足到当天收入区间，保证「击杀 + 结算」每天总获取落在区间内
             // 关卡模式：无金币经济（waveTotal=0，均摊公式会失去意义），仅累计击杀数
             const coinGain = g.mode === "level" ? 0 : Math.max(6, Math.round(dailyKillBudget(g.day) / g.waveTotal)) + Math.min(6, Math.floor(z.maxHp / 90));
-            g.coins += coinGain;
+            const rewardOwner = g.coOp ? z.rewardOwner ?? 1 : 1;
+            addCoinsForSlot(g, rewardOwner, coinGain);
             g.stats.coinsEarned += coinGain;
-            g.dayKillCoins += coinGain;
+            addDayKillCoinsForSlot(g, rewardOwner, coinGain);
             g.kills += 1;
             if (g.mode === "level" && g.level) g.level.sceneKills += 1;
             // 盾兵死亡时若盾牌仍在，随尸体脱手落地（与踹落同一地面道具流：原尺寸翻倒躺平，10 秒清除）
@@ -15148,15 +15455,19 @@ export function DeadRoadGame() {
               // 通关结算奖励：在当天收入区间内随机取一个目标总额，减去当天击杀已得即为奖励；
               // 击杀超目标时仍发一笔保底（区间下限的 15%），保证每天总获取落在区间内且略有浮动
               const [bandLo, bandHi] = dailyIncomeBand(g.day);
-              const targetTotal = Math.round(bandLo + Math.random() * (bandHi - bandLo));
-              const bonus = Math.max(targetTotal - g.dayKillCoins, Math.round(bandLo * 0.15));
-              g.coins += bonus;
-              g.stats.bonusEarned += bonus;
-              g.lastDayBonus = bonus;
+              for (const slot of (g.coOp ? [1, 2] : [1]) as PlayerSlot[]) {
+                const targetTotal = Math.round(bandLo + Math.random() * (bandHi - bandLo));
+                const bonus = Math.max(targetTotal - dayKillCoinsForSlot(g, slot), Math.round(bandLo * 0.15));
+                addCoinsForSlot(g, slot, bonus);
+                g.stats.bonusEarned += bonus;
+                if (slot === 2 && g.secondGear) g.secondGear.lastDayBonus = bonus;
+                else g.lastDayBonus = bonus;
+              }
               saveBest(g.day);
               syncSnapshot();
               setShopDetail(null);
               setShopTab("weapons");
+              setCoOpShopper(1);
               changeScreen("shop");
             }
           } else {
@@ -15170,7 +15481,7 @@ export function DeadRoadGame() {
     };
     rafRef.current = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [attack, attackPlayer, changeScreen, cyclePlayerWeapon, damageZombie, damageZombieFromExplosion, drawWorld, kickPlayer, reloadPlayer, saveBest, spawnZombie, syncSnapshot, updateLevelNpcs, updateLevelTasks, updatePartner]);
+  }, [attack, attackPlayer, changeScreen, cyclePlayerWeapon, damageZombie, damageZombieFromExplosion, drawWorld, kickPlayer, reloadPlayer, saveBest, setCoOpShopper, spawnZombie, syncSnapshot, togglePause, updateLevelNpcs, updateLevelTasks, updatePartner]);
 
   const rangeFree = snapshot.mode === "range";
   const lotteryHighlight = highestLotteryRarity(lotteryRewards);
@@ -15218,14 +15529,24 @@ export function DeadRoadGame() {
   // 非战斗界面（菜单/商店/装备/结算）使用紧凑页头并隐藏底栏按键条，把纵向空间全部让给面板；
   // 战斗与暂停（screen 恒为 playing）保持完整底栏 → 暂停/进出战斗舞台几何不变、实体不跳变
   const panelMode = screen !== "playing";
+  const activeCoins = gamepadShopping ? snapshot.secondCoins ?? 0 : snapshot.coins;
+  const activeOwned = gamepadShopping ? snapshot.secondOwned : snapshot.owned;
+  const activeLoadout = gamepadShopping && snapshot.secondLoadout ? snapshot.secondLoadout : snapshot.loadout;
+  const activeMelee = gamepadShopping ? snapshot.secondMelee ?? snapshot.melee : snapshot.melee;
+  const activeArmor = gamepadShopping ? snapshot.secondArmor ?? snapshot.armor : snapshot.armor;
+  const activeOwnedArmors = gamepadShopping ? snapshot.secondOwnedArmors : snapshot.ownedArmors;
+  const activeWeapon = gamepadShopping ? snapshot.secondWeapon ?? activeLoadout[0] : snapshot.weapon;
+  const activeHp = gamepadShopping ? snapshot.secondHp ?? 0 : snapshot.hp;
+  const activeMaxHp = gamepadShopping ? snapshot.secondMaxHp ?? 100 : snapshot.maxHp;
+  const activeLastDayBonus = gamepadShopping ? snapshot.secondLastDayBonus : snapshot.lastDayBonus;
   // 负重与移速展示（装备整备/商店读数条共用）
-  const snapshotCarriedKg = WEAPON_HANDLING[snapshot.loadout[0]].weightKg + WEAPON_HANDLING[snapshot.loadout[1]].weightKg
-    + WEAPON_HANDLING[snapshot.melee].weightKg + ARMORS[snapshot.armor].weightKg;
+  const snapshotCarriedKg = WEAPON_HANDLING[activeLoadout[0]].weightKg + WEAPON_HANDLING[activeLoadout[1]].weightKg
+    + WEAPON_HANDLING[activeMelee].weightKg + ARMORS[activeArmor].weightKg;
   const snapshotSpeedPct = Math.round(Math.max(0.72, Math.min(1, 1 - 0.007 * (snapshotCarriedKg - 5))) * 100);
   // 装备整备列表来源：靶场模式免费开放全部装备，生存模式仅限已拥有
-  const loadoutGuns = rangeFree ? SHOP_WEAPON_KEYS.filter((key) => !MELEE_WEAPONS.has(key)) : snapshot.owned.filter((key) => !MELEE_WEAPONS.has(key));
-  const loadoutMelees = rangeFree ? SHOP_WEAPON_KEYS.filter((key) => MELEE_WEAPONS.has(key)) : snapshot.owned.filter((key) => MELEE_WEAPONS.has(key));
-  const loadoutArmors = rangeFree ? (Object.keys(ARMORS) as ArmorKey[]) : snapshot.ownedArmors;
+  const loadoutGuns = rangeFree ? SHOP_WEAPON_KEYS.filter((key) => !MELEE_WEAPONS.has(key)) : activeOwned.filter((key) => !MELEE_WEAPONS.has(key));
+  const loadoutMelees = rangeFree ? SHOP_WEAPON_KEYS.filter((key) => MELEE_WEAPONS.has(key)) : activeOwned.filter((key) => MELEE_WEAPONS.has(key));
+  const loadoutArmors = rangeFree ? (Object.keys(ARMORS) as ArmorKey[]) : activeOwnedArmors;
   const loadoutPartners = rangeFree ? PARTNER_KEYS : snapshot.ownedPartners;
 
   // 商店详情面板：点击商品卡弹出，展示完整参数，面板内确认购买/装备后自动关闭
@@ -15237,8 +15558,8 @@ export function DeadRoadGame() {
       const key = shopDetail.key as WeaponKey;
       const weapon = WEAPONS[key];
       const handling = WEAPON_HANDLING[key];
-      const owned = snapshot.owned.includes(key);
-      const canBuy = canPurchase(snapshot.mode, snapshot.coins, weapon.price);
+      const owned = activeOwned.includes(key);
+      const canBuy = canPurchase(snapshot.mode, activeCoins, weapon.price);
       const isMelee = MELEE_WEAPONS.has(key);
       detailBody = (
         <>
@@ -15268,8 +15589,8 @@ export function DeadRoadGame() {
     } else if (shopDetail.kind === "armor") {
       const key = shopDetail.key as ArmorKey;
       const armor = ARMORS[key];
-      const owned = snapshot.ownedArmors.includes(key);
-      const canBuy = canPurchase(snapshot.mode, snapshot.coins, armor.price);
+      const owned = activeOwnedArmors.includes(key);
+      const canBuy = canPurchase(snapshot.mode, activeCoins, armor.price);
       detailBody = (
         <>
           <div className="shop-detail-head">
@@ -15298,7 +15619,7 @@ export function DeadRoadGame() {
       const key = shopDetail.key as PartnerKey;
       const partner = PARTNERS[key];
       const owned = snapshot.ownedPartners.includes(key);
-      const canBuy = canPurchase(snapshot.mode, snapshot.coins, partner.price);
+      const canBuy = canPurchase(snapshot.mode, activeCoins, partner.price);
       detailBody = (
         <>
           <div className="shop-detail-head">
@@ -15343,7 +15664,7 @@ export function DeadRoadGame() {
     } else {
       const key = shopDetail.key as ItemKey;
       const item = ITEMS[key];
-      const canBuy = canPurchase(snapshot.mode, snapshot.coins, item.price);
+      const canBuy = canPurchase(snapshot.mode, activeCoins, item.price);
       detailBody = (
         <>
           <div className="shop-detail-head">
@@ -15366,7 +15687,7 @@ export function DeadRoadGame() {
       );
     }
     shopDetailView = (
-      <div className="shop-detail-backdrop" onClick={closeDetail}>
+      <div className="shop-detail-backdrop" onClick={gamepadShopping ? undefined : closeDetail}>
         <div className="shop-detail" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
           {detailBody}
         </div>
@@ -15375,7 +15696,7 @@ export function DeadRoadGame() {
   }
 
   return (
-    <main className={`game-shell ${panelMode ? "panel-mode" : ""} ${lotteryCinematic ? "lottery-cinematic" : ""}`}>
+    <main className={`game-shell ${panelMode ? "panel-mode" : ""} ${lotteryCinematic ? "lottery-cinematic" : ""} ${gamepadShopping ? "controller-lock" : ""}`}>
       <div className="noise" aria-hidden="true" />
       {lotteryOverlayActive ? <div className="masthead lottery-masthead-placeholder" aria-hidden="true" /> : <header className="masthead">
         <div className="masthead-left">
@@ -16332,24 +16653,24 @@ export function DeadRoadGame() {
         )}
 
         {screen === "shop" && (
-          <div className="shop-panel overlay-panel">
+          <div className={`shop-panel overlay-panel ${gamepadShopping ? "controller-turn" : ""}`} data-gamepad-panel>
             <div className="shop-heading">
-              <div><p className="eyebrow">{rangeFree ? "靶场自由配置" : snapshot.day >= 1 ? (snapshot.lastDayBonus > 0 ? `第 ${snapshot.day} 天清剿完成 · 通关奖励 ◉ ${snapshot.lastDayBonus}` : `第 ${snapshot.day} 天清剿完成`) : "出发前整备"}</p><h2>{rangeFree ? "靶场军需库" : "路边军火铺"}</h2></div>
-              <div className="wallet"><span>{rangeFree ? "训练额度" : "持有金币"}</span><strong>{rangeFree ? "全部免费" : `◉ ${snapshot.coins}`}</strong></div>
+              <div><p className="eyebrow">{gamepadShopping ? "P2 · 手柄玩家购买阶段" : snapshot.coOp ? "P1 · 键鼠玩家购买阶段" : rangeFree ? "靶场自由配置" : snapshot.day >= 1 ? (activeLastDayBonus > 0 ? `第 ${snapshot.day} 天清剿完成 · 通关奖励 ◉ ${activeLastDayBonus}` : `第 ${snapshot.day} 天清剿完成`) : "出发前整备"}</p><h2>{rangeFree ? "靶场军需库" : "路边军火铺"}</h2></div>
+              <div className="wallet"><span>{rangeFree ? "训练额度" : `${gamepadShopping ? "P2" : snapshot.coOp ? "P1" : ""} 持有金币`}</span><strong>{rangeFree ? "全部免费" : `◉ ${activeCoins}`}</strong></div>
             </div>
             <div className="loadout-readout">
-              <span>枪械 1 <b>{WEAPONS[snapshot.loadout[0]].name}</b></span>
-              <span>枪械 2 <b>{WEAPONS[snapshot.loadout[1]].name}</b></span>
-              <span>近战 <b>{WEAPONS[snapshot.melee].name}</b></span>
-              <span>战斗服 <b>{ARMORS[snapshot.armor].name} · {snapshot.maxHp} HP</b></span>
-              <em>{rangeFree ? "B 键返回靶场 · Q 切换武器" : "Q 键循环切换"}</em>
+              <span>枪械 1 <b>{WEAPONS[activeLoadout[0]].name}</b></span>
+              <span>枪械 2 <b>{WEAPONS[activeLoadout[1]].name}</b></span>
+              <span>近战 <b>{WEAPONS[activeMelee].name}</b></span>
+              <span>战斗服 <b>{ARMORS[activeArmor].name} · {activeMaxHp} HP</b></span>
+              <em>{gamepadShopping ? "方向键导航 · A 确认 · B 关闭详情 · LB/RB 切换分类" : rangeFree ? "B 键返回靶场 · Q 切换武器" : "Q 键循环切换"}</em>
             </div>
             <div className="shop-tabs" role="tablist" aria-label="商店分类">
               <button className={shopTab === "weapons" ? "active" : ""} onClick={() => { sound.uiClick(); setShopDetail(null); setShopTab("weapons"); }} role="tab" aria-selected={shopTab === "weapons"}>武器库 <b>{Object.keys(WEAPONS).length}</b></button>
               <button className={shopTab === "armor" ? "active" : ""} onClick={() => { sound.uiClick(); setShopDetail(null); setShopTab("armor"); }} role="tab" aria-selected={shopTab === "armor"}>战斗服 <b>{Object.keys(ARMORS).length - 1}</b></button>
               <button className={shopTab === "supplies" ? "active" : ""} onClick={() => { sound.uiClick(); setShopDetail(null); setShopTab("supplies"); }} role="tab" aria-selected={shopTab === "supplies"}>医疗补给 <b>1</b></button>
-              <button className={shopTab === "items" ? "active" : ""} onClick={() => { sound.uiClick(); setShopDetail(null); setShopTab("items"); }} role="tab" aria-selected={shopTab === "items"}>战术道具 <b>{ITEM_KEYS.length}</b></button>
-              <button className={shopTab === "partners" ? "active" : ""} onClick={() => { sound.uiClick(); setShopDetail(null); setShopTab("partners"); }} role="tab" aria-selected={shopTab === "partners"}>搭档 <b>{PARTNER_KEYS.length}</b></button>
+              {!gamepadShopping && <button className={shopTab === "items" ? "active" : ""} onClick={() => { sound.uiClick(); setShopDetail(null); setShopTab("items"); }} role="tab" aria-selected={shopTab === "items"}>战术道具 <b>{ITEM_KEYS.length}</b></button>}
+              {!gamepadShopping && <button className={shopTab === "partners" ? "active" : ""} onClick={() => { sound.uiClick(); setShopDetail(null); setShopTab("partners"); }} role="tab" aria-selected={shopTab === "partners"}>搭档 <b>{PARTNER_KEYS.length}</b></button>}
               {rangeFree && (
                 <button className={shopTab === "zombies" ? "active" : ""} onClick={() => { sound.uiClick(); setShopDetail(null); setShopTab("zombies"); }} role="tab" aria-selected={shopTab === "zombies"}>僵尸生成 <b>{spawnTotal}</b></button>
               )}
@@ -16360,10 +16681,10 @@ export function DeadRoadGame() {
                 <div className="shop-grid">
                   {SHOP_WEAPON_KEYS.map((key, index) => {
                     const weapon = WEAPONS[key];
-                    const owned = snapshot.owned.includes(key);
-                    const selected = snapshot.weapon === key;
-                    const carried = key === snapshot.melee || snapshot.loadout.includes(key);
-                    const canBuy = canPurchase(snapshot.mode, snapshot.coins, weapon.price);
+                    const owned = activeOwned.includes(key);
+                    const selected = activeWeapon === key;
+                    const carried = key === activeMelee || activeLoadout.includes(key);
+                    const canBuy = canPurchase(snapshot.mode, activeCoins, weapon.price);
                     return (
                       <button key={key} className={`weapon-card ${selected ? "selected" : ""} ${carried ? "carried" : ""}`} onClick={() => { sound.uiClick(); setShopDetail({ kind: "weapon", key }); }} disabled={!owned && !canBuy}>
                         <span className="weapon-index">{String(index + 1).padStart(2, "0")}</span>
@@ -16386,9 +16707,9 @@ export function DeadRoadGame() {
                 <div className="armor-grid armor-grid-full">
                   {(Object.keys(ARMORS) as ArmorKey[]).filter((key) => key !== "civilian").map((key) => {
                     const armor = ARMORS[key];
-                    const owned = snapshot.ownedArmors.includes(key);
-                    const selected = snapshot.armor === key;
-                    const canBuy = canPurchase(snapshot.mode, snapshot.coins, armor.price);
+                    const owned = activeOwnedArmors.includes(key);
+                    const selected = activeArmor === key;
+                    const canBuy = canPurchase(snapshot.mode, activeCoins, armor.price);
                     return (
                       <button key={key} className={`armor-card ${selected ? "selected" : ""}`} onClick={() => { sound.uiClick(); setShopDetail({ kind: "armor", key }); }} disabled={!owned && !canBuy}>
                         <div className="armor-figure" aria-hidden="true">
@@ -16409,16 +16730,16 @@ export function DeadRoadGame() {
               <div className="shop-content" role="tabpanel">
                 <div className="shop-section-label"><b>医疗补给</b><span>急救包购买后立即使用，不占武器栏位</span></div>
                 <div className="supply-grid">
-                  <button className="supply-card" onClick={buyMedkit} disabled={!canPurchase(snapshot.mode, snapshot.coins, MEDKIT_PRICE) || (snapshot.hp >= snapshot.maxHp && (snapshot.secondHp === null || snapshot.secondHp >= (snapshot.secondMaxHp ?? 0)))}>
+                  <button className="supply-card" onClick={buyMedkit} disabled={!canPurchase(snapshot.mode, activeCoins, MEDKIT_PRICE) || activeHp >= activeMaxHp}>
                     <span className="medkit-icon" aria-hidden="true"><i /><b /></span>
-                    <span className="supply-copy"><strong>战地急救包</strong><em>{snapshot.coOp ? "全队" : "立即"}恢复 {MEDKIT_HEAL} HP</em><small>P1 {Math.ceil(snapshot.hp)} / {snapshot.maxHp} HP{snapshot.secondHp !== null ? ` · P2 ${Math.ceil(snapshot.secondHp)} / ${snapshot.secondMaxHp} HP` : ""}</small></span>
+                    <span className="supply-copy"><strong>战地急救包</strong><em>为{gamepadShopping ? " P2" : snapshot.coOp ? " P1" : "当前玩家"}恢复 {MEDKIT_HEAL} HP</em><small>{gamepadShopping ? "P2" : "P1"} {Math.ceil(activeHp)} / {activeMaxHp} HP</small></span>
                     <span className="supply-price">{shopPriceLabel(snapshot.mode, MEDKIT_PRICE, true)}</span>
-                    <span className="supply-action">{snapshot.hp >= snapshot.maxHp && (snapshot.secondHp === null || snapshot.secondHp >= (snapshot.secondMaxHp ?? 0)) ? "生命值已满" : !canPurchase(snapshot.mode, snapshot.coins, MEDKIT_PRICE) ? "金币不足" : "领取并使用"}</span>
+                    <span className="supply-action">{activeHp >= activeMaxHp ? "生命值已满" : !canPurchase(snapshot.mode, activeCoins, MEDKIT_PRICE) ? "金币不足" : "领取并使用"}</span>
                   </button>
                 </div>
               </div>
             )}
-            {shopTab === "items" && (
+            {shopTab === "items" && !gamepadShopping && (
               <div className="shop-content" role="tabpanel">
                 <div className="shop-section-label"><b>战术道具</b><span>1–5、7 选择后左键确认；6 自动轰炸尸群最密集处 · 点击卡片查看详情</span></div>
                 <div className="item-grid">
@@ -16440,7 +16761,7 @@ export function DeadRoadGame() {
                 </div>
               </div>
             )}
-            {shopTab === "partners" && (
+            {shopTab === "partners" && !gamepadShopping && (
               <div className="shop-content" role="tabpanel">
                 <div className="shop-section-label"><b>搭档</b><span>搭档不会死亡、不被僵尸选为目标 · 同时只能装备 1 个 · 点击卡片查看详情</span></div>
                 <div className="item-grid">
@@ -16517,49 +16838,49 @@ export function DeadRoadGame() {
                     <button className="primary-button compact" onClick={resumeRange}><span>进入靶场</span><b>◎</b></button>
                   </div>
                 )
-                : <button className="primary-button compact" onClick={() => { sound.uiClick(); changeScreen("loadout"); }}><span>装备整备 · 第 {snapshot.day + 1} 天</span><b>→</b></button>}
+                : <button className="primary-button compact" onClick={() => { sound.uiClick(); setLoadoutOpen(null); changeScreen("loadout"); }}><span>{gamepadShopping ? "P2 装备选择" : "装备整备"} · 第 {snapshot.day + 1} 天</span><b>→</b></button>}
             </div>
           </div>
         )}
 
         {screen === "loadout" && (
-          <div className="shop-panel overlay-panel loadout-panel">
+          <div className={`shop-panel overlay-panel loadout-panel ${gamepadShopping ? "controller-turn" : ""}`} data-gamepad-panel>
             <div className="shop-heading">
-              <div><p className="eyebrow">装备整备</p><h2>{rangeFree ? "靶场装备配置" : `出战配置 · 第 ${snapshot.day + 1} 天`}</h2></div>
-              <div className="wallet"><span>{rangeFree ? "训练额度" : "持有金币"}</span><strong>{rangeFree ? "全部免费" : `◉ ${snapshot.coins}`}</strong></div>
+              <div><p className="eyebrow">{gamepadShopping ? "P2 · 手柄玩家选择阶段" : snapshot.coOp ? "P1 · 键鼠玩家选择阶段" : "装备整备"}</p><h2>{rangeFree ? "靶场装备配置" : `出战配置 · 第 ${snapshot.day + 1} 天`}</h2></div>
+              <div className="wallet"><span>{rangeFree ? "训练额度" : `${gamepadShopping ? "P2" : snapshot.coOp ? "P1" : ""} 持有金币`}</span><strong>{rangeFree ? "全部免费" : `◉ ${activeCoins}`}</strong></div>
             </div>
             <div className="loadout-readout">
-              <span>枪械 1 <b>{WEAPONS[snapshot.loadout[0]].name}</b></span>
-              <span>枪械 2 <b>{WEAPONS[snapshot.loadout[1]].name}</b></span>
-              <span>近战 <b>{WEAPONS[snapshot.melee].name}</b></span>
-              <span>战斗服 <b>{ARMORS[snapshot.armor].name} · {snapshot.maxHp} HP</b></span>
-              <span>搭档 <b>{snapshot.partner ? PARTNERS[snapshot.partner].name : "无"}</b></span>
+              <span>枪械 1 <b>{WEAPONS[activeLoadout[0]].name}</b></span>
+              <span>枪械 2 <b>{WEAPONS[activeLoadout[1]].name}</b></span>
+              <span>近战 <b>{WEAPONS[activeMelee].name}</b></span>
+              <span>战斗服 <b>{ARMORS[activeArmor].name} · {activeMaxHp} HP</b></span>
+              {!gamepadShopping && <span>搭档 <b>{snapshot.partner ? PARTNERS[snapshot.partner].name : "无"}</b></span>}
               <span>负重 <b>{snapshotCarriedKg.toFixed(1)}kg · 移速 {snapshotSpeedPct}%</b></span>
-              <em>Q 键循环切换</em>
+              <em>{gamepadShopping ? "方向键导航 · A 确认 · B 返回" : "Q 键循环切换"}</em>
             </div>
             {loadoutOpen === null ? (
               <div className="loadout-columns">
                 <section className="loadout-column">
                   <div className="shop-section-label"><b>主武器 · 枪械 1</b><span>点击进入选择界面更换</span></div>
                   <button className="weapon-card loadout-card loadout-current selected" onClick={() => { sound.uiClick(); setLoadoutOpen("primary"); }}>
-                    <WeaponPreview weapon={snapshot.loadout[0]} />
-                    <strong>{WEAPONS[snapshot.loadout[0]].name}</strong>
+                    <WeaponPreview weapon={activeLoadout[0]} />
+                    <strong>{WEAPONS[activeLoadout[0]].name}</strong>
                     <span className="weapon-price">主枪位装备中 · 点击更换</span>
                   </button>
                 </section>
                 <section className="loadout-column">
                   <div className="shop-section-label"><b>副武器 · 枪械 2</b><span>点击进入选择界面更换</span></div>
                   <button className="weapon-card loadout-card loadout-current selected" onClick={() => { sound.uiClick(); setLoadoutOpen("secondary"); }}>
-                    <WeaponPreview weapon={snapshot.loadout[1]} />
-                    <strong>{WEAPONS[snapshot.loadout[1]].name}</strong>
+                    <WeaponPreview weapon={activeLoadout[1]} />
+                    <strong>{WEAPONS[activeLoadout[1]].name}</strong>
                     <span className="weapon-price">副枪位装备中 · 点击更换</span>
                   </button>
                 </section>
                 <section className="loadout-column">
                   <div className="shop-section-label"><b>近战武器</b><span>点击进入选择界面更换</span></div>
                   <button className="weapon-card loadout-card loadout-current selected" onClick={() => { sound.uiClick(); setLoadoutOpen("melee"); }}>
-                    <WeaponPreview weapon={snapshot.melee} />
-                    <strong>{WEAPONS[snapshot.melee].name}</strong>
+                    <WeaponPreview weapon={activeMelee} />
+                    <strong>{WEAPONS[activeMelee].name}</strong>
                     <span className="weapon-price">近战位装备中 · 点击更换</span>
                   </button>
                 </section>
@@ -16568,15 +16889,15 @@ export function DeadRoadGame() {
                     <div className="shop-section-label"><b>战斗服</b><span>点击进入选择界面更换</span></div>
                     <button className={`armor-card loadout-card loadout-current selected`} onClick={() => { sound.uiClick(); setLoadoutOpen("armor"); }}>
                       <div className="armor-figure" aria-hidden="true">
-                        <i className={`armor-head ${ARMORS[snapshot.armor].helmet}`} style={{ backgroundColor: ARMORS[snapshot.armor].accent }} />
-                        <i className="armor-body" style={{ backgroundColor: ARMORS[snapshot.armor].torso, borderColor: ARMORS[snapshot.armor].accent }} />
-                        <i className="armor-legs" style={{ backgroundColor: ARMORS[snapshot.armor].pants }} />
+                        <i className={`armor-head ${ARMORS[activeArmor].helmet}`} style={{ backgroundColor: ARMORS[activeArmor].accent }} />
+                        <i className="armor-body" style={{ backgroundColor: ARMORS[activeArmor].torso, borderColor: ARMORS[activeArmor].accent }} />
+                        <i className="armor-legs" style={{ backgroundColor: ARMORS[activeArmor].pants }} />
                       </div>
-                      <div><strong>{ARMORS[snapshot.armor].name}</strong><span>最大生命 {ARMORS[snapshot.armor].maxHp} HP · 重 {ARMORS[snapshot.armor].weightKg}kg</span></div>
+                      <div><strong>{ARMORS[activeArmor].name}</strong><span>最大生命 {ARMORS[activeArmor].maxHp} HP · 重 {ARMORS[activeArmor].weightKg}kg</span></div>
                       <em>已装备 · 点击更换</em>
                     </button>
                   </div>
-                  <div className="loadout-stack-group">
+                  {!gamepadShopping && <div className="loadout-stack-group">
                     <div className="shop-section-label"><b>搭档</b><span>点击进入选择界面更换</span></div>
                     <button className={`item-card partner-card loadout-card loadout-current ${snapshot.partner ? "selected" : ""}`} onClick={() => { sound.uiClick(); setLoadoutOpen("partner"); }}>
                       {snapshot.partner
@@ -16585,7 +16906,7 @@ export function DeadRoadGame() {
                       <strong>{snapshot.partner ? PARTNERS[snapshot.partner].name : "无搭档"}</strong>
                       <em>{snapshot.partner ? "随行中 · 点击更换" : "点击选择搭档"}</em>
                     </button>
-                  </div>
+                  </div>}
                 </section>
               </div>
             ) : (
@@ -16598,7 +16919,7 @@ export function DeadRoadGame() {
                   <div className="shop-grid select-grid">
                     {loadoutGuns.map((key) => {
                       const slot = loadoutOpen === "primary" ? 0 : 1;
-                      const current = snapshot.loadout[slot] === key;
+                      const current = activeLoadout[slot] === key;
                       return (
                         <button key={key} className={`weapon-card ${current ? "selected" : ""}`} onClick={() => { assignLoadoutSlot(slot, key); setLoadoutOpen(null); }}>
                           <WeaponPreview weapon={key} />
@@ -16614,12 +16935,12 @@ export function DeadRoadGame() {
                 {loadoutOpen === "melee" && (
                   <div className="shop-grid select-grid">
                     {loadoutMelees.map((key) => (
-                      <button key={key} className={`weapon-card ${snapshot.melee === key ? "selected" : ""}`} onClick={() => { assignMelee(key); setLoadoutOpen(null); }}>
+                      <button key={key} className={`weapon-card ${activeMelee === key ? "selected" : ""}`} onClick={() => { assignMelee(key); setLoadoutOpen(null); }}>
                         <WeaponPreview weapon={key} />
                         <strong>{WEAPONS[key].name}</strong>
                         <span className="weapon-caliber">{WEAPONS[key].caliber}</span>
                         <small>{Math.round(weaponDamage(key) * 10) / 10} 伤害 · {WEAPON_HANDLING[key].weightKg}kg · 制动力 {Math.round(WEAPON_HANDLING[key].stopping * 100)}%</small>
-                        <span className="weapon-price">{snapshot.melee === key ? "当前装备" : "点击设为近战武器"}</span>
+                        <span className="weapon-price">{activeMelee === key ? "当前装备" : "点击设为近战武器"}</span>
                       </button>
                     ))}
                   </div>
@@ -16629,20 +16950,20 @@ export function DeadRoadGame() {
                     {loadoutArmors.map((key) => {
                       const armor = ARMORS[key];
                       return (
-                        <button key={key} className={`armor-card ${snapshot.armor === key ? "selected" : ""}`} onClick={() => { assignArmor(key); setLoadoutOpen(null); }}>
+                        <button key={key} className={`armor-card ${activeArmor === key ? "selected" : ""}`} onClick={() => { assignArmor(key); setLoadoutOpen(null); }}>
                           <div className="armor-figure" aria-hidden="true">
                             <i className={`armor-head ${armor.helmet}`} style={{ backgroundColor: armor.accent }} />
                             <i className="armor-body" style={{ backgroundColor: armor.torso, borderColor: armor.accent }} />
                             <i className="armor-legs" style={{ backgroundColor: armor.pants }} />
                           </div>
                           <div><strong>{armor.name}</strong><span>最大生命 {armor.maxHp} HP · 重 {armor.weightKg}kg</span><small>{armor.description}</small></div>
-                          <em>{snapshot.armor === key ? "已装备" : "点击装备"}</em>
+                          <em>{activeArmor === key ? "已装备" : "点击装备"}</em>
                         </button>
                       );
                     })}
                   </div>
                 )}
-                {loadoutOpen === "partner" && (
+                {loadoutOpen === "partner" && !gamepadShopping && (
                   <div className="item-grid select-grid">
                     {loadoutPartners.length === 0 && <p className="loadout-empty">尚未拥有搭档，可先在商店「搭档」页购买</p>}
                     {loadoutPartners.map((key) => (
@@ -16673,7 +16994,9 @@ export function DeadRoadGame() {
                     <button className="ghost-button" onClick={() => { sound.uiClick(); setLoadoutOpen(null); changeScreen("shop"); }}>返回商店</button>
                     {rangeFree
                       ? <button className="primary-button compact" onClick={resumeRange}><span>进入靶场</span><b>◎</b></button>
-                      : <button className="primary-button compact" onClick={startNextDay}><span>进入第 {snapshot.day + 1} 天</span><b>→</b></button>}
+                      : snapshot.coOp && !gamepadShopping
+                        ? <button className="primary-button compact" onClick={readyKeyboardPlayer}><span>P1 准备</span><b>✓</b></button>
+                        : <button className="primary-button compact" onClick={startNextDay}><span>{gamepadShopping ? "P2 继续" : `进入第 ${snapshot.day + 1} 天`}</span><b>→</b></button>}
                   </div>
                 </>
               ) : (
@@ -16804,7 +17127,8 @@ export function DeadRoadGame() {
         <div><kbd>G</kbd><span>关卡丢弃武器</span></div>
         <div><kbd>鼠标右键</kbd><span>关卡拾取武器</span></div>
         <div><kbd>M</kbd><span>静音开关</span></div>
-        {snapshot.coOp && <div><kbd>P2 手柄</kbd><span>左摇杆移动 · 右摇杆瞄准 · RT 射击 · X 换弹 · Y 切枪 · RB 踢击</span></div>}
+        {snapshot.coOp && <div><kbd>P2 手柄</kbd><span>左摇杆移动 · 右摇杆瞄准 · RT 射击 · X 换弹 · Y 切枪 · RB 踢击 · Menu 暂停</span></div>}
+        {snapshot.coOp && <div><kbd>P2 商店</kbd><span>方向键导航 · A 确认 · B 关闭详情/返回 · LB/RB 切换分类</span></div>}
         <p>提示：路障与阔剑雷仅能放在人物身前；绿色圆圈表示投掷物落点</p>
       </footer>
     </main>

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  creditPlayerCoins,
   EMPTY_COOP_GAMEPAD_BUTTONS,
   readCoOpGamepad,
   survivalWaveTotal,
@@ -32,6 +33,12 @@ test("双人生存模式每天的僵尸数恰好是单人模式两倍", () => {
   assert.equal(survivalWaveTotal(1, true), 12);
 });
 
+test("两名玩家的金币独立增加和扣除", () => {
+  assert.deepEqual(creditPlayerCoins([100, 40], 2, 15), [100, 55]);
+  assert.deepEqual(creditPlayerCoins([100, 55], 1, -30), [70, 55]);
+  assert.deepEqual(creditPlayerCoins([10, 55], 1, -50), [0, 55]);
+});
+
 test("手柄摇杆死区会过滤漂移并保留有效方向", () => {
   const drift = readCoOpGamepad([standardGamepad({ axes: [0.12, -0.08, 0.19, 0] })]);
   assert.deepEqual([drift.moveX, drift.moveY, drift.aimX, drift.aimY], [0, 0, 0, 0]);
@@ -43,26 +50,42 @@ test("手柄摇杆死区会过滤漂移并保留有效方向", () => {
   assert.ok(input.aimY < -0.7);
 });
 
-test("手柄动作只在按钮按下边沿触发，射击同时提供按住状态", () => {
+test("战斗与菜单的全部手柄动作只在按钮按下边沿触发", () => {
   const first = readCoOpGamepad(
-    [standardGamepad({ pressed: [2, 3, 5, 7] })],
+    [standardGamepad({ pressed: [0, 1, 2, 3, 4, 5, 7, 9, 12, 13, 14, 15] })],
     EMPTY_COOP_GAMEPAD_BUTTONS,
   );
   assert.equal(first.fireHeld, true);
   assert.equal(first.firePressed, true);
+  assert.equal(first.confirmPressed, true);
+  assert.equal(first.backPressed, true);
   assert.equal(first.reloadPressed, true);
   assert.equal(first.switchWeaponPressed, true);
   assert.equal(first.kickPressed, true);
+  assert.equal(first.previousTabPressed, true);
+  assert.equal(first.menuPressed, true);
+  assert.deepEqual(
+    [first.upPressed, first.downPressed, first.leftPressed, first.rightPressed],
+    [true, true, true, true],
+  );
 
   const held = readCoOpGamepad(
-    [standardGamepad({ pressed: [2, 3, 5, 7] })],
+    [standardGamepad({ pressed: [0, 1, 2, 3, 4, 5, 7, 9, 12, 13, 14, 15] })],
     first.buttons,
   );
   assert.equal(held.fireHeld, true);
   assert.equal(held.firePressed, false);
+  assert.equal(held.confirmPressed, false);
+  assert.equal(held.backPressed, false);
   assert.equal(held.reloadPressed, false);
   assert.equal(held.switchWeaponPressed, false);
   assert.equal(held.kickPressed, false);
+  assert.equal(held.previousTabPressed, false);
+  assert.equal(held.menuPressed, false);
+  assert.deepEqual(
+    [held.upPressed, held.downPressed, held.leftPressed, held.rightPressed],
+    [false, false, false, false],
+  );
 });
 
 test("未连接标准手柄时返回安全的空输入", () => {

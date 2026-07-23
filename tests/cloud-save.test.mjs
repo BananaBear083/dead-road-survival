@@ -81,13 +81,15 @@ test("keeps the most advanced loadout while unioning unlocks and inventory", () 
         ownedArmors: ["combat"],
         ownedPartners: ["soldier"],
         itemInventory: { frag: 3, molotov: 1 },
+        secondPlayer: { coins: 175, loadout: ["glock17", "sawedoff"] },
       },
     },
   );
 
   assert.equal(merged.progress.nextDay, 9);
   assert.equal(merged.progress.coOp, true);
-  assert.equal(merged.progress.version, 3);
+  assert.equal(merged.progress.version, 4);
+  assert.deepEqual(merged.progress.secondPlayer, { coins: 175, loadout: ["glock17", "sawedoff"] });
   assert.equal(merged.progress.coins, 400);
   assert.deepEqual(merged.progress.loadout, ["pkm", "glock17"]);
   assert.equal(merged.progress.weapon, "pkm");
