@@ -45,6 +45,7 @@ type ExplorationConsumableKey = "armySupport" | "armoredSupport" | "airSupport";
 type ExplorationConsumableInventory = Record<ExplorationConsumableKey, number>;
 type ExplorationMemberRarity = "common" | "rare" | "epic" | "legendary";
 type ExplorationMemberSpeed = "慢" | "中等" | "快";
+type ExplorationHeadwear = "cap" | "farmerHat" | "policeCap" | "combatHelmet" | "headscarf";
 type ExplorationVehicleKind = "van" | "truck" | "bus";
 type ExplorationChapterId = 1 | 2 | 3;
 type ExplorationChapterTheme = "farm" | "suburb" | "desert";
@@ -124,6 +125,7 @@ type ExplorationMemberDefinition = {
   levelSkills: { level: 5 | 10 | 15; name: string }[];
   lotteryOnly?: boolean;
   displayWeaponName?: string;
+  headwear?: ExplorationHeadwear;
   battleProfile?: {
     openingWeapon?: WeaponKey;
     openingDamage?: number;
@@ -1239,7 +1241,7 @@ const EXPLORATION_MEMBERS: ExplorationMemberDefinition[] = [
   {
     id: "assaultSoldier", name: "冲锋士兵", weapon: "mac11", rarity: "epic", lotteryOnly: true,
     trait: "减伤 25%", faction: "军队", hp: 100, damage: weaponDamage("mac11"), hpPerLevel: 3, damagePerLevel: 2,
-    speed: "快", speedFactor: 1.24, courageCost: 25, purchaseCost: 2600, levelSkills: NO_EXPLORATION_LEVEL_SKILLS,
+    speed: "快", speedFactor: 1.5, courageCost: 25, purchaseCost: 2600, levelSkills: NO_EXPLORATION_LEVEL_SKILLS,
     battleProfile: { damageReduction: .25 },
   },
   {
@@ -1259,9 +1261,9 @@ const EXPLORATION_MEMBERS: ExplorationMemberDefinition[] = [
     speed: "中等", speedFactor: 1, courageCost: 20, purchaseCost: 1200, levelSkills: NO_EXPLORATION_LEVEL_SKILLS,
   },
   {
-    id: "bomber", name: "中东小伙", weapon: "fists", displayWeaponName: "炸弹背心", rarity: "rare", lotteryOnly: true,
+    id: "bomber", name: "中东小伙", weapon: "fists", displayWeaponName: "炸弹背心", headwear: "headscarf", rarity: "rare", lotteryOnly: true,
     trait: "冲向敌人并自爆", faction: "非法人员", hp: 70, damage: ITEMS.frag.damage, hpPerLevel: 0, damagePerLevel: 3,
-    speed: "快", speedFactor: 1.24, courageCost: 15, purchaseCost: 1200, levelSkills: NO_EXPLORATION_LEVEL_SKILLS,
+    speed: "快", speedFactor: 1.5, courageCost: 15, purchaseCost: 1200, levelSkills: NO_EXPLORATION_LEVEL_SKILLS,
     battleProfile: { selfDestruct: true },
   },
   {
@@ -9342,7 +9344,7 @@ function ExplorationThrownKnife({ fromX, fromY, toX, toY }: { fromX: number; fro
 }
 
 /** 生存模式便装人物与探索队员共用的颅形、五官、头发和帽饰细节。 */
-function drawSurvivalHumanHeadAndFace(ctx: CanvasRenderingContext2D, facing: number, headwear: "cap" | "farmerHat" | "policeCap" | "combatHelmet" = "cap") {
+function drawSurvivalHumanHeadAndFace(ctx: CanvasRenderingContext2D, facing: number, headwear: ExplorationHeadwear = "cap") {
   ctx.fillStyle = "#c58e67";
   ctx.beginPath();
   ctx.moveTo(-5.5, -102); ctx.lineTo(5.5, -102); ctx.lineTo(4, -112); ctx.lineTo(-4, -112);
@@ -9390,6 +9392,22 @@ function drawSurvivalHumanHeadAndFace(ctx: CanvasRenderingContext2D, facing: num
     ctx.beginPath(); ctx.moveTo(facing * -1, -121); ctx.lineTo(facing * 22, -118); ctx.lineTo(facing * 3, -117); ctx.closePath(); ctx.fill();
     ctx.fillStyle = "#9fb8cf";
     ctx.beginPath(); ctx.moveTo(-2.5, -125.5); ctx.lineTo(0, -128); ctx.lineTo(2.5, -125.5); ctx.lineTo(0, -121.5); ctx.closePath(); ctx.fill();
+  } else if (headwear === "headscarf") {
+    // 中东小伙使用包裹头顶并垂落至肩部的头巾，面部细节仍沿用生存模式人物头部。
+    ctx.fillStyle = "#c8b88f";
+    ctx.beginPath();
+    ctx.moveTo(facing * -10.5, -117); ctx.quadraticCurveTo(facing * -10, -128, 0, -132);
+    ctx.quadraticCurveTo(facing * 9.5, -129, facing * 11, -117);
+    ctx.lineTo(facing * 8, -111); ctx.lineTo(facing * -8, -111); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#a4936f";
+    ctx.beginPath();
+    ctx.moveTo(facing * -9, -116); ctx.lineTo(facing * -14, -92); ctx.lineTo(facing * -5, -96); ctx.lineTo(facing * -2, -115); ctx.closePath(); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(facing * 8, -116); ctx.lineTo(facing * 13, -96); ctx.lineTo(facing * 6, -99); ctx.lineTo(facing * 2, -116); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = "#50483a"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(facing * -9, -123); ctx.lineTo(facing * 8, -116); ctx.moveTo(facing * -7, -128); ctx.lineTo(facing * 9, -121); ctx.stroke();
+    ctx.fillStyle = "#3b352d";
+    ctx.beginPath(); ctx.rect(facing * -10, -120, facing * 20, 3); ctx.fill();
   } else {
     ctx.fillStyle = "#4a563b";
     ctx.beginPath();
@@ -9484,7 +9502,7 @@ function ExplorationMemberPreview({ member, motion = "standing", reloadProgress 
         ctx.fillStyle = "#b7d0e2";
         ctx.beginPath(); ctx.arc(0, -84, 3.1, 0, Math.PI * 2); ctx.fill();
       }
-      drawSurvivalHumanHeadAndFace(ctx, facing, farmer ? "farmerHat" : police ? "policeCap" : soldier ? "combatHelmet" : "cap");
+      drawSurvivalHumanHeadAndFace(ctx, facing, member.headwear ?? (farmer ? "farmerHat" : police ? "policeCap" : soldier ? "combatHelmet" : "cap"));
 
       const melee = MELEE_WEAPONS.has(renderWeapon);
       const recoil = !melee && renderMotion === "attacking" ? Math.sin(Math.min(1, attackPhase * 2) * Math.PI) : 0;
@@ -9755,6 +9773,7 @@ export function DeadRoadGame() {
   const [explorationRecruitPhase, setExplorationRecruitPhase] = useState<ExplorationRecruitPhase>("approach");
   const [explorationSupportClock, setExplorationSupportClock] = useState(0);
   const [lotteryPhase, setLotteryPhase] = useState<LotteryPhase>("idle");
+  const [lotteryRosterOpen, setLotteryRosterOpen] = useState(false);
   const [lotteryZombieDamage, setLotteryZombieDamage] = useState<ExplorationZombieDamageState[]>(freshLotteryZombieDamage);
   const [lotteryLastHit, setLotteryLastHit] = useState<number | null>(null);
   const [lotteryShotSerial, setLotteryShotSerial] = useState(0);
@@ -11091,6 +11110,7 @@ export function DeadRoadGame() {
   const openLottery = useCallback(() => {
     sound.uiClick();
     setLotteryPhase("idle");
+    setLotteryRosterOpen(false);
     resetLotteryBattle();
     setLotteryRewards([]);
     changeScreen("lottery");
@@ -11098,14 +11118,20 @@ export function DeadRoadGame() {
 
   const closeLottery = useCallback(() => {
     if (lotteryPhase === "firing" || lotteryPhase === "flash") return;
+    if (lotteryRosterOpen) {
+      sound.uiClick();
+      setLotteryRosterOpen(false);
+      return;
+    }
     sound.uiClick();
     setLotteryPhase("idle");
     changeScreen("exploration");
-  }, [changeScreen, lotteryPhase]);
+  }, [changeScreen, lotteryPhase, lotteryRosterOpen]);
 
   const startLotteryDraw = useCallback((count: 1 | 10) => {
     if (recruitTickets < count) return;
     sound.uiClick();
+    setLotteryRosterOpen(false);
     setRecruitTickets((tickets) => tickets - count);
     recordExplorationDailyMetric("recruitDraws", count);
     setExplorationAchievementProgress((progress) => ({ ...progress, lotteryDraws: progress.lotteryDraws + count }));
@@ -14949,6 +14975,7 @@ export function DeadRoadGame() {
 
   const rangeFree = snapshot.mode === "range";
   const lotteryHighlight = highestLotteryRarity(lotteryRewards);
+  const unownedLotteryMembers = EXPLORATION_LOTTERY_MEMBERS.filter((member) => !ownedMemberIds.includes(member.id));
   const hasUnclaimedDailyTask = EXPLORATION_DAILY_TASKS.some((task) => explorationDailyProgress[task.metric] >= task.target && !explorationDailyProgress.claimedTaskIds.includes(task.id));
   const hasUnclaimedActivityReward = explorationDailyProgress.activity >= EXPLORATION_DAILY_ACTIVITY_REWARD_TARGET && !explorationDailyProgress.activityRewardClaimed;
   const hasUnclaimedAchievement = EXPLORATION_ACHIEVEMENTS.some((achievement) => explorationAchievementValue(achievement, explorationAchievementProgress, explorationClearedTasks) >= achievement.target && !explorationAchievementProgress.claimedAchievementIds.includes(achievement.id));
@@ -15884,7 +15911,12 @@ export function DeadRoadGame() {
             {lotteryPhase === "idle" && (
               <>
                 <div className="lottery-interface lottery-topbar">
-                  <button type="button" className="lottery-back" onClick={closeLottery}>← 返回探索</button>
+                  <div className="lottery-topbar-actions">
+                    <button type="button" className="lottery-back" onClick={closeLottery}>← 返回探索</button>
+                    <button type="button" className="lottery-unowned-button" onClick={() => { sound.uiClick(); setLotteryRosterOpen(true); }}>
+                      <span>未拥有人物</span><small>{unownedLotteryMembers.length} 人</small>
+                    </button>
+                  </div>
                   <div className="lottery-heading">
                     <p className="eyebrow">探索模式 · 公路招募</p>
                     <h2>火线招募</h2>
@@ -15907,6 +15939,25 @@ export function DeadRoadGame() {
               <div className="lottery-interface lottery-actions">
                 <button type="button" onClick={() => startLotteryDraw(1)} disabled={recruitTickets < 1}><small>消耗 1 张招募券</small><strong>抽一次</strong></button>
                 <button type="button" className="lottery-ten" onClick={() => startLotteryDraw(10)} disabled={recruitTickets < 10}><small>消耗 10 张招募券</small><strong>抽十次</strong></button>
+              </div>
+            )}
+
+            {lotteryPhase === "idle" && lotteryRosterOpen && (
+              <div className="lottery-unowned-backdrop" onPointerDown={(event) => event.stopPropagation()}>
+                <section className="lottery-unowned-roster" role="dialog" aria-modal="true" aria-label="未拥有人物">
+                  <header>
+                    <div><p className="eyebrow">火线招募 · 人物档案</p><h2>未拥有人物</h2><small>尚未购买的抽奖人物共 {unownedLotteryMembers.length} 名</small></div>
+                    <button type="button" onClick={() => { sound.uiClick(); setLotteryRosterOpen(false); }} aria-label="关闭未拥有人物">×</button>
+                  </header>
+                  <div className="lottery-unowned-grid">
+                    {unownedLotteryMembers.length === 0 ? <p className="lottery-roster-complete">所有抽奖人物均已拥有</p> : unownedLotteryMembers.map((member) => (
+                      <article key={member.id} className={`lottery-unowned-card rarity-${member.rarity}`}>
+                        <ExplorationMemberPreview member={member} />
+                        <div><strong>{member.name}</strong><span>{EXPLORATION_RARITY_LABELS[member.rarity]} · {member.faction}</span><small>{member.displayWeaponName ?? WEAPONS[member.weapon].name}</small></div>
+                      </article>
+                    ))}
+                  </div>
+                </section>
               </div>
             )}
 

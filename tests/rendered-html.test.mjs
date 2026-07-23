@@ -1489,7 +1489,7 @@ test("adds the exploration six-slot team roster with shared character and weapon
   assert.match(source, /const scale = battleScale \? EXPLORATION_BATTLE_MEMBER_SCALE : 1\.9/);
   assert.match(source, /function ExplorationMemberPreview/);
   assert.match(source, /function drawSurvivalHumanHeadAndFace/);
-  assert.match(source, /drawSurvivalHumanHeadAndFace\(ctx, facing, farmer \? "farmerHat" : police \? "policeCap" : soldier \? "combatHelmet" : "cap"\)/);
+  assert.match(source, /drawSurvivalHumanHeadAndFace\(ctx, facing, member\.headwear \?\? \(farmer \? "farmerHat" : police \? "policeCap" : soldier \? "combatHelmet" : "cap"\)\)/);
   assert.match(source, /if \(armor\.key === "civilian"\) \{\s*drawSurvivalHumanHeadAndFace\(ctx, facing, "cap"\)/);
   assert.match(source, /standingLegPose/);
   assert.match(source, /gaitLegPose/);
@@ -1995,4 +1995,23 @@ test("keeps defeated exploration members as matching fallen bodies and adds the 
   assert.match(source, /<span>枪械<\/span><small>内容待开放<\/small>/);
   assert.match(css, /\.battle-unit-corpse/);
   assert.match(css, /\.battle-unit-corpse \.team-member-preview[^}]*width:\s*184px[^}]*height:\s*124px/);
+});
+
+test("adds the bomber headscarf, faster rush units and an unowned lottery roster", async () => {
+  const source = await readFile(new URL("../app/DeadRoadGame.tsx", import.meta.url), "utf8");
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+
+  assert.match(source, /id: "assaultSoldier"[\s\S]*?speed: "快", speedFactor: 1\.5/);
+  assert.match(source, /id: "bomber"[\s\S]*?speed: "快", speedFactor: 1\.5/);
+  assert.match(source, /type ExplorationHeadwear = "cap" \| "farmerHat" \| "policeCap" \| "combatHelmet" \| "headscarf"/);
+  assert.match(source, /id: "bomber"[\s\S]*?headwear: "headscarf"/);
+  assert.match(source, /headwear === "headscarf"/);
+  assert.match(source, /member\.headwear \?\?/);
+  assert.match(source, /const \[lotteryRosterOpen, setLotteryRosterOpen\] = useState\(false\)/);
+  assert.match(source, /EXPLORATION_LOTTERY_MEMBERS\.filter\(\(member\) => !ownedMemberIds\.includes\(member\.id\)\)/);
+  assert.match(source, /<span>未拥有人物<\/span>/);
+  assert.match(source, /lotteryRosterOpen && \([\s\S]*role="dialog" aria-modal="true" aria-label="未拥有人物"/);
+  assert.match(source, /unownedLotteryMembers\.map\(\(member\) =>/);
+  assert.match(css, /\.lottery-unowned-backdrop/);
+  assert.match(css, /\.lottery-unowned-grid[^}]*grid-template-columns:\s*repeat\(auto-fill,/);
 });

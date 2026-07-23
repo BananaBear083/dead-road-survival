@@ -194,8 +194,13 @@ button { -webkit-tap-highlight-color: transparent; }
 .lottery-interface { transition: opacity .16s ease, transform .16s ease; }
 .lottery-cinematic .lottery-interface, .lottery-cinematic .masthead { opacity: 0; pointer-events: none; }
 .lottery-topbar { position: absolute; z-index: 9; inset: 0 0 auto; min-height: 100px; display: flex; align-items: flex-start; justify-content: space-between; padding: 18px clamp(18px, 3vw, 46px); background: linear-gradient(180deg, rgba(7,12,9,.85), transparent); }
+.lottery-topbar-actions { display:flex; align-items:stretch; gap:8px; }
 .lottery-back { padding: 10px 14px; color: #d9dece; background: rgba(17,24,18,.9); border: 1px solid #707969; cursor: pointer; font-size: 11px; font-weight: 1000; letter-spacing: .08em; }
 .lottery-back:hover { color: #11160f; background: var(--signal); border-color: var(--signal); }
+.lottery-unowned-button { min-width:126px; display:grid; grid-template-columns:1fr auto; align-items:center; gap:7px; padding:8px 11px; color:#e7e4d5; background:rgba(17,24,18,.94); border:1px solid #8a8058; cursor:pointer; text-align:left; }
+.lottery-unowned-button:hover { color:#11160f; background:var(--signal); border-color:var(--signal); }
+.lottery-unowned-button span { font-size:10px; font-weight:1000; letter-spacing:.08em; }
+.lottery-unowned-button small { padding:3px 5px; color:#f1d56a; background:#292719; font-size:8px; font-weight:1000; }
 .lottery-heading { position: absolute; left: 50%; top: 13px; text-align: center; transform: translateX(-50%); text-shadow: 0 3px 8px rgba(0,0,0,.55); }
 .lottery-heading .eyebrow { margin-bottom: 4px; font-size: 9px; }
 .lottery-heading h2 { margin: 0; font-size: clamp(30px, 3.6vw, 50px); line-height: .9; font-weight: 1000; letter-spacing: -.05em; }
@@ -227,6 +232,25 @@ button { -webkit-tap-highlight-color: transparent; }
 .lottery-actions .lottery-ten small, .lottery-actions .lottery-ten em { color: #4e441e; }
 .lottery-actions strong { font-size: 20px; font-weight: 1000; letter-spacing: .12em; }
 .lottery-actions em { color: #e9c94e; font-size: 8px; font-style: normal; font-weight: 900; }
+
+.lottery-unowned-backdrop { position:absolute; z-index:28; inset:0; display:grid; place-items:center; padding:78px 5vw 30px; background:rgba(5,8,6,.82); backdrop-filter:blur(5px); }
+.lottery-unowned-roster { width:min(1120px,92vw); max-height:calc(100vh - 116px); display:grid; grid-template-rows:auto minmax(0,1fr); overflow:hidden; color:#eeeada; background:linear-gradient(145deg,rgba(25,33,26,.98),rgba(10,15,12,.99)); border:1px solid #9a8952; border-top:5px solid #e5c75c; box-shadow:0 18px 55px rgba(0,0,0,.62),inset 0 0 42px rgba(197,171,79,.08); }
+.lottery-unowned-roster > header { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:16px 20px 13px; border-bottom:1px solid rgba(225,205,127,.22); }
+.lottery-unowned-roster > header h2 { margin:2px 0 3px; font-size:28px; line-height:1; }
+.lottery-unowned-roster > header small { color:#aeb4a7; font-size:9px; font-weight:800; letter-spacing:.07em; }
+.lottery-unowned-roster > header button { width:38px; height:38px; color:#eee7cc; background:#222a22; border:1px solid #817a5c; cursor:pointer; font-size:22px; font-weight:1000; }
+.lottery-unowned-roster > header button:hover { color:#171910; background:var(--signal); }
+.lottery-unowned-grid { min-height:0; display:grid; grid-template-columns:repeat(auto-fill,minmax(174px,1fr)); align-content:start; gap:11px; padding:15px 18px 20px; overflow-y:auto; }
+.lottery-unowned-card { position:relative; min-height:214px; display:grid; grid-template-rows:150px auto; overflow:hidden; background:linear-gradient(180deg,#28312b,#171d19); border:1px solid #6f766b; box-shadow:inset 0 0 18px rgba(255,255,255,.03); }
+.lottery-unowned-card.rarity-rare { border-color:#438edf; box-shadow:inset 0 0 22px rgba(64,139,230,.15),0 0 8px rgba(64,139,230,.32); }
+.lottery-unowned-card.rarity-epic { border-color:#9a50dd; box-shadow:inset 0 0 22px rgba(155,71,230,.17),0 0 8px rgba(155,71,230,.34); }
+.lottery-unowned-card.rarity-legendary { border-color:#d8ae39; box-shadow:inset 0 0 24px rgba(236,189,57,.18),0 0 9px rgba(236,189,57,.36); }
+.lottery-unowned-card .team-member-preview { justify-self:center; width:118px; height:150px; max-height:none; object-fit:contain; }
+.lottery-unowned-card > div { display:grid; gap:3px; padding:9px 10px 10px; border-top:1px solid rgba(255,255,255,.08); }
+.lottery-unowned-card strong { color:#f4f0e0; font-size:14px; }
+.lottery-unowned-card span { color:#d4bd64; font-size:8px; font-weight:1000; }
+.lottery-unowned-card small { color:#9fa89e; font-size:8px; font-weight:800; }
+.lottery-roster-complete { grid-column:1 / -1; padding:70px 20px; color:#d9d6c7; text-align:center; font-size:18px; font-weight:1000; }
 
 .lottery-combat-status { position: absolute; z-index: 13; left: 50%; top: 5%; display: grid; place-items: center; color: #f1edda; text-shadow: 0 3px 8px #000; transform: translateX(-50%); }
 .lottery-combat-status span { color: #dfc855; font-size: 9px; font-weight: 1000; letter-spacing: .16em; }
