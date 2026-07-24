@@ -1564,7 +1564,7 @@ test("adds the exploration six-slot team roster with shared character and weapon
   assert.match(source, /const scale = battleScale \? EXPLORATION_BATTLE_MEMBER_SCALE : 1\.9/);
   assert.match(source, /function ExplorationMemberPreview/);
   assert.match(source, /function drawSurvivalHumanHeadAndFace/);
-  assert.match(source, /drawSurvivalHumanHeadAndFace\(ctx, facing, member\.headwear \?\? \(farmer \? "farmerHat" : police \? "policeCap" : soldier \? "combatHelmet" : "cap"\)\)/);
+  assert.match(source, /drawSurvivalHumanHeadAndFace\(ctx, facing, appearance\.headwear\)/);
   assert.match(source, /if \(armor\.key === "civilian"\) \{\s*drawSurvivalHumanHeadAndFace\(ctx, facing, "cap"\)/);
   assert.match(source, /standingLegPose/);
   assert.match(source, /gaitLegPose/);
@@ -2079,9 +2079,9 @@ test("adds the bomber headscarf, faster rush units and an unowned lottery roster
   assert.match(source, /id: "assaultSoldier"[\s\S]*?speed: "快", speedFactor: 1\.5/);
   assert.match(source, /id: "bomber"[\s\S]*?speed: "快", speedFactor: 1\.5/);
   assert.match(source, /type ExplorationHeadwear = "cap" \| "farmerHat" \| "policeCap" \| "combatHelmet" \| "headscarf"/);
-  assert.match(source, /id: "bomber"[\s\S]*?headwear: "headscarf"/);
+  assert.match(source, /bomber: \{[\s\S]*?headwear: "headscarf"/);
   assert.match(source, /headwear === "headscarf"/);
-  assert.match(source, /member\.headwear \?\?/);
+  assert.match(source, /drawSurvivalHumanHeadAndFace\(ctx, facing, appearance\.headwear\)/);
   assert.match(source, /const \[lotteryRosterOpen, setLotteryRosterOpen\] = useState\(false\)/);
   assert.match(source, /EXPLORATION_LOTTERY_MEMBERS\.filter\(\(member\) => !ownedMemberIds\.includes\(member\.id\)\)/);
   assert.match(source, /<span>未拥有人物<\/span>/);
@@ -2112,4 +2112,23 @@ test("adds a persistent three-category black market beneath the exploration shop
   assert.match(css, /\.exploration-shop-scroll-spacer[^}]*height:\s*400%/);
   assert.match(css, /\.black-market-page[^}]*top:\s*300%/);
   assert.match(css, /\.black-market-grid[^}]*overflow-y:\s*auto/);
+});
+
+test("gives every exploration member a detailed trait-driven outfit and equipment profile", async () => {
+  const source = await readFile(new URL("../app/DeadRoadGame.tsx", import.meta.url), "utf8");
+  assert.match(source, /type ExplorationMemberGear =/);
+  assert.match(source, /const EXPLORATION_MEMBER_APPEARANCES: Record<string, ExplorationMemberAppearance> = \{/);
+  assert.match(source, /for \(const member of \[\.\.\.EXPLORATION_MEMBERS, EXPLORATION_SUPPORT_SOLDIER\]\) explorationMemberAppearance\(member\)/);
+  assert.match(source, /if \(!appearance\) throw new Error\(`Missing exploration appearance/);
+  assert.match(source, /function drawExplorationBackEquipment/);
+  assert.match(source, /function drawExplorationOutfitDetails/);
+  assert.match(source, /function drawExplorationHeadEquipment/);
+  assert.match(source, /has\("bombVest"\)/);
+  assert.match(source, /appearance\.gear\.includes\("medicalPack"\)/);
+  assert.match(source, /has\("grenadeBandolier"\)/);
+  assert.match(source, /has\("ammoHarness"\)/);
+  assert.match(source, /const appearance = explorationMemberAppearance\(member\)/);
+  assert.match(source, /drawExplorationBackEquipment\(ctx, appearance, facing\)/);
+  assert.match(source, /drawExplorationOutfitDetails\(ctx, appearance, facing\)/);
+  assert.match(source, /drawExplorationHeadEquipment\(ctx, appearance, facing\)/);
 });

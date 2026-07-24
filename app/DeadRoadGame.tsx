@@ -62,7 +62,24 @@ type ExplorationBlackMarketCategory = "sidearms" | "rifles" | "snipers";
 type ExplorationBlackMarketPartVisual = "magazine" | "barrel" | "trigger" | "grip" | "muzzle" | "stock" | "gas";
 type ExplorationMemberRarity = "common" | "rare" | "epic" | "legendary";
 type ExplorationMemberSpeed = "慢" | "中等" | "快";
-type ExplorationHeadwear = "cap" | "farmerHat" | "policeCap" | "combatHelmet" | "headscarf";
+type ExplorationHeadwear = "cap" | "farmerHat" | "policeCap" | "combatHelmet" | "headscarf" | "beanie" | "hardHat" | "fireHelmet" | "riotHelmet" | "boonie" | "blueHelmet" | "bandana";
+type ExplorationMemberGear =
+  | "suspenders" | "toolBelt" | "hiVis" | "badge" | "dutyBelt" | "shotgunShells"
+  | "plateCarrier" | "magPouches" | "kneePads" | "knifeSheaths" | "radio" | "goggles"
+  | "riotArmor" | "taser" | "reflective" | "oxygenTank" | "medicalPack" | "redCross"
+  | "scarf" | "bandolier" | "molotov" | "dualHolsters" | "bombVest" | "thermite"
+  | "grenadeBandolier" | "ammoHarness" | "heavyArmor" | "ammoPack";
+type ExplorationMemberAppearance = {
+  shirt: string;
+  pants: string;
+  vest: string;
+  accent: string;
+  boots: string;
+  headwear: ExplorationHeadwear;
+  pattern?: "plain" | "plaid" | "camo" | "reflective" | "un";
+  gear: ExplorationMemberGear[];
+  gloves?: boolean;
+};
 type ExplorationVehicleKind = "van" | "truck" | "bus";
 type ExplorationChapterId = 1 | 2 | 3;
 type ExplorationChapterTheme = "farm" | "suburb" | "desert";
@@ -142,7 +159,6 @@ type ExplorationMemberDefinition = {
   levelSkills: { level: 5 | 10 | 15; name: string }[];
   lotteryOnly?: boolean;
   displayWeaponName?: string;
-  headwear?: ExplorationHeadwear;
   battleProfile?: {
     openingWeapon?: WeaponKey;
     openingDamage?: number;
@@ -1406,7 +1422,7 @@ const EXPLORATION_MEMBERS: ExplorationMemberDefinition[] = [
     speed: "中等", speedFactor: 1, courageCost: 20, purchaseCost: 1200, levelSkills: NO_EXPLORATION_LEVEL_SKILLS,
   },
   {
-    id: "bomber", name: "中东小伙", weapon: "fists", displayWeaponName: "炸弹背心", headwear: "headscarf", rarity: "rare", lotteryOnly: true,
+    id: "bomber", name: "中东小伙", weapon: "fists", displayWeaponName: "炸弹背心", rarity: "rare", lotteryOnly: true,
     trait: "冲向敌人并自爆", faction: "非法人员", hp: 70, damage: ITEMS.frag.damage, hpPerLevel: 0, damagePerLevel: 3,
     speed: "快", speedFactor: 1.5, courageCost: 15, purchaseCost: 1200, levelSkills: NO_EXPLORATION_LEVEL_SKILLS,
     battleProfile: { selfDestruct: true },
@@ -1487,6 +1503,47 @@ const EXPLORATION_SUPPORT_SOLDIER: ExplorationMemberDefinition = {
   purchaseCost: 0,
   levelSkills: [{ level: 5, name: "无" }, { level: 10, name: "无" }, { level: 15, name: "无" }],
 };
+/** 人物专属外观只叠加在生存模式共用骨架和动作上；武器仍使用原版真实枪模。 */
+const EXPLORATION_MEMBER_APPEARANCES: Record<string, ExplorationMemberAppearance> = {
+  civilian: { shirt: "#52604c", pants: "#343b38", vest: "#485342", accent: "#b89b62", boots: "#211f1a", headwear: "cap", pattern: "plain", gear: [] },
+  farmer: { shirt: "#8a7446", pants: "#4f593d", vest: "#665d36", accent: "#d1b45c", boots: "#33291e", headwear: "farmerHat", pattern: "plaid", gear: ["suspenders", "toolBelt"] },
+  police: { shirt: "#315b80", pants: "#172f49", vest: "#18334d", accent: "#bad3e5", boots: "#11171d", headwear: "policeCap", gear: ["badge", "dutyBelt", "radio"] },
+  combatSoldier: { shirt: "#465346", pants: "#29342d", vest: "#202c24", accent: "#94a881", boots: "#171b17", headwear: "combatHelmet", pattern: "camo", gear: ["plateCarrier", "knifeSheaths", "magPouches", "kneePads", "radio"], gloves: true },
+  lumberjack: { shirt: "#8f4338", pants: "#3a4542", vest: "#6c352f", accent: "#d7b57b", boots: "#35271d", headwear: "beanie", pattern: "plaid", gear: ["suspenders", "toolBelt"], gloves: true },
+  mechanic: { shirt: "#4d6570", pants: "#344851", vest: "#334b54", accent: "#d8a84a", boots: "#20272a", headwear: "cap", gear: ["toolBelt", "goggles"], gloves: true },
+  engineer: { shirt: "#a66a2e", pants: "#4a514d", vest: "#c87d29", accent: "#f4dc58", boots: "#252a27", headwear: "hardHat", gear: ["hiVis", "toolBelt", "radio"], gloves: true },
+  combatPolice: { shirt: "#2b5275", pants: "#162d46", vest: "#142b42", accent: "#b8d4e6", boots: "#11161c", headwear: "policeCap", gear: ["badge", "dutyBelt", "radio"], gloves: true },
+  sheriff: { shirt: "#62523b", pants: "#2c3942", vest: "#463b2d", accent: "#d7b95e", boots: "#241d17", headwear: "policeCap", gear: ["badge", "dutyBelt", "shotgunShells", "radio"] },
+  riotShieldPolice: { shirt: "#243849", pants: "#182731", vest: "#172934", accent: "#7798ad", boots: "#101518", headwear: "riotHelmet", gear: ["riotArmor", "taser", "dutyBelt", "kneePads", "radio"], gloves: true },
+  stunBatonPolice: { shirt: "#28465c", pants: "#182d3b", vest: "#17303d", accent: "#67cfee", boots: "#10171c", headwear: "riotHelmet", gear: ["riotArmor", "taser", "dutyBelt", "radio"], gloves: true },
+  swat: { shirt: "#28343c", pants: "#182126", vest: "#18252c", accent: "#6d8da0", boots: "#0f1316", headwear: "riotHelmet", gear: ["plateCarrier", "magPouches", "kneePads", "goggles", "radio"], gloves: true },
+  firefighter: { shirt: "#8f342d", pants: "#3d3d35", vest: "#662824", accent: "#f1d04c", boots: "#24221c", headwear: "fireHelmet", pattern: "reflective", gear: ["reflective", "oxygenTank", "toolBelt"], gloves: true },
+  medic: { shirt: "#d6d6cb", pants: "#425760", vest: "#ece9df", accent: "#bd3737", boots: "#20272b", headwear: "cap", gear: ["medicalPack", "redCross", "dutyBelt", "radio"], gloves: true },
+  soldier: { shirt: "#52604d", pants: "#344036", vest: "#263229", accent: "#93a780", boots: "#171b17", headwear: "combatHelmet", pattern: "camo", gear: ["plateCarrier", "magPouches", "kneePads", "radio"], gloves: true },
+  sniper: { shirt: "#4d5845", pants: "#303a31", vest: "#29342b", accent: "#899875", boots: "#171a17", headwear: "boonie", pattern: "camo", gear: ["plateCarrier", "scarf", "magPouches", "radio"], gloves: true },
+  assaultSoldier: { shirt: "#485747", pants: "#2d3931", vest: "#222f27", accent: "#a0b287", boots: "#151a16", headwear: "combatHelmet", pattern: "camo", gear: ["plateCarrier", "magPouches", "kneePads", "radio"], gloves: true },
+  outlaw: { shirt: "#5c3b31", pants: "#33302d", vest: "#312924", accent: "#bd8a51", boots: "#2a2019", headwear: "bandana", gear: ["bandolier", "dutyBelt", "shotgunShells"] },
+  thug: { shirt: "#554152", pants: "#292d31", vest: "#372d38", accent: "#b65b47", boots: "#191b1d", headwear: "beanie", gear: ["molotov", "dutyBelt"], gloves: true },
+  bandit: { shirt: "#47423d", pants: "#292d2f", vest: "#2c302e", accent: "#9a6544", boots: "#191b1b", headwear: "bandana", gear: ["dualHolsters", "dutyBelt"], gloves: true },
+  bomber: { shirt: "#6b5b45", pants: "#38362f", vest: "#262b26", accent: "#bf3c32", boots: "#29231c", headwear: "headscarf", gear: ["bombVest"], gloves: true },
+  rifleman: { shirt: "#303d39", pants: "#202a27", vest: "#16231f", accent: "#d65b38", boots: "#101513", headwear: "riotHelmet", pattern: "camo", gear: ["plateCarrier", "magPouches", "thermite", "kneePads", "radio"], gloves: true },
+  flintSniper: { shirt: "#37433d", pants: "#232e29", vest: "#1d2924", accent: "#d56a32", boots: "#111613", headwear: "boonie", pattern: "camo", gear: ["plateCarrier", "scarf", "thermite", "magPouches", "radio"], gloves: true },
+  shieldTrooper: { shirt: "#303a3c", pants: "#20292d", vest: "#1b2529", accent: "#8599a4", boots: "#101416", headwear: "riotHelmet", gear: ["heavyArmor", "plateCarrier", "magPouches", "kneePads", "radio"], gloves: true },
+  grenadier: { shirt: "#6581a2", pants: "#3c4c5c", vest: "#40566d", accent: "#9bc5e5", boots: "#1a2025", headwear: "blueHelmet", pattern: "un", gear: ["plateCarrier", "grenadeBandolier", "radio"], gloves: true },
+  peacekeeper: { shirt: "#6683a4", pants: "#3b4e5f", vest: "#40566c", accent: "#a2c9e3", boots: "#192026", headwear: "blueHelmet", pattern: "un", gear: ["plateCarrier", "magPouches", "radio"], gloves: true },
+  shotgunSoldier: { shirt: "#6783a1", pants: "#3b4c5c", vest: "#40556a", accent: "#a5cce4", boots: "#192026", headwear: "blueHelmet", pattern: "un", gear: ["plateCarrier", "shotgunShells", "radio"], gloves: true },
+  terminator: { shirt: "#3c4140", pants: "#292e2e", vest: "#202725", accent: "#b59155", boots: "#111514", headwear: "combatHelmet", gear: ["heavyArmor", "ammoHarness", "ammoPack", "kneePads"], gloves: true },
+  warMachine: { shirt: "#3d4540", pants: "#2a302c", vest: "#222b25", accent: "#aa7047", boots: "#121613", headwear: "combatHelmet", gear: ["heavyArmor", "grenadeBandolier", "ammoPack", "kneePads"], gloves: true },
+  heavy: { shirt: "#4a4740", pants: "#302f2c", vest: "#292b28", accent: "#8e6f4d", boots: "#171613", headwear: "combatHelmet", gear: ["heavyArmor", "ammoHarness", "kneePads"], gloves: true },
+  dualGunner: { shirt: "#42434d", pants: "#292b33", vest: "#2c2e36", accent: "#a84c43", boots: "#15161a", headwear: "bandana", gear: ["dualHolsters", "ammoHarness"], gloves: true },
+  supportSoldier: { shirt: "#52604d", pants: "#344036", vest: "#263229", accent: "#93a780", boots: "#171b17", headwear: "combatHelmet", pattern: "camo", gear: ["plateCarrier", "magPouches", "kneePads", "radio"], gloves: true },
+};
+function explorationMemberAppearance(member: ExplorationMemberDefinition) {
+  const appearance = EXPLORATION_MEMBER_APPEARANCES[member.id];
+  if (!appearance) throw new Error(`Missing exploration appearance for member "${member.id}"`);
+  return appearance;
+}
+for (const member of [...EXPLORATION_MEMBERS, EXPLORATION_SUPPORT_SOLDIER]) explorationMemberAppearance(member);
 const EXPLORATION_MEMBER_IDS = new Set(EXPLORATION_MEMBERS.map((member) => member.id));
 
 function explorationVehicleKind(level: number): ExplorationVehicleKind {
@@ -9881,6 +9938,45 @@ function drawSurvivalHumanHeadAndFace(ctx: CanvasRenderingContext2D, facing: num
     ctx.beginPath(); ctx.moveTo(facing * -9, -123); ctx.lineTo(facing * 8, -116); ctx.moveTo(facing * -7, -128); ctx.lineTo(facing * 9, -121); ctx.stroke();
     ctx.fillStyle = "#3b352d";
     ctx.beginPath(); ctx.rect(facing * -10, -120, facing * 20, 3); ctx.fill();
+  } else if (headwear === "beanie") {
+    ctx.fillStyle = "#343b3c";
+    ctx.beginPath(); ctx.moveTo(facing * -10, -118); ctx.quadraticCurveTo(facing * -8, -131, 0, -133); ctx.quadraticCurveTo(facing * 8, -131, facing * 10, -118); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#252b2c"; roundedRect(ctx, -10.5, -121, 21, 5, 2); ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,.16)"; ctx.lineWidth = .7;
+    for (let x = -7; x <= 7; x += 4) { ctx.beginPath(); ctx.moveTo(x, -130); ctx.lineTo(x, -120); ctx.stroke(); }
+  } else if (headwear === "hardHat") {
+    ctx.fillStyle = "#e7b72e";
+    ctx.beginPath(); ctx.moveTo(facing * -11, -119); ctx.quadraticCurveTo(facing * -9, -131, 0, -133); ctx.quadraticCurveTo(facing * 9, -131, facing * 11, -119); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#f3cd48"; ctx.fillRect(-2, -132, 4, 13);
+    ctx.fillStyle = "#8f6c18"; ctx.beginPath(); ctx.ellipse(facing * 3, -118, 16, 2.6, 0, 0, Math.PI * 2); ctx.fill();
+  } else if (headwear === "fireHelmet") {
+    ctx.fillStyle = "#b83129";
+    ctx.beginPath(); ctx.moveTo(facing * -11, -118); ctx.quadraticCurveTo(facing * -9, -132, 0, -134); ctx.quadraticCurveTo(facing * 9, -132, facing * 11, -118); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#d7b33e"; ctx.fillRect(-2, -133, 4, 15);
+    ctx.fillStyle = "#711f1b"; ctx.beginPath(); ctx.ellipse(facing * 2, -117.5, 18, 3, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#e1c85e"; ctx.beginPath(); ctx.arc(0, -125, 3, 0, Math.PI * 2); ctx.fill();
+  } else if (headwear === "riotHelmet") {
+    ctx.fillStyle = "#202b32";
+    ctx.beginPath(); ctx.moveTo(facing * -11, -116); ctx.lineTo(facing * -10, -128); ctx.quadraticCurveTo(0, -136, facing * 11, -128); ctx.lineTo(facing * 12, -116); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = "#596b76"; ctx.lineWidth = 1.2; ctx.stroke();
+    ctx.fillStyle = "rgba(104,166,194,.3)";
+    ctx.beginPath(); ctx.moveTo(facing * 1, -121); ctx.lineTo(facing * 15, -118); ctx.lineTo(facing * 13, -109); ctx.lineTo(facing * 6, -111); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = "#718591"; ctx.beginPath(); ctx.moveTo(facing * -7, -116); ctx.lineTo(facing * -5, -108); ctx.stroke();
+  } else if (headwear === "boonie") {
+    ctx.fillStyle = "#4f5d48";
+    ctx.beginPath(); ctx.ellipse(0, -120, 18, 3.8, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#5e6c54";
+    ctx.beginPath(); ctx.moveTo(-9, -120); ctx.quadraticCurveTo(-7, -131, 0, -132); ctx.quadraticCurveTo(8, -130, 10, -120); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = "#303a2e"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-7, -125); ctx.lineTo(8, -123); ctx.stroke();
+  } else if (headwear === "blueHelmet") {
+    ctx.fillStyle = "#4d91c3";
+    ctx.beginPath(); ctx.moveTo(facing * -10.5, -118); ctx.lineTo(facing * -8.5, -128); ctx.quadraticCurveTo(0, -135, facing * 10.5, -127); ctx.lineTo(facing * 11, -118); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = "#b8d9ec"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(facing * -7, -126); ctx.lineTo(facing * 7, -129); ctx.stroke();
+    ctx.fillStyle = "#e7f1f5"; ctx.font = "bold 5px sans-serif"; ctx.fillText("UN", facing * -4, -121);
+  } else if (headwear === "bandana") {
+    ctx.fillStyle = "#7e302b";
+    ctx.beginPath(); ctx.moveTo(facing * -10, -121); ctx.quadraticCurveTo(0, -130, facing * 10, -121); ctx.lineTo(facing * 9, -117); ctx.lineTo(facing * -9, -117); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(facing * -8, -119); ctx.lineTo(facing * -15, -110); ctx.lineTo(facing * -8, -112); ctx.closePath(); ctx.fill();
   } else {
     ctx.fillStyle = "#4a563b";
     ctx.beginPath();
@@ -9906,6 +10002,154 @@ function drawSurvivalHumanHeadAndFace(ctx: CanvasRenderingContext2D, facing: num
   ctx.beginPath(); ctx.moveTo(facing * 3, -112.5); ctx.lineTo(facing * 6, -112.5); ctx.stroke();
 }
 
+function drawExplorationBackEquipment(ctx: CanvasRenderingContext2D, appearance: ExplorationMemberAppearance, facing: number) {
+  ctx.save();
+  if (appearance.gear.includes("oxygenTank")) {
+    ctx.fillStyle = "#2c3736"; ctx.strokeStyle = "#7e8d87"; ctx.lineWidth = 1.2;
+    roundedRect(ctx, -18, -101, 10, 32, 4); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = "#c8b64a"; ctx.fillRect(-16.5, -96, 7, 4); ctx.fillRect(-16.5, -77, 7, 3);
+    ctx.strokeStyle = "#202625"; ctx.beginPath(); ctx.moveTo(-13, -101); ctx.quadraticCurveTo(-24, -109, -20, -82); ctx.stroke();
+  }
+  if (appearance.gear.includes("medicalPack")) {
+    ctx.fillStyle = "#d8d9cf"; ctx.strokeStyle = "#6d7876"; ctx.lineWidth = 1;
+    roundedRect(ctx, -20, -98, 13, 27, 3); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = "#b93436"; ctx.fillRect(-16.5, -91, 6, 14); ctx.fillRect(-19, -87, 11, 6);
+  }
+  if (appearance.gear.includes("ammoPack")) {
+    ctx.fillStyle = "#282e2b"; ctx.strokeStyle = "#656c64"; ctx.lineWidth = 1;
+    roundedRect(ctx, -21, -101, 15, 32, 3); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = appearance.accent;
+    for (let y = -96; y <= -76; y += 7) { ctx.fillRect(-18, y, 9, 2); }
+  }
+  if (appearance.gear.includes("molotov")) {
+    ctx.save(); ctx.translate(-16 * facing, -73); ctx.rotate(-.18 * facing);
+    ctx.fillStyle = "#557148"; roundedRect(ctx, -3, -11, 6, 14, 2); ctx.fill();
+    ctx.fillStyle = "#8b3b2c"; ctx.fillRect(-2, -15, 4, 6);
+    ctx.fillStyle = "#c5b483"; ctx.fillRect(-1.5, -19, 3, 5); ctx.restore();
+  }
+  ctx.restore();
+}
+
+function drawExplorationOutfitDetails(ctx: CanvasRenderingContext2D, appearance: ExplorationMemberAppearance, facing: number) {
+  const has = (gear: ExplorationMemberGear) => appearance.gear.includes(gear);
+  ctx.save();
+  // 衣料接缝、领口与不同职业的织物纹理。
+  ctx.strokeStyle = "rgba(229,235,222,.18)"; ctx.lineWidth = .75;
+  ctx.beginPath(); ctx.moveTo(-13, -100); ctx.lineTo(0, -94); ctx.lineTo(13, -100); ctx.moveTo(0, -94); ctx.lineTo(0, -68); ctx.stroke();
+  if (appearance.pattern === "plaid") {
+    ctx.strokeStyle = "rgba(34,27,23,.42)"; ctx.lineWidth = .7;
+    for (let y = -97; y <= -70; y += 7) { ctx.beginPath(); ctx.moveTo(-14, y); ctx.lineTo(14, y); ctx.stroke(); }
+    for (let x = -9; x <= 9; x += 6) { ctx.beginPath(); ctx.moveTo(x, -100); ctx.lineTo(x, -68); ctx.stroke(); }
+  } else if (appearance.pattern === "camo") {
+    ctx.fillStyle = "rgba(22,34,25,.45)";
+    [[-10,-98,7,5],[3,-96,9,6],[-5,-84,8,5],[5,-75,6,4]].forEach(([x,y,w,h]) => { ctx.beginPath(); ctx.ellipse(x, y, w, h, -.25, 0, Math.PI * 2); ctx.fill(); });
+  } else if (appearance.pattern === "un") {
+    ctx.fillStyle = "#e8f0ef"; ctx.font = "bold 5px sans-serif"; ctx.fillText("UN", -5, -94);
+  }
+  if (has("suspenders")) {
+    ctx.strokeStyle = appearance.accent; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(-9, -101); ctx.lineTo(-5, -68); ctx.moveTo(9, -101); ctx.lineTo(5, -68); ctx.stroke();
+  }
+  if (has("hiVis")) {
+    ctx.strokeStyle = "#f2d84d"; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(-10, -98); ctx.lineTo(-6, -69); ctx.moveTo(10, -98); ctx.lineTo(6, -69); ctx.moveTo(-12, -81); ctx.lineTo(12, -81); ctx.stroke();
+  }
+  if (has("plateCarrier") || has("heavyArmor") || has("riotArmor")) {
+    ctx.strokeStyle = has("heavyArmor") ? "#78817e" : has("riotArmor") ? "#617581" : "#5e6d61"; ctx.lineWidth = has("heavyArmor") ? 2 : 1;
+    roundedRect(ctx, -11, -92, 22, 24, 3); ctx.stroke();
+    ctx.strokeStyle = "rgba(205,214,204,.25)"; ctx.lineWidth = .8;
+    ctx.beginPath(); ctx.moveTo(-8, -87); ctx.lineTo(8, -87); ctx.moveTo(-8, -82); ctx.lineTo(8, -82); ctx.stroke();
+  }
+  if (has("heavyArmor") || has("riotArmor")) {
+    ctx.fillStyle = has("heavyArmor") ? "#39413f" : "#2d3a42";
+    roundedRect(ctx, -19, -101, 8, 13, 3); ctx.fill(); roundedRect(ctx, 11, -101, 8, 13, 3); ctx.fill();
+    ctx.strokeStyle = "#6c7878"; ctx.lineWidth = 1; ctx.strokeRect(-17, -62, 11, 17); ctx.strokeRect(6, -62, 11, 17);
+  }
+  if (has("magPouches")) {
+    ctx.fillStyle = "#323c34";
+    for (let index = 0; index < 3; index++) { roundedRect(ctx, -10 + index * 7, -78, 6, 10, 1); ctx.fill(); ctx.strokeStyle = "#667064"; ctx.stroke(); }
+  }
+  if (has("shotgunShells")) {
+    ctx.save(); ctx.translate(0, -84); ctx.rotate(-.5);
+    for (let index = -3; index <= 3; index++) { ctx.fillStyle = "#9f342b"; roundedRect(ctx, index * 4 - 1.3, -7, 2.6, 11, 1); ctx.fill(); ctx.fillStyle = "#c4a45c"; ctx.fillRect(index * 4 - 1.3, -7, 2.6, 2); }
+    ctx.restore();
+  }
+  if (has("grenadeBandolier")) {
+    ctx.save(); ctx.translate(0, -84); ctx.rotate(-.48);
+    for (let index = -2; index <= 2; index++) { ctx.fillStyle = "#4d5b42"; ctx.beginPath(); ctx.arc(index * 5, 0, 3.2, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = "#8b987a"; ctx.stroke(); ctx.fillStyle = "#252c24"; ctx.fillRect(index * 5 - 1, -5, 2, 3); }
+    ctx.restore();
+  }
+  if (has("bandolier") || has("ammoHarness")) {
+    ctx.strokeStyle = has("ammoHarness") ? "#b09254" : "#8e6742"; ctx.lineWidth = has("ammoHarness") ? 5 : 3.5;
+    ctx.beginPath(); ctx.moveTo(-12, -100); ctx.lineTo(11, -68); ctx.stroke();
+    ctx.strokeStyle = "#2c2a24"; ctx.lineWidth = 1;
+    for (let index = 0; index < 6; index++) { const x = -9 + index * 3.5; const y = -95 + index * 4.8; ctx.beginPath(); ctx.moveTo(x - 2, y + 2); ctx.lineTo(x + 2, y - 2); ctx.stroke(); }
+  }
+  if (has("bombVest")) {
+    ctx.fillStyle = "#303732";
+    for (let index = 0; index < 4; index++) { roundedRect(ctx, -10 + index * 5, -89, 3.5, 18, 1); ctx.fill(); ctx.fillStyle = index % 2 ? "#64583d" : "#3d4941"; }
+    ctx.strokeStyle = "#c43c32"; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.moveTo(-8, -77); ctx.quadraticCurveTo(0, -65, 8, -77); ctx.moveTo(-3, -89); ctx.lineTo(5, -71); ctx.stroke();
+    ctx.fillStyle = "#7d191b"; roundedRect(ctx, 5, -84, 5, 8, 1); ctx.fill();
+  }
+  if (has("thermite")) {
+    ctx.fillStyle = "#8e2f24";
+    for (let index = 0; index < 2; index++) { roundedRect(ctx, 8 + index * 4, -86, 3, 15, 1); ctx.fill(); ctx.fillStyle = "#dd7334"; ctx.fillRect(8 + index * 4, -84, 3, 3); }
+  }
+  if (has("knifeSheaths")) {
+    ctx.fillStyle = "#202520"; ctx.strokeStyle = "#788077";
+    ctx.save(); ctx.translate(-14, -70); ctx.rotate(.2); roundedRect(ctx, -2, -3, 5, 22, 2); ctx.fill(); ctx.stroke(); ctx.restore();
+    ctx.save(); ctx.translate(9, -70); ctx.rotate(-.22); roundedRect(ctx, -2, -3, 5, 22, 2); ctx.fill(); ctx.stroke(); ctx.restore();
+  }
+  if (has("dualHolsters")) {
+    ctx.fillStyle = "#28231f";
+    ctx.save(); ctx.translate(-14, -62); ctx.rotate(.18); roundedRect(ctx, -3, 0, 7, 18, 2); ctx.fill(); ctx.restore();
+    ctx.save(); ctx.translate(8, -62); ctx.rotate(-.18); roundedRect(ctx, -3, 0, 7, 18, 2); ctx.fill(); ctx.restore();
+  }
+  if (has("dutyBelt") || has("toolBelt")) {
+    ctx.fillStyle = has("dutyBelt") ? "#14191c" : "#5b3e29"; ctx.fillRect(-14, -68, 28, 4);
+    ctx.fillStyle = appearance.accent; ctx.fillRect(-2, -69, 4, 5);
+    if (has("toolBelt")) { ctx.fillStyle = "#7d5738"; roundedRect(ctx, -14, -67, 7, 11, 2); ctx.fill(); roundedRect(ctx, 7, -67, 7, 9, 2); ctx.fill(); }
+  }
+  if (has("taser")) {
+    ctx.fillStyle = "#d2b93f"; ctx.strokeStyle = "#1d2425"; ctx.lineWidth = 1;
+    ctx.save(); ctx.translate(12 * facing, -63); ctx.rotate(-.15 * facing); roundedRect(ctx, -3, -8, 7, 13, 2); ctx.fill(); ctx.stroke(); ctx.restore();
+  }
+  if (has("badge")) {
+    ctx.fillStyle = appearance.accent;
+    ctx.beginPath(); ctx.moveTo(5, -96); ctx.lineTo(8, -92); ctx.lineTo(6, -87); ctx.lineTo(2, -87); ctx.lineTo(1, -92); ctx.closePath(); ctx.fill();
+  }
+  if (has("redCross")) {
+    ctx.fillStyle = "#b72f34"; ctx.fillRect(-2, -96, 4, 13); ctx.fillRect(-7, -91, 14, 4);
+  }
+  if (has("reflective")) {
+    ctx.fillStyle = "#e2ce54"; ctx.fillRect(-14, -80, 28, 3); ctx.fillRect(-14, -73, 28, 2);
+  }
+  if (has("kneePads")) {
+    ctx.fillStyle = "#262d2b"; ctx.strokeStyle = "#626d68"; ctx.lineWidth = .8;
+    roundedRect(ctx, -13, -48, 10, 10, 3); ctx.fill(); ctx.stroke(); roundedRect(ctx, 3, -48, 10, 10, 3); ctx.fill(); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawExplorationHeadEquipment(ctx: CanvasRenderingContext2D, appearance: ExplorationMemberAppearance, facing: number) {
+  ctx.save();
+  if (appearance.gear.includes("goggles")) {
+    ctx.fillStyle = "rgba(91,157,178,.55)"; ctx.strokeStyle = "#26343a"; ctx.lineWidth = 1.2;
+    roundedRect(ctx, facing > 0 ? 1 : -11, -121, 10, 6, 2); ctx.fill(); ctx.stroke();
+  }
+  if (appearance.gear.includes("scarf")) {
+    ctx.fillStyle = appearance.accent;
+    ctx.beginPath(); ctx.moveTo(facing * -7, -113); ctx.lineTo(facing * 9, -116); ctx.lineTo(facing * 10, -109); ctx.lineTo(facing * -5, -106); ctx.closePath(); ctx.fill();
+  }
+  if (appearance.gear.includes("radio")) {
+    ctx.fillStyle = "#1c2325"; roundedRect(ctx, facing * -15, -105, 6, 13, 2); ctx.fill();
+    ctx.strokeStyle = "#232b2d"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(facing * -12, -105); ctx.lineTo(facing * -15, -116); ctx.stroke();
+    ctx.fillStyle = "#63b06f"; ctx.beginPath(); ctx.arc(facing * -12, -101, 1, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
 /** 探索队伍详情与战斗复用生存模式的人体骨架、步态、枪焰和真实武器模型。 */
 function ExplorationMemberPreview({ member, motion = "standing", reloadProgress = 0, reloadStartedAt, actionStartedAt, battleScale = false, automaticWeaponStartedAt, weaponOverride, openingAttackPending = false, shieldHp, knockedDown = false }: { member: ExplorationMemberDefinition; motion?: "standing" | "moving" | "attacking" | "reloading" | "kicking" | "throwing"; reloadProgress?: number; reloadStartedAt?: number; actionStartedAt?: number; battleScale?: boolean; automaticWeaponStartedAt?: number; weaponOverride?: WeaponKey; openingAttackPending?: boolean; shieldHp?: number; knockedDown?: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -9926,14 +10170,11 @@ function ExplorationMemberPreview({ member, motion = "standing", reloadProgress 
           : reloadProgress);
       const facing = 1;
       const scale = battleScale ? EXPLORATION_BATTLE_MEMBER_SCALE : 1.9;
-      const farmer = member.id === "farmer";
-      const police = member.faction.includes("警察");
-      const soldier = member.faction === "军队" || member.faction === "特战小组" || member.faction === "联合国部队";
-      const emergency = member.faction === "紧急救助";
-      const rearUniform = farmer ? "#5b513e" : police ? "#172b43" : soldier ? "#252d29" : emergency ? "#493637" : "#313936";
-      const frontUniform = farmer ? "#665b44" : police ? "#1d3653" : soldier ? "#2c3530" : emergency ? "#613e3b" : "#39423e";
-      const torsoUniform = farmer ? "#777045" : police ? "#254867" : soldier ? "#384537" : emergency ? "#8e493c" : "#4e5b47";
-      const vestUniform = farmer ? "#5c5638" : police ? "#132a40" : soldier ? "#1f2a22" : emergency ? "#4a302f" : "#3c4738";
+      const appearance = explorationMemberAppearance(member);
+      const rearUniform = appearance.pants;
+      const frontUniform = appearance.pants;
+      const torsoUniform = appearance.shirt;
+      const vestUniform = appearance.vest;
       const gaitCycle = (now / 230) % 1;
       const moving = renderMotion === "moving";
       const kickProgress = Math.min(1, Math.max(0, (now - motionStartedAt) / KICK_ANIMATION_MS));
@@ -9958,24 +10199,17 @@ function ExplorationMemberPreview({ member, motion = "standing", reloadProgress 
       const frontLeg = moving ? gaitLegPose(gaitCycle, facing, 5) : standingLegPose(facing, 5);
       drawLimb(ctx, rearLeg, 7.5, rearUniform, "#151917");
       drawLimb(ctx, frontLeg, 7.5, frontUniform, "#171c19");
-      drawFoot(ctx, rearLeg[2], facing, 14, "#161a17", renderMotion === "kicking" ? 1 : moving ? gaitFootPitch((gaitCycle + .5) % 1) : 0);
-      drawFoot(ctx, frontLeg[2], facing, 14, "#171b18", moving ? gaitFootPitch(gaitCycle) : 0);
+      drawFoot(ctx, rearLeg[2], facing, 14, appearance.boots, renderMotion === "kicking" ? 1 : moving ? gaitFootPitch((gaitCycle + .5) % 1) : 0);
+      drawFoot(ctx, frontLeg[2], facing, 14, appearance.boots, moving ? gaitFootPitch(gaitCycle) : 0);
+      drawExplorationBackEquipment(ctx, appearance, facing);
       ctx.fillStyle = torsoUniform;
       ctx.beginPath();
       ctx.moveTo(-15, -102); ctx.lineTo(15, -102); ctx.lineTo(13, -66); ctx.lineTo(-13, -66); ctx.closePath(); ctx.fill();
       ctx.fillStyle = vestUniform;
       roundedRect(ctx, -11, -91, 22, 23, 3); ctx.fill();
-      if (member.id === "bomber") {
-        ctx.fillStyle = "#222a25";
-        for (let index = 0; index < 4; index++) { roundedRect(ctx, -10 + index * 5, -89, 3.5, 18, 1); ctx.fill(); }
-        ctx.strokeStyle = "#b33a31"; ctx.lineWidth = 1.4;
-        ctx.beginPath(); ctx.moveTo(-8, -76); ctx.quadraticCurveTo(0, -66, 8, -76); ctx.stroke();
-      }
-      if (police) {
-        ctx.fillStyle = "#b7d0e2";
-        ctx.beginPath(); ctx.arc(0, -84, 3.1, 0, Math.PI * 2); ctx.fill();
-      }
-      drawSurvivalHumanHeadAndFace(ctx, facing, member.headwear ?? (farmer ? "farmerHat" : police ? "policeCap" : soldier ? "combatHelmet" : "cap"));
+      drawExplorationOutfitDetails(ctx, appearance, facing);
+      drawSurvivalHumanHeadAndFace(ctx, facing, appearance.headwear);
+      drawExplorationHeadEquipment(ctx, appearance, facing);
 
       const melee = MELEE_WEAPONS.has(renderWeapon);
       const recoil = !melee && renderMotion === "attacking" ? Math.sin(Math.min(1, attackPhase * 2) * Math.PI) : 0;
@@ -9999,10 +10233,11 @@ function ExplorationMemberPreview({ member, motion = "standing", reloadProgress 
       const elbowDown = (shoulder: [number, number], hand: [number, number]): [number, number] => [(shoulder[0] + hand[0]) / 2, (shoulder[1] + hand[1]) / 2 + 15];
       const rightArm = solveTwoBoneArm(rearShoulder, rightHand, elbowDown(rearShoulder, rightHand));
       const leadArm = solveTwoBoneArm(leadShoulder, leadHand, elbowDown(leadShoulder, leadHand));
-      drawLimb(ctx, rightArm, 6.4, torsoUniform, "#c79068");
-      drawLimb(ctx, leadArm, 6.4, torsoUniform, "#c79068");
-      drawHand(ctx, rightArm[2], rightArm[1], 6.5, "#c79068");
-      drawHand(ctx, leadArm[2], leadArm[1], 6.5, "#c79068");
+      const handColor = appearance.gloves ? "#252b29" : "#c79068";
+      drawLimb(ctx, rightArm, 6.4, torsoUniform, handColor);
+      drawLimb(ctx, leadArm, 6.4, torsoUniform, handColor);
+      drawHand(ctx, rightArm[2], rightArm[1], 6.5, handColor);
+      drawHand(ctx, leadArm[2], leadArm[1], 6.5, handColor);
       ctx.save();
       ctx.translate(gunX, gunY);
       ctx.rotate(weaponAngle);
@@ -10046,11 +10281,22 @@ function ExplorationMemberPreview({ member, motion = "standing", reloadProgress 
       ctx.restore();
       if ((member.battleProfile?.shieldHp ?? 0) > 0 && (shieldHp ?? member.battleProfile?.shieldHp ?? 0) > 0) {
         ctx.save();
-        ctx.translate(2, -72);
-        ctx.fillStyle = member.id === "shieldTrooper" ? "#49555f" : "#27343d";
-        ctx.strokeStyle = "#93a3af"; ctx.lineWidth = 2;
-        roundedRect(ctx, -5, -26, member.id === "shieldTrooper" ? 28 : 24, 58, 5); ctx.fill(); ctx.stroke();
-        ctx.fillStyle = "rgba(138,188,214,.32)"; roundedRect(ctx, 0, -20, 15, 13, 2); ctx.fill();
+        const metalShield = appearance.gear.includes("heavyArmor");
+        ctx.translate(4, -71);
+        ctx.fillStyle = metalShield ? "#4b565d" : "#26343d";
+        ctx.strokeStyle = metalShield ? "#9aa5aa" : "#748894"; ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(-9, -34); ctx.lineTo(metalShield ? 25 : 21, -32); ctx.lineTo(metalShield ? 27 : 23, 27);
+        ctx.lineTo(metalShield ? 17 : 14, 38); ctx.lineTo(-7, 31); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = metalShield ? "rgba(120,157,171,.25)" : "rgba(121,181,207,.38)";
+        roundedRect(ctx, -2, -26, metalShield ? 20 : 17, 14, 2); ctx.fill();
+        ctx.strokeStyle = "#9aaeb8"; ctx.lineWidth = 1; ctx.stroke();
+        ctx.fillStyle = metalShield ? "#b8c2c5" : "#dbe7eb"; ctx.font = "bold 5px sans-serif";
+        ctx.fillText(metalShield ? "SRT" : "POLICE", -2, 9);
+        ctx.fillStyle = "#20272a";
+        [[-4,-28],[18,-26],[-3,25],[18,28]].forEach(([x,y]) => { ctx.beginPath(); ctx.arc(x, y, 1.4, 0, Math.PI * 2); ctx.fill(); });
+        ctx.strokeStyle = "rgba(219,225,221,.24)"; ctx.lineWidth = .8;
+        ctx.beginPath(); ctx.moveTo(1, 16); ctx.lineTo(16, 4); ctx.moveTo(5, 24); ctx.lineTo(20, 15); ctx.stroke();
         ctx.restore();
       }
       ctx.restore();
