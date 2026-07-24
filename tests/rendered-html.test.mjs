@@ -650,7 +650,7 @@ test("level mode: playable escape-home level with scenes, tasks, camera and pick
   assert.match(source, /g\.owned = new Set<WeaponKey>\(\["fists"\]\)/);
   assert.match(source, /onClick=\{\(\) => startLevel\(level\.id\)\}/);
   // 关卡模式金币结算守卫（waveTotal=0 不参与均摊公式）
-  assert.match(source, /g\.mode === "level" \? 0 : Math\.max\(6, Math\.round\(dailyKillBudget\(g\.day\) \/ g\.waveTotal\)\)/);
+  assert.match(source, /g\.mode === "level" \? 0 : Math\.max\(6, Math\.round\(killBudget \/ g\.waveTotal\)\)/);
   // HUD：关卡标题/任务副行/用时/隐藏道具栏
   assert.match(source, /levelTitleById\(g\.level\?\.levelId/);
   assert.match(source, /levelTaskText\(g, now\)/);

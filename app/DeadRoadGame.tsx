@@ -16,6 +16,11 @@ import {
   type CoOpGamepadButtons,
   type GamepadFocusDirection,
 } from "./coOp";
+import {
+  cappedDailyKillReward,
+  dailyKillBudget,
+  settleDailyIncome,
+} from "./survivalEconomy";
 import { firearmReloadInsertionTimeline, soundManager as sound } from "./sound";
 import type { FirearmSoundKey } from "./sound";
 
@@ -486,14 +491,6 @@ const ARMORS: Record<ArmorKey, Armor> = {
 const MEDKIT_PRICE = 500;
 const MEDKIT_HEAL = 50;
 
-// 每日总收入区间（击杀获取 + 通关结算奖励之和）：1–10 天 900–1200，11–20 天 1900–2300，21 天起 2900–3500
-function dailyIncomeBand(day: number): [number, number] {
-  return day <= 10 ? [900, 1200] : day <= 20 ? [1900, 2300] : [2900, 3500];
-}
-// 当日击杀奖励总预算（约为区间下限的一半）：按僵尸数量均摊到每只，通关结算奖励再补足到区间
-function dailyKillBudget(day: number): number {
-  return day <= 10 ? 460 : day <= 20 ? 950 : 1450;
-}
 const THROW_FLIGHT_MS = 620;
 const FRAG_FUSE_MS = 2000;
 const MOLOTOV_BURN_MS = 10000;
@@ -15630,8 +15627,12 @@ export function DeadRoadGame() {
             // 击杀奖励：当日击杀预算按僵尸总数均摊（僵尸随天数变多、单价相应下降），大块头按体型小幅加成；
             // 通关时再发结算奖励补足到当天收入区间，保证「击杀 + 结算」每天总获取落在区间内
             // 关卡模式：无金币经济（waveTotal=0，均摊公式会失去意义），仅累计击杀数
-            const coinGain = g.mode === "level" ? 0 : Math.max(6, Math.round(dailyKillBudget(g.day) / g.waveTotal)) + Math.min(6, Math.floor(z.maxHp / 90));
+            const killBudget = g.mode === "survival" ? dailyKillBudget(g.day) : 460;
+            const rawCoinGain = g.mode === "level" ? 0 : Math.max(6, Math.round(killBudget / g.waveTotal)) + Math.min(6, Math.floor(z.maxHp / 90));
             const rewardOwner = g.coOp ? z.rewardOwner ?? 1 : 1;
+            const coinGain = g.mode === "survival"
+              ? cappedDailyKillReward(g.day, dayKillCoinsForSlot(g, rewardOwner), rawCoinGain)
+              : rawCoinGain;
             addCoinsForSlot(g, rewardOwner, coinGain);
             g.stats.coinsEarned += coinGain;
             addDayKillCoinsForSlot(g, rewardOwner, coinGain);
@@ -15740,12 +15741,9 @@ export function DeadRoadGame() {
           } else if (g.mode === "survival" && g.spawned >= g.waveTotal && g.zombies.length === 0) {
             if (g.waveClearedAt === null) g.waveClearedAt = now;
             if (now - g.waveClearedAt >= ZOMBIE_DEATH_FALL_MS + 200) {
-              // 通关结算奖励：在当天收入区间内随机取一个目标总额，减去当天击杀已得即为奖励；
-              // 击杀超目标时仍发一笔保底（区间下限的 15%），保证每天总获取落在区间内且略有浮动
-              const [bandLo, bandHi] = dailyIncomeBand(g.day);
+              // P1、P2 分别按自己的击杀所得补足到当天目标，总收入独立且都落在对应日段区间内。
               for (const slot of (g.coOp ? [1, 2] : [1]) as PlayerSlot[]) {
-                const targetTotal = Math.round(bandLo + Math.random() * (bandHi - bandLo));
-                const bonus = Math.max(targetTotal - dayKillCoinsForSlot(g, slot), Math.round(bandLo * 0.15));
+                const { bonus } = settleDailyIncome(g.day, dayKillCoinsForSlot(g, slot));
                 addCoinsForSlot(g, slot, bonus);
                 g.stats.bonusEarned += bonus;
                 if (slot === 2 && g.secondGear) g.secondGear.lastDayBonus = bonus;
