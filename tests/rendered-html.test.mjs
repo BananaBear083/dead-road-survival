@@ -2090,3 +2090,26 @@ test("adds the bomber headscarf, faster rush units and an unowned lottery roster
   assert.match(css, /\.lottery-unowned-backdrop/);
   assert.match(css, /\.lottery-unowned-grid[^}]*grid-template-columns:\s*repeat\(auto-fill,/);
 });
+
+test("adds a persistent three-category black market beneath the exploration shop", async () => {
+  const source = await readFile(new URL("../app/DeadRoadGame.tsx", import.meta.url), "utf8");
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+
+  assert.match(source, /type ExplorationBlackMarketCategory = "sidearms" \| "rifles" \| "snipers"/);
+  assert.match(source, /name: "冲锋枪\/手枪弹夹", price: 1500/);
+  assert.match(source, /name: "冲锋枪\/手枪扩容弹夹", price: 2000/);
+  assert.match(source, /name: "手枪增长型枪管", price: 1000/);
+  assert.match(source, /name: "步枪扩容弹夹", price: 2500/);
+  assert.match(source, /name: "狙击枪铝热弹夹", price: 4000/);
+  assert.match(source, /name: "狙击枪枪托", price: 2000/);
+  assert.match(source, /blackMarketInventory: ExplorationBlackMarketInventory/);
+  assert.match(source, /setExplorationBlackMarketInventory\(progress\.blackMarketInventory\)/);
+  assert.match(source, /purchaseExplorationBlackMarketItem/);
+  assert.match(source, /<section className="black-market-page" aria-label="黑市">/);
+  assert.match(source, /EXPLORATION_BLACK_MARKET_CATEGORIES\.map/);
+  assert.match(source, /EXPLORATION_BLACK_MARKET_ITEMS\.filter\(\(item\) => item\.category === explorationBlackMarketCategory\)/);
+  assert.match(source, /用途待开放 · 可重复购买并永久保存库存/);
+  assert.match(css, /\.exploration-shop-scroll-spacer[^}]*height:\s*400%/);
+  assert.match(css, /\.black-market-page[^}]*top:\s*300%/);
+  assert.match(css, /\.black-market-grid[^}]*overflow-y:\s*auto/);
+});

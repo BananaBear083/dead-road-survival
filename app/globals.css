@@ -529,7 +529,7 @@ button { -webkit-tap-highlight-color: transparent; }
 
 /* 探索商店：旧公路旁的小型商铺，柜台前仅提供点券兑换。 */
 .exploration-shop-panel { isolation: isolate; overflow-x: hidden; overflow-y: auto; background: #303733; scroll-snap-type: y proximity; }
-.exploration-shop-scroll-spacer { width: 1px; height: 300%; pointer-events: none; }
+.exploration-shop-scroll-spacer { width: 1px; height: 400%; pointer-events: none; }
 .exploration-shop-scenery { position: absolute; z-index: -1; left: 0; right: 0; top: 0; height: 100%; overflow: hidden; background: repeating-linear-gradient(90deg, rgba(255,255,255,.018) 0 4px, transparent 5px 68px), linear-gradient(180deg, #303b35 0 18%, #5c5140 18% 72%, #39342d 72%); }
 .shop-awning { position: absolute; left: 12%; right: 12%; top: 16%; height: 42px; background: repeating-linear-gradient(90deg, #6f2f2b 0 72px, #d4c39a 73px 142px); border: 4px solid #2d2d26; clip-path: polygon(2% 0, 98% 0, 100% 100%, 0 100%); box-shadow: 0 13px 0 rgba(0,0,0,.24); }
 .shop-shelf { position: absolute; top: 29%; width: 25%; height: 39%; display: flex; align-items: end; justify-content: space-around; padding: 18px; background: repeating-linear-gradient(180deg, transparent 0 29%, #29271f 30% 34%, transparent 35% 62%, #29271f 63% 68%, transparent 69%); border: 7px solid #312d23; }
@@ -603,6 +603,38 @@ button { -webkit-tap-highlight-color: transparent; }
 .consumable-product h3 { margin:0; font-size:20px; }.consumable-product p { margin:0; color:#9ba49a; font-size:10px; line-height:1.5; }.consumable-product span,.consumable-product strong { font-size:10px; }.consumable-product strong { color:#f1cf58; }
 .consumable-product button { padding:11px; color:#11160f; background:var(--signal); border:0; border-bottom:5px solid #705b18; cursor:pointer; font-weight:1000; }
 .consumable-product button:disabled { color:#777d73; background:#343b35; border-bottom-color:#202620; cursor:not-allowed; }
+
+/* 商店第四屏：黑市配件交易。当前只持久化配件库存，具体改装效果等待后续规则。 */
+.black-market-page { position:absolute; z-index:5; left:0; right:0; top:300%; height:100%; overflow:hidden; scroll-snap-align:start; color:#e7e1d2; background:radial-gradient(circle at 50% 30%,rgba(112,29,23,.18),transparent 34%),linear-gradient(180deg,#151817 0 24%,#090b0a 24% 100%); border:4px solid #4f4338; box-shadow:inset 0 0 120px #000; }
+.black-market-scenery { position:absolute; inset:0; opacity:.72; background:repeating-linear-gradient(90deg,transparent 0 94px,rgba(255,255,255,.018) 95px 97px),linear-gradient(180deg,transparent 0 76%,#201a15 77%); pointer-events:none; }
+.black-market-scenery::before,.black-market-scenery::after { content:""; position:absolute; bottom:3%; width:18%; height:28%; background:repeating-linear-gradient(0deg,#33281e 0 19px,#211a15 20px 24px); border:5px solid #100d0b; box-shadow:inset 0 0 28px #090706; }
+.black-market-scenery::before { left:2%; transform:rotate(-2deg); }.black-market-scenery::after { right:2%; transform:rotate(2deg); }
+.black-market-scenery > i { position:absolute; top:6%; width:220px; height:220px; background:radial-gradient(circle,rgba(230,76,44,.18),transparent 66%); }.black-market-scenery > i:first-child { left:9%; }.black-market-scenery > i:nth-child(2) { right:9%; }
+.black-market-scenery > b { position:absolute; left:50%; top:14%; width:150px; height:24px; background:#2b2923; border:3px solid #0b0c0b; box-shadow:0 8px 18px #000; transform:translateX(-50%); }
+.black-market-scenery > span { position:absolute; left:7%; right:7%; bottom:5%; height:7px; background:#4f3e2f; box-shadow:0 -5px #1b1612; }
+.black-market-heading { position:absolute; z-index:2; left:50%; top:4%; text-align:center; transform:translateX(-50%); text-shadow:0 4px 10px #000; }
+.black-market-heading p,.black-market-heading small { margin:0; color:#b8876a; font-size:9px; font-weight:1000; letter-spacing:.16em; white-space:nowrap; }
+.black-market-heading h2 { margin:1px 0 3px; color:#e84e36; font-size:42px; line-height:.95; letter-spacing:.12em; text-shadow:0 0 16px rgba(231,62,39,.46); }
+.black-market-wallet { position:absolute; z-index:4; right:3%; top:5%; min-width:132px; display:grid; gap:2px; padding:9px 13px; text-align:right; background:rgba(8,11,9,.93); border:1px solid #725a44; border-bottom:4px solid #2d241d; }
+.black-market-wallet small { color:#8d8377; font-size:8px; font-weight:900; }.black-market-wallet strong { color:#e4c459; font:1000 18px/1 monospace; }
+.black-market-categories { position:absolute; z-index:4; left:50%; top:19%; display:flex; gap:8px; transform:translateX(-50%); }
+.black-market-categories button { min-width:154px; padding:9px 14px; color:#8f8d85; background:#171a18; border:1px solid #51463c; border-bottom:4px solid #080a09; cursor:pointer; font-size:10px; font-weight:1000; letter-spacing:.08em; }
+.black-market-categories button:hover,.black-market-categories button.active { color:#f0e8d3; background:#642a22; border-color:#b4503e; box-shadow:0 0 12px rgba(211,57,39,.26); }
+.black-market-grid { position:absolute; z-index:3; left:6%; right:6%; top:29%; bottom:8%; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); align-content:start; gap:10px; padding:3px 9px 14px 3px; overflow-y:auto; scrollbar-color:#80382c #111411; }
+.black-market-product { min-height:128px; display:grid; grid-template-columns:66px minmax(0,1fr); grid-template-rows:1fr auto; gap:7px 10px; padding:11px; background:rgba(15,18,16,.96); border:1px solid #51483d; border-left:4px solid #8e3d30; box-shadow:6px 7px 0 rgba(0,0,0,.42); }
+.black-market-product > div { min-width:0; align-self:center; }.black-market-product h3 { margin:0 0 5px; font-size:12px; line-height:1.2; }.black-market-product small { display:block; color:#767d76; font-size:8px; }
+.black-market-product > span { align-self:center; color:#99958b; font-size:9px; font-weight:900; }.black-market-product > span b { color:#e5d2a3; }
+.black-market-product > button { padding:8px; color:#f4dfc1; background:#61291f; border:1px solid #a14a39; border-bottom:4px solid #2c120e; cursor:pointer; font-size:9px; font-weight:1000; }.black-market-product > button:disabled { color:#686d68; background:#252925; border-color:#3e443e; cursor:not-allowed; }
+.black-market-notice { position:absolute; z-index:5; left:50%; bottom:2%; margin:0; padding:7px 16px; color:#efcf85; background:rgba(9,11,9,.94); border:1px solid #6d503b; font-size:9px; font-weight:900; transform:translateX(-50%); }
+.black-market-part-icon { position:relative; grid-row:1 / 3; align-self:center; width:64px; height:72px; display:block; overflow:hidden; background:radial-gradient(circle,#343b38 0,transparent 66%); }
+.black-market-part-icon i,.black-market-part-icon b,.black-market-part-icon em { position:absolute; display:block; background:linear-gradient(180deg,#929991,#464d49); border:2px solid #202522; box-shadow:inset 0 0 0 1px rgba(255,255,255,.08); }
+.black-market-part-icon.part-magazine i { left:21px; top:8px; width:24px; height:52px; border-radius:3px 3px 9px 11px; transform:skewX(-6deg); }.black-market-part-icon.part-magazine b { left:23px; top:4px; width:22px; height:8px; }
+.black-market-part-icon.part-barrel i { left:5px; top:29px; width:54px; height:11px; border-radius:6px; }.black-market-part-icon.part-barrel b { right:3px; top:25px; width:14px; height:19px; border-radius:3px; }
+.black-market-part-icon.part-trigger i { left:15px; top:17px; width:35px; height:37px; background:transparent; border:5px solid #69716d; border-radius:7px 7px 17px 17px; }.black-market-part-icon.part-trigger b { left:31px; top:24px; width:5px; height:22px; border-radius:4px; transform:rotate(18deg); }
+.black-market-part-icon.part-grip i { left:24px; top:10px; width:24px; height:53px; border-radius:5px 7px 12px 9px; transform:rotate(12deg); }.black-market-part-icon.part-grip b { left:28px; top:17px; width:16px; height:4px; box-shadow:0 9px #2b302d,0 18px #2b302d,0 27px #2b302d; }
+.black-market-part-icon.part-muzzle i { left:16px; top:19px; width:36px; height:32px; border-radius:7px; }.black-market-part-icon.part-muzzle b { left:12px; top:27px; width:44px; height:5px; box-shadow:0 10px #333936; }
+.black-market-part-icon.part-stock i { left:7px; top:20px; width:49px; height:34px; clip-path:polygon(0 35%,67% 0,100% 18%,91% 100%,58% 92%,43% 53%,0 66%); }.black-market-part-icon.part-stock b { left:4px; top:31px; width:22px; height:8px; }
+.black-market-part-icon.part-gas i { left:8px; top:23px; width:48px; height:12px; border-radius:7px; }.black-market-part-icon.part-gas b { left:34px; top:15px; width:13px; height:28px; border-radius:4px; }.black-market-part-icon.part-gas em { left:12px; top:38px; width:34px; height:5px; }
 
 /* 共用车辆模型：白漆底色叠加泥土、污渍和血渍；等级只改变车体外形。 */
 .exploration-vehicle { position: relative; width: 470px; height: 205px; filter: drop-shadow(13px 15px 6px rgba(0,0,0,.48)); }

@@ -58,6 +58,8 @@ type ExplorationTaskSystemTab = "daily" | "achievements";
 type ExplorationRecruitPhase = "approach" | "dialog" | "reward";
 type ExplorationConsumableKey = "armySupport" | "armoredSupport" | "airSupport";
 type ExplorationConsumableInventory = Record<ExplorationConsumableKey, number>;
+type ExplorationBlackMarketCategory = "sidearms" | "rifles" | "snipers";
+type ExplorationBlackMarketPartVisual = "magazine" | "barrel" | "trigger" | "grip" | "muzzle" | "stock" | "gas";
 type ExplorationMemberRarity = "common" | "rare" | "epic" | "legendary";
 type ExplorationMemberSpeed = "慢" | "中等" | "快";
 type ExplorationHeadwear = "cap" | "farmerHat" | "policeCap" | "combatHelmet" | "headscarf";
@@ -1089,6 +1091,45 @@ const EXPLORATION_CONSUMABLES: Record<ExplorationConsumableKey, { name: string; 
   armoredSupport: { name: "装甲车支援", price: 3000, description: "第八关同型重机枪装甲车扫射 10 秒" },
   airSupport: { name: "空中支援", price: 2000, description: "向僵尸最密集的两处投下大威力航空炸弹" },
 };
+const EXPLORATION_BLACK_MARKET_CATEGORIES: Array<{ id: ExplorationBlackMarketCategory; name: string }> = [
+  { id: "sidearms", name: "手枪 / 冲锋枪" },
+  { id: "rifles", name: "步枪" },
+  { id: "snipers", name: "狙击枪" },
+];
+const EXPLORATION_BLACK_MARKET_ITEMS = [
+  { id: "pistolSmgMagazine", category: "sidearms", name: "冲锋枪/手枪弹夹", price: 1500, visual: "magazine" },
+  { id: "pistolSmgExtendedMagazine", category: "sidearms", name: "冲锋枪/手枪扩容弹夹", price: 2000, visual: "magazine" },
+  { id: "pistolBarrel", category: "sidearms", name: "手枪枪管", price: 1600, visual: "barrel" },
+  { id: "pistolLongBarrel", category: "sidearms", name: "手枪增长型枪管", price: 1000, visual: "barrel" },
+  { id: "lightTrigger", category: "sidearms", name: "轻质板机", price: 1000, visual: "trigger" },
+  { id: "pistolRearGrip", category: "sidearms", name: "手枪后握把", price: 1100, visual: "grip" },
+  { id: "smgBarrel", category: "sidearms", name: "冲锋枪枪管", price: 1800, visual: "barrel" },
+  { id: "smgLongBarrel", category: "sidearms", name: "冲锋枪增长型枪管", price: 2000, visual: "barrel" },
+  { id: "smgMuzzle", category: "sidearms", name: "冲锋枪枪口", price: 600, visual: "muzzle" },
+  { id: "smgStock", category: "sidearms", name: "冲锋枪枪托", price: 1700, visual: "stock" },
+  { id: "smgRearGrip", category: "sidearms", name: "冲锋枪后握把", price: 1000, visual: "grip" },
+  { id: "smgGasSystem", category: "sidearms", name: "冲锋枪导气", price: 2000, visual: "gas" },
+  { id: "rifleMagazine", category: "rifles", name: "步枪弹夹", price: 2000, visual: "magazine" },
+  { id: "rifleExtendedMagazine", category: "rifles", name: "步枪扩容弹夹", price: 2500, visual: "magazine" },
+  { id: "rifleBarrel", category: "rifles", name: "步枪枪管", price: 2000, visual: "barrel" },
+  { id: "rifleLongBarrel", category: "rifles", name: "步枪增长型枪管", price: 2200, visual: "barrel" },
+  { id: "rifleMuzzle", category: "rifles", name: "步枪枪口", price: 700, visual: "muzzle" },
+  { id: "rifleStock", category: "rifles", name: "步枪枪托", price: 1900, visual: "stock" },
+  { id: "rifleRearGrip", category: "rifles", name: "步枪后握把", price: 1100, visual: "grip" },
+  { id: "rifleGasSystem", category: "rifles", name: "步枪导气", price: 2500, visual: "gas" },
+  { id: "sniperMagazine", category: "snipers", name: "狙击枪弹夹", price: 2200, visual: "magazine" },
+  { id: "sniperExtendedMagazine", category: "snipers", name: "狙击枪扩容弹夹", price: 3000, visual: "magazine" },
+  { id: "sniperThermiteMagazine", category: "snipers", name: "狙击枪铝热弹夹", price: 4000, visual: "magazine" },
+  { id: "sniperBarrel", category: "snipers", name: "狙击枪枪管", price: 2500, visual: "barrel" },
+  { id: "sniperMuzzle", category: "snipers", name: "狙击枪枪口", price: 1000, visual: "muzzle" },
+  { id: "sniperStock", category: "snipers", name: "狙击枪枪托", price: 2000, visual: "stock" },
+] as const satisfies ReadonlyArray<{ id: string; category: ExplorationBlackMarketCategory; name: string; price: number; visual: ExplorationBlackMarketPartVisual }>;
+type ExplorationBlackMarketItem = (typeof EXPLORATION_BLACK_MARKET_ITEMS)[number];
+type ExplorationBlackMarketItemKey = ExplorationBlackMarketItem["id"];
+type ExplorationBlackMarketInventory = Record<ExplorationBlackMarketItemKey, number>;
+const EMPTY_EXPLORATION_BLACK_MARKET_INVENTORY = (): ExplorationBlackMarketInventory => Object.fromEntries(
+  EXPLORATION_BLACK_MARKET_ITEMS.map((item) => [item.id, 0]),
+) as ExplorationBlackMarketInventory;
 
 function explorationBattleTaskConfig(taskOrder: number) {
   return EXPLORATION_BATTLE_TASK_CONFIGS[taskOrder] ?? DEFAULT_EXPLORATION_BATTLE_TASK_CONFIG;
@@ -1813,6 +1854,7 @@ type ExplorationProgress = {
   achievementProgress: ExplorationAchievementProgress;
   consumableInventory: ExplorationConsumableInventory;
   deployedConsumables: ExplorationConsumableKey[];
+  blackMarketInventory: ExplorationBlackMarketInventory;
   selectedChapterId: ExplorationChapterId;
 };
 
@@ -1832,6 +1874,7 @@ function readExplorationProgress(): ExplorationProgress {
     achievementProgress: freshExplorationAchievementProgress(),
     consumableInventory: EMPTY_EXPLORATION_CONSUMABLES(),
     deployedConsumables: [],
+    blackMarketInventory: EMPTY_EXPLORATION_BLACK_MARKET_INVENTORY(),
     selectedChapterId: 1 as ExplorationChapterId,
   };
   try {
@@ -1889,6 +1932,13 @@ function readExplorationProgress(): ExplorationProgress {
     const deployedConsumables = Array.isArray(parsed.deployedConsumables)
       ? [...new Set(parsed.deployedConsumables.filter((key): key is ExplorationConsumableKey => typeof key === "string" && key in EXPLORATION_CONSUMABLES))].slice(0, 3)
       : [];
+    const rawBlackMarketInventory = parsed.blackMarketInventory && typeof parsed.blackMarketInventory === "object"
+      ? parsed.blackMarketInventory
+      : EMPTY_EXPLORATION_BLACK_MARKET_INVENTORY();
+    const blackMarketInventory = Object.fromEntries(EXPLORATION_BLACK_MARKET_ITEMS.map((item) => [
+      item.id,
+      nonNegative(rawBlackMarketInventory[item.id]),
+    ])) as ExplorationBlackMarketInventory;
     return {
       coins: nonNegative(parsed.coins),
       experience: nonNegative(parsed.experience),
@@ -1904,6 +1954,7 @@ function readExplorationProgress(): ExplorationProgress {
       achievementProgress,
       consumableInventory,
       deployedConsumables,
+      blackMarketInventory,
       selectedChapterId: parsed.selectedChapterId === 2 || parsed.selectedChapterId === 3 ? parsed.selectedChapterId : 1,
     };
   } catch {
@@ -10026,6 +10077,10 @@ function ExplorationConsumableIcon({ kind, compact = false }: { kind: Exploratio
   );
 }
 
+function ExplorationBlackMarketPartIcon({ visual }: { visual: ExplorationBlackMarketPartVisual }) {
+  return <span className={`black-market-part-icon part-${visual}`} aria-hidden="true"><i /><b /><em /></span>;
+}
+
 function lineCircleHitT(x1: number, y1: number, x2: number, y2: number, cx: number, cy: number, radius: number) {
   const dx = x2 - x1;
   const dy = y2 - y1;
@@ -10187,6 +10242,8 @@ export function DeadRoadGame() {
   const [explorationAchievementProgress, setExplorationAchievementProgress] = useState<ExplorationAchievementProgress>(freshExplorationAchievementProgress);
   const [explorationConsumableInventory, setExplorationConsumableInventory] = useState<ExplorationConsumableInventory>(EMPTY_EXPLORATION_CONSUMABLES);
   const [deployedExplorationConsumables, setDeployedExplorationConsumables] = useState<ExplorationConsumableKey[]>([]);
+  const [explorationBlackMarketCategory, setExplorationBlackMarketCategory] = useState<ExplorationBlackMarketCategory>("sidearms");
+  const [explorationBlackMarketInventory, setExplorationBlackMarketInventory] = useState<ExplorationBlackMarketInventory>(EMPTY_EXPLORATION_BLACK_MARKET_INVENTORY);
   const [selectedExplorationMemberId, setSelectedExplorationMemberId] = useState<string | null>(null);
   const selectedExplorationMemberIdRef = useRef<string | null>(null);
   useEffect(() => { selectedExplorationMemberIdRef.current = selectedExplorationMemberId; }, [selectedExplorationMemberId]);
@@ -10239,6 +10296,7 @@ export function DeadRoadGame() {
       setExplorationAchievementProgress(progress.achievementProgress);
       setExplorationConsumableInventory(progress.consumableInventory);
       setDeployedExplorationConsumables(progress.deployedConsumables);
+      setExplorationBlackMarketInventory(progress.blackMarketInventory);
       explorationProgressLoadedRef.current = true;
     });
     return () => { active = false; };
@@ -10260,9 +10318,10 @@ export function DeadRoadGame() {
       achievementProgress: explorationAchievementProgress,
       consumableInventory: explorationConsumableInventory,
       deployedConsumables: deployedExplorationConsumables,
+      blackMarketInventory: explorationBlackMarketInventory,
       selectedChapterId: selectedExplorationChapterId,
     } satisfies ExplorationProgress));
-  }, [deployedExplorationConsumables, deployedMemberIds, explorationAchievementProgress, explorationCoins, explorationConsumableInventory, explorationDailyProgress, explorationExperience, explorationMemberLevels, explorationVehicleLevel, explorationVouchers, ownedMemberIds, recruitTickets, recruitedMemberIds, selectedExplorationChapterId, starterPackPurchased]);
+  }, [deployedExplorationConsumables, deployedMemberIds, explorationAchievementProgress, explorationBlackMarketInventory, explorationCoins, explorationConsumableInventory, explorationDailyProgress, explorationExperience, explorationMemberLevels, explorationVehicleLevel, explorationVouchers, ownedMemberIds, recruitTickets, recruitedMemberIds, selectedExplorationChapterId, starterPackPurchased]);
   const [shopTab, setShopTab] = useState<ShopTab>("weapons");
   const [coOpShopper, setCoOpShopperState] = useState<PlayerSlot>(1);
   const coOpShopperRef = useRef<PlayerSlot>(1);
@@ -10554,6 +10613,18 @@ export function DeadRoadGame() {
     setExplorationExchangeNotice(`已购买「${item.name}」，消耗 ${item.price} 金币。`);
     sound.purchase();
   }, [explorationCoins, recordExplorationDailyMetric]);
+
+  const purchaseExplorationBlackMarketItem = useCallback((item: ExplorationBlackMarketItem) => {
+    if (explorationCoins < item.price) {
+      setExplorationExchangeNotice(`金币不足，还需要 ${item.price - explorationCoins} 金币购买「${item.name}」。`);
+      sound.purchaseFail();
+      return;
+    }
+    setExplorationCoins((coins) => coins - item.price);
+    setExplorationBlackMarketInventory((inventory) => ({ ...inventory, [item.id]: inventory[item.id] + 1 }));
+    setExplorationExchangeNotice(`黑市交易完成：「${item.name}」已存入配件库存。`);
+    sound.purchase();
+  }, [explorationCoins]);
 
   const toggleExplorationConsumableDeployment = useCallback((key: ExplorationConsumableKey) => {
     if (explorationConsumableInventory[key] <= 0) return;
@@ -16370,6 +16441,35 @@ export function DeadRoadGame() {
                   </article>;
                 })}
               </div>
+            </section>
+            <section className="black-market-page" aria-label="黑市">
+              <div className="black-market-scenery" aria-hidden="true"><i /><i /><b /><span /></div>
+              <header className="black-market-heading">
+                <p>探索模式 · 地下配件交易</p>
+                <h2>黑市</h2>
+                <small>用途待开放 · 可重复购买并永久保存库存</small>
+              </header>
+              <div className="black-market-wallet"><small>持有金币</small><strong>◉ {explorationCoins}</strong></div>
+              <nav className="black-market-categories" aria-label="黑市商品分区">
+                {EXPLORATION_BLACK_MARKET_CATEGORIES.map((category) => (
+                  <button type="button" key={category.id} className={explorationBlackMarketCategory === category.id ? "active" : ""} onClick={() => { sound.uiClick(); setExplorationBlackMarketCategory(category.id); setExplorationExchangeNotice(null); }}>
+                    {category.name}
+                  </button>
+                ))}
+              </nav>
+              <div className="black-market-grid">
+                {EXPLORATION_BLACK_MARKET_ITEMS.filter((item) => item.category === explorationBlackMarketCategory).map((item) => (
+                  <article key={item.id} className="black-market-product">
+                    <ExplorationBlackMarketPartIcon visual={item.visual} />
+                    <div><h3>{item.name}</h3><small>配件用途将在后续开放</small></div>
+                    <span>库存 <b>{explorationBlackMarketInventory[item.id]}</b></span>
+                    <button type="button" onClick={() => purchaseExplorationBlackMarketItem(item)} disabled={explorationCoins < item.price}>
+                      {item.price} 金币
+                    </button>
+                  </article>
+                ))}
+              </div>
+              {explorationExchangeNotice && <p className="black-market-notice" role="status">{explorationExchangeNotice}</p>}
             </section>
           </div>
         )}
