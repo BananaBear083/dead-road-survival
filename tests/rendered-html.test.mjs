@@ -14,27 +14,21 @@ async function render(pathname = "/") {
   );
 }
 
-test("server-renders the CS2 manager entry and keeps Dead Road available", async () => {
+test("server-renders Dead Road at the repository root", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
 
   const html = await response.text();
-  assert.match(html, /<title>CS2 战队老板 · 职业经理生涯<\/title>/i);
-  assert.match(html, /载入职业赛场/);
-  assert.match(html, /VRS/);
+  assert.match(html, /<title>死路求生 · 2D 僵尸射击<\/title>/i);
+  assert.match(html, /死路求生/);
+  assert.match(html, /生存模式/);
+  assert.match(html, /双人生存/);
+  assert.match(html, /键鼠 \+ 手柄 · 尸潮 ×2/);
+  assert.match(html, /靶场模式/);
+  assert.match(html, /最高存活/);
+  assert.doesNotMatch(html, /载入职业赛场|CS2 OWNER \/ CAREER DATABASE/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape/);
-
-  const legacyResponse = await render("/dead-road");
-  assert.equal(legacyResponse.status, 200);
-  const legacyHtml = await legacyResponse.text();
-  assert.match(legacyHtml, /<title>死路求生 · 2D 僵尸射击<\/title>/i);
-  assert.match(legacyHtml, /死路求生/);
-  assert.match(legacyHtml, /生存模式/);
-  assert.match(legacyHtml, /双人生存/);
-  assert.match(legacyHtml, /键鼠 \+ 手柄 · 尸潮 ×2/);
-  assert.match(legacyHtml, /靶场模式/);
-  assert.match(legacyHtml, /最高存活/);
 });
 
 test("co-op keeps separate wallets and hands shopping from keyboard to gamepad", async () => {
