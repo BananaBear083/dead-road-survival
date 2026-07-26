@@ -2,23 +2,20 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-const imageUrl = `${siteUrl.replace(/\/$/, "")}/og.png`;
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  title: "死路求生 · 2D 僵尸射击",
-  description: "守住公路，活过一波又一波尸潮。",
+  title: "CS2 战队老板 · 职业经理生涯",
+  description: "创建俱乐部、招募真实职业选手，带队从 Challenger 一路打进 Major 决赛。",
   openGraph: {
-    title: "死路求生",
-    description: "守住公路，活过今天。",
+    title: "CS2 战队老板",
+    description: "创建你的战队，签下真实职业选手，冲击世界第一。",
     type: "website",
-    images: [{ url: imageUrl, width: 1200, height: 630, alt: "死路求生游戏封面" }],
   },
   twitter: {
-    card: "summary_large_image",
-    title: "死路求生",
-    description: "守住公路，活过今天。",
-    images: [imageUrl],
+    card: "summary",
+    title: "CS2 战队老板",
+    description: "创建你的战队，签下真实职业选手，冲击世界第一。",
   },
 };
 

@@ -2,32 +2,39 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-async function render() {
+async function render(pathname = "/") {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
   workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
   const { default: worker } = await import(workerUrl.href);
 
   return worker.fetch(
-    new Request("http://localhost/", { headers: { accept: "text/html" } }),
+    new Request(`http://localhost${pathname}`, { headers: { accept: "text/html" } }),
     { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } },
     { waitUntil() {}, passThroughOnException() {} },
   );
 }
 
-test("server-renders the finished Dead Road game", async () => {
+test("server-renders the CS2 manager entry and keeps Dead Road available", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
 
   const html = await response.text();
-  assert.match(html, /<title>死路求生 · 2D 僵尸射击<\/title>/i);
-  assert.match(html, /死路求生/);
-  assert.match(html, /生存模式/);
-  assert.match(html, /双人生存/);
-  assert.match(html, /键鼠 \+ 手柄 · 尸潮 ×2/);
-  assert.match(html, /靶场模式/);
-  assert.match(html, /最高存活/);
+  assert.match(html, /<title>CS2 战队老板 · 职业经理生涯<\/title>/i);
+  assert.match(html, /载入职业赛场/);
+  assert.match(html, /VRS/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape/);
+
+  const legacyResponse = await render("/dead-road");
+  assert.equal(legacyResponse.status, 200);
+  const legacyHtml = await legacyResponse.text();
+  assert.match(legacyHtml, /<title>死路求生 · 2D 僵尸射击<\/title>/i);
+  assert.match(legacyHtml, /死路求生/);
+  assert.match(legacyHtml, /生存模式/);
+  assert.match(legacyHtml, /双人生存/);
+  assert.match(legacyHtml, /键鼠 \+ 手柄 · 尸潮 ×2/);
+  assert.match(legacyHtml, /靶场模式/);
+  assert.match(legacyHtml, /最高存活/);
 });
 
 test("co-op keeps separate wallets and hands shopping from keyboard to gamepad", async () => {
@@ -498,7 +505,7 @@ test("tracks seen zombies in localStorage and pages through the codex book", asy
 test("advertises a coming-soon campaign mode with its own screen and placeholder levels", async () => {
   const source = await readFile(new URL("../app/DeadRoadGame.tsx", import.meta.url), "utf8");
   const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
-  const response = await render();
+  const response = await render("/dead-road");
   const html = await response.text();
 
   // 主菜单第三模式入口（SSR HTML 可见）与涵盖三模式的新标语；旧标语移除

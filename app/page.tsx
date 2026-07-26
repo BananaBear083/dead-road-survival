@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
-import { DeadRoadGame } from "./DeadRoadGame";
+import { CS2ManagerGame } from "./CS2ManagerGame";
 
 export const dynamic = "force-static";
 
 export const metadata: Metadata = {
-  title: "死路求生 · 2D 僵尸射击",
-  description: "守住公路，活过一波又一波尸潮。",
+  title: "CS2 战队老板 · 职业经理生涯",
+  description: "创建俱乐部、招募真实职业选手，带队从 Challenger 一路打进 Major 决赛。",
 };
 
 export default function Home() {
-  return <DeadRoadGame />;
+  return <CS2ManagerGame />;
 }

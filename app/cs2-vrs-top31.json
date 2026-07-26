@@ -1,0 +1,1397 @@
+[
+  {
+    "logo": "https://img-cdn.hltv.org/teamlogo/syrtYYKR7sBRw3ZHy1YFX7.png?ixlib=java-2.1.0&w=50&s=40e66714687bec05ea422255b1c0099e",
+    "name": "Spirit",
+    "players": [
+      {
+        "country": "Russia",
+        "fullName": "Dmitry 'sh1ro' Sokolov",
+        "nickname": "sh1ro",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/FzSxKl1NYggaERMuAI2GXN.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=117%2C8%2C467%2C467&w=200&s=0f26c3fa75f963798b7b7a957c413d5b",
+        "profile": "/player/16920/sh1ro"
+      },
+      {
+        "country": "Russia",
+        "fullName": "Boris 'magixx' Vorobiev",
+        "nickname": "magixx",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/MdObr3NVti_99Vx6AvCbD5.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=476b92f789fa41d818b61d9d067a482a",
+        "profile": "/player/18317/magixx"
+      },
+      {
+        "country": "Belarus",
+        "fullName": "Andrey 'tN1R' Tatarinovich",
+        "nickname": "tN1R",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/HLMq_fSrH54kG5qptvM3aT.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=1cb278307ee5a04177ef7b9b5e85a7b3",
+        "profile": "/player/19808/tn1r"
+      },
+      {
+        "country": "Ukraine",
+        "fullName": "Myroslav 'zont1x' Plakhotia",
+        "nickname": "zont1x",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/0ohE83Rx1J5Y-TQT1RR6H1.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C4%2C467%2C467&w=200&s=a5d49fda445df4c8b2cce8f31f3ad852",
+        "profile": "/player/20423/zont1x"
+      },
+      {
+        "country": "Russia",
+        "fullName": "Danil 'donk' Kryshkovets",
+        "nickname": "donk",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/O6_iw91qalpf0TJD6KFpzw.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=117%2C8%2C467%2C467&w=200&s=946261c2169f3907a3fc8161f2c56066",
+        "profile": "/player/21167/donk"
+      }
+    ],
+    "points": 1993,
+    "rank": 1,
+    "region": "EU",
+    "teamProfile": "/team/7020/spirit"
+  },
+  {
+    "logo": "https://img-cdn.hltv.org/teamlogo/4eJSkDQINNM6Tbs4WvLzkN.png?ixlib=java-2.1.0&w=50&s=d8c857ea47046f61eca695beab0d12ef",
+    "name": "Falcons",
+    "players": [
+      {
+        "country": "Denmark",
+        "fullName": "Finn 'karrigan' Andersen",
+        "nickname": "karrigan",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/4nm-v1aawxy5SUrv81H9JZ.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C4%2C467%2C467&w=200&s=6046aeb54159f162512d78f16713b909",
+        "profile": "/player/429/karrigan"
+      },
+      {
+        "country": "Bosnia and Herzegovina",
+        "fullName": "Nikola 'NiKo' Kovač",
+        "nickname": "NiKo",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/ZPB6zop8FumkqqbHl8BGos.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=8e3ee7684200cfed72a42e003126f5de",
+        "profile": "/player/3741/niko"
+      },
+      {
+        "country": "Denmark",
+        "fullName": "René 'TeSeS' Madsen",
+        "nickname": "TeSeS",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/8WRqHyjmzJ6HqrG6ZkQ1Vh.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=124%2C8%2C467%2C467&w=200&s=4ad9c8c52d6ca29c89b61e3263c8f028",
+        "profile": "/player/12018/teses"
+      },
+      {
+        "country": "Russia",
+        "fullName": "Ilya 'm0NESY' Osipov",
+        "nickname": "m0NESY",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/Xn6RSL5KIFiD6hXiBseskM.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=081454b7208bffabb1bfad7f8113de0f",
+        "profile": "/player/19230/m0nesy"
+      },
+      {
+        "country": "Russia",
+        "fullName": "Maksim 'kyousuke' Lukin",
+        "nickname": "kyousuke",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/hkLE4eILVbTT3QigB1gFqp.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=124%2C4%2C467%2C467&w=200&s=d973cf9477ffbb2474c8bb031f462c79",
+        "profile": "/player/24177/kyousuke"
+      }
+    ],
+    "points": 1988,
+    "rank": 2,
+    "region": "EU",
+    "teamProfile": "/team/11283/falcons"
+  },
+  {
+    "logo": "https://img-cdn.hltv.org/teamlogo/ogcHrcCdzRvxbYvAz04KAN.png?ixlib=java-2.1.0&w=50&s=e1f6019aa9f274ffe45a5e99c88dbc02",
+    "name": "Vitality",
+    "players": [
+      {
+        "country": "France",
+        "fullName": "Dan 'apEX' Madesclaire",
+        "nickname": "apEX",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/3M9h08qvl3YOsaRcAvKhs4.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C0%2C467%2C467&w=200&s=35368eff8b418f421339d96c83c5cf3f",
+        "profile": "/player/7322/apex"
+      },
+      {
+        "country": "Estonia",
+        "fullName": "Robin 'ropz' Kool",
+        "nickname": "ropz",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/YQ9kQQ3aop1JZQE9xJ140r.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=117%2C8%2C467%2C467&w=200&s=6a04eac3ad99e2e75838eae47df2ee97",
+        "profile": "/player/11816/ropz"
+      },
+      {
+        "country": "France",
+        "fullName": "Mathieu 'ZywOo' Herbaut",
+        "nickname": "ZywOo",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/blnoWFtH8GUJZjhr8H0P4u.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=b1042678b6af57a2f029eb7a5eb79c10",
+        "profile": "/player/11893/zywoo"
+      },
+      {
+        "country": "Israel",
+        "fullName": "Shahar 'flameZ' Shushan",
+        "nickname": "flameZ",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/LUQi5dX9boyO0uDadUGht5.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=0d6e89c20fa62ca1e8bec46074e936cc",
+        "profile": "/player/16693/flamez"
+      },
+      {
+        "country": "United Kingdom",
+        "fullName": "William 'mezii' Merriman",
+        "nickname": "mezii",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/7GVUrVLAQkgnuovRkk5Bxw.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=117%2C8%2C467%2C467&w=200&s=a48f2791f78b51e6fefa5f54346cdb07",
+        "profile": "/player/18462/mezii"
+      }
+    ],
+    "points": 1908,
+    "rank": 3,
+    "region": "EU",
+    "teamProfile": "/team/9565/vitality"
+  },
+  {
+    "logo": "https://img-cdn.hltv.org/teamlogo/9iMirAi7ArBLNU8p3kqUTZ.svg?ixlib=java-2.1.0&s=4dd8635be16122656093ae9884675d0c",
+    "name": "Natus Vincere",
+    "players": [
+      {
+        "country": "Finland",
+        "fullName": "Aleksi 'Aleksib' Virolainen",
+        "nickname": "Aleksib",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/7-TvianW79yWk13gdw-Jc5.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C0%2C467%2C467&w=200&s=175a338a99cade90db7c02bb2f34621a",
+        "profile": "/player/9816/aleksib"
+      },
+      {
+        "country": "Romania",
+        "fullName": "Mihai 'iM' Ivan",
+        "nickname": "iM",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/lWNcoOFOcHF3uIERANZRXh.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=124%2C0%2C467%2C467&w=200&s=59f258a15c55bc99a08594e86a0afdb9",
+        "profile": "/player/14759/im"
+      },
+      {
+        "country": "Ukraine",
+        "fullName": "Valeriy 'b1t' Vakhovskiy",
+        "nickname": "b1t",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/CgO3veixSYH5OMIePtwp1u.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C0%2C467%2C467&w=200&s=955e7e23a4b6c395e8c6011b765ccd9c",
+        "profile": "/player/18987/b1t"
+      },
+      {
+        "country": "Ukraine",
+        "fullName": "Ihor 'w0nderful' Zhdanov",
+        "nickname": "w0nderful",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/OepRRBoc68iVojIfgK3JIA.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C0%2C467%2C467&w=200&s=1e0aa8426a8f10ed45e925d4e19f21af",
+        "profile": "/player/20127/w0nderful"
+      },
+      {
+        "country": "Kosovo",
+        "fullName": "Drin 'makazze' Shaqiri",
+        "nickname": "makazze",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/U6KmIKHcqg2OpMrNn-Aqk6.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C0%2C467%2C467&w=200&s=e9fbcf7f14ed5b60221f68441079b1f9",
+        "profile": "/player/22673/makazze"
+      }
+    ],
+    "points": 1837,
+    "rank": 4,
+    "region": "EU",
+    "teamProfile": "/team/4608/natus-vincere"
+  },
+  {
+    "logo": "https://img-cdn.hltv.org/teamlogo/mvNQc4csFGtxXk5guAh8m1.svg?ixlib=java-2.1.0&s=11e5056829ad5d6c06c5961bbe76d20c",
+    "name": "FURIA",
+    "players": [
+      {
+        "country": "Brazil",
+        "fullName": "Gabriel 'FalleN' Toledo",
+        "nickname": "FalleN",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/gQbb4I0TeHmxx7bYBOtd7T.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=117%2C8%2C467%2C467&w=200&s=0715dcbd64b0c5e51333dfa187589c0a",
+        "profile": "/player/2023/fallen"
+      },
+      {
+        "country": "Brazil",
+        "fullName": "Yuri 'yuurih' Santos",
+        "nickname": "yuurih",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/ZapU9KMKIlH1bDpSlV6MO1.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=124%2C8%2C467%2C467&w=200&s=a6c5697b768fc641f3e08b0257503d1a",
+        "profile": "/player/12553/yuurih"
+      },
+      {
+        "country": "Latvia",
+        "fullName": "Mareks 'YEKINDAR' Gaļinskis",
+        "nickname": "YEKINDAR",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/IO3vEa2fT2qFPRlrPid7hf.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=80bbbfec8092ec8cb1a9214051c93ce2",
+        "profile": "/player/13915/yekindar"
+      },
+      {
+        "country": "Brazil",
+        "fullName": "Kaike 'KSCERATO' Cerato",
+        "nickname": "KSCERATO",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/z0vT0V815B0MdeeKhcf44Y.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=c6c4053790c0418650950273808067f3",
+        "profile": "/player/15631/kscerato"
+      },
+      {
+        "country": "Kazakhstan",
+        "fullName": "Danil 'molodoy' Golubenko",
+        "nickname": "molodoy",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/oPoWLYFq87cIs2cYDo8id7.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=3fce0b6c0a0a08654c7c4c59eabf609a",
+        "profile": "/player/24144/molodoy"
+      }
+    ],
+    "points": 1797,
+    "rank": 5,
+    "region": "AM",
+    "teamProfile": "/team/8297/furia"
+  },
+  {
+    "logo": "https://img-cdn.hltv.org/teamlogo/IejtXpquZnE8KqYPB1LNKw.svg?ixlib=java-2.1.0&s=7fd33b8def053fbfd8fdbb58e3bdcd3c",
+    "name": "MOUZ",
+    "players": [
+      {
+        "country": "Hungary",
+        "fullName": "Ádám 'torzsi' Torzsás",
+        "nickname": "torzsi",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/LC4IyA9pG5bg2VjGJLRewo.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=116%2C8%2C467%2C467&w=200&s=c16483a9d87631c943e145847f73995e",
+        "profile": "/player/18072/torzsi"
+      },
+      {
+        "country": "Israel",
+        "fullName": "Lotan 'Spinx' Giladi",
+        "nickname": "Spinx",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/JAkuRqfsM2QH-3jM9MxyDc.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=117%2C4%2C467%2C467&w=200&s=6bd0f0b1f4c8082a8d26daddee80348e",
+        "profile": "/player/18221/spinx"
+      },
+      {
+        "country": "Lithuania",
+        "fullName": "Justinas 'jL' Lekavicius",
+        "nickname": "jL",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/UGID7eabT-jrCrZAs3M-7N.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=124%2C4%2C467%2C467&w=200&s=b436e37c1ba436eec8a9bf51e2a18556",
+        "profile": "/player/19206/jl"
+      },
+      {
+        "country": "Israel",
+        "fullName": "Dorian 'xertioN' Berman",
+        "nickname": "xertioN",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/2dmCBtgnXCqwc_-fFkHCJ7.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=117%2C4%2C467%2C467&w=200&s=e8cf1775f3efd78b1c1e5df7f5a2de40",
+        "profile": "/player/20312/xertion"
+      },
+      {
+        "country": "Hungary",
+        "fullName": "Adrian 'xelex' Vincze",
+        "nickname": "xelex",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/fqMRvs8zagUZGa8WxQEg5D.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C0%2C467%2C467&w=200&s=91696ecf0b8e4c139a830ee69f8eb6c8",
+        "profile": "/player/24457/xelex"
+      }
+    ],
+    "points": 1762,
+    "rank": 6,
+    "region": "EU",
+    "teamProfile": "/team/4494/mouz"
+  },
+  {
+    "logo": "https://img-cdn.hltv.org/teamlogo/RWbHH6RA8uGwJurGeLFvSr.png?ixlib=java-2.1.0&w=50&s=3d251032e156cab2f6df8c630ca29745",
+    "name": "Legacy",
+    "players": [
+      {
+        "country": "Brazil",
+        "fullName": "Andrei 'arT' Piovezan",
+        "nickname": "arT",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/RNtwGsZMj_-NGHTF4JftRz.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=117%2C8%2C467%2C467&w=200&s=96bcb61439c6f3c194d432c240e602a3",
+        "profile": "/player/12521/art"
+      },
+      {
+        "country": "Brazil",
+        "fullName": "Eduardo 'dumau' Wolkmer",
+        "nickname": "dumau",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/AaXH-IceGH9dsAVVCtJqj2.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C4%2C467%2C467&w=200&s=1aefa05c10f3741c1dfa1e18b7db4aff",
+        "profile": "/player/15698/dumau"
+      },
+      {
+        "country": "Brazil",
+        "fullName": "Bruno 'latto' Rebelatto",
+        "nickname": "latto",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/jCUXaY5eU29djMDyuC1gcq.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C4%2C467%2C467&w=200&s=8f2ddc4cb844bf962e2518af83533d69",
+        "profile": "/player/19045/latto"
+      },
+      {
+        "country": "Brazil",
+        "fullName": "Vinicius 'n1ssim' Pereira",
+        "nickname": "n1ssim",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/HdzBojQ4zxeEcmE9CY08Py.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=124%2C0%2C467%2C467&w=200&s=ff058df29bd971f8e492470fe324fa99",
+        "profile": "/player/19686/n1ssim"
+      },
+      {
+        "country": "Brazil",
+        "fullName": "Guilherme 'saadzin' Pacheco",
+        "nickname": "saadzin",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/0qAhOYvK00_Ss3YRcGD8yM.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C4%2C467%2C467&w=200&s=f406055d59ccfbbd67f6a73387d62f0c",
+        "profile": "/player/22965/saadzin"
+      }
+    ],
+    "points": 1752,
+    "rank": 7,
+    "region": "AM",
+    "teamProfile": "/team/12468/legacy"
+  },
+  {
+    "logo": "https://img-cdn.hltv.org/teamlogo/yJzPNOeXlyiniNxanYJCrv.png?ixlib=java-2.1.0&w=50&s=2c08f70c2f2f8c2024a438ddcf19bbf1",
+    "name": "Aurora",
+    "players": [
+      {
+        "country": "Turkey",
+        "fullName": "Engin 'MAJ3R' Küpeli",
+        "nickname": "MAJ3R",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/iSK5s-3M-UHQt0OCyFV4X5.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=116%2C8%2C467%2C467&w=200&s=d0505965e226bafb6fe87693190c0b93",
+        "profile": "/player/150/maj3r"
+      },
+      {
+        "country": "Turkey",
+        "fullName": "Ismailcan 'XANTARES' Dörtkardeş",
+        "nickname": "XANTARES",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/Zz4YEB5YdJ5frXRz1IFbIQ.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=117%2C8%2C467%2C467&w=200&s=a8a9dd0a1e0a8a3459acc072130ee54d",
+        "profile": "/player/7938/xantares"
+      },
+      {
+        "country": "Turkey",
+        "fullName": "Özgür 'woxic' Eker",
+        "nickname": "woxic",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/40JQIBCAIg4ntblIvsgcfN.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C4%2C467%2C467&w=200&s=8115fc22279cfe16122eef8fb0a0b9be",
+        "profile": "/player/8574/woxic"
+      },
+      {
+        "country": "Turkey",
+        "fullName": "Caner 'soulfly' Kesici",
+        "nickname": "soulfly",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/EKNeaCGj68ZulfPvjFUE1T.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=124%2C0%2C467%2C467&w=200&s=fbb70d2f1914bdf08f8aea8d885cda06",
+        "profile": "/player/20968/soulfly"
+      },
+      {
+        "country": "Turkey",
+        "fullName": "Ali 'Wicadia' Haydar Yalçın",
+        "nickname": "Wicadia",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/kpOP6MrO8t81cT_FNvsufn.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=124%2C0%2C467%2C467&w=200&s=af6bb5b30ada1611d139c2a1e25c0949",
+        "profile": "/player/21243/wicadia"
+      }
+    ],
+    "points": 1723,
+    "rank": 8,
+    "region": "EU",
+    "teamProfile": "/team/11861/aurora"
+  },
+  {
+    "logo": "https://img-cdn.hltv.org/teamlogo/zFLwAELOD15BjJSDMMNBWQ.png?ixlib=java-2.1.0&w=50&s=affb583e6716d8ee904826992255cc4b",
+    "name": "G2",
+    "players": [
+      {
+        "country": "Bosnia and Herzegovina",
+        "fullName": "Nemanja 'huNter-' Kovač",
+        "nickname": "huNter-",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/TLblUN6ECPWq8B-BCk60q5.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=117%2C8%2C467%2C467&w=200&s=f7655f73b27ec92b8554e871c4f21248",
+        "profile": "/player/3972/hunter"
+      },
+      {
+        "country": "Israel",
+        "fullName": "Guy 'NertZ' Iluz",
+        "nickname": "NertZ",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/fVb-kixqE1ekkxdWQIMn8V.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=cb5d911bf5ac90b9b029344bf2f12873",
+        "profile": "/player/9436/nertz"
+      },
+      {
+        "country": "Spain",
+        "fullName": "Álvaro 'SunPayus' García",
+        "nickname": "SunPayus",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/lBSCuct0c7EwbBKHVL4m8e.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=5e6f089ecdf401c952a859c312e5d71f",
+        "profile": "/player/19164/sunpayus"
+      },
+      {
+        "country": "Israel",
+        "fullName": "Nikita 'HeavyGod' Martynenko",
+        "nickname": "HeavyGod",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/Rbf6g0Gfxofe4JPtMeYF7W.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=3f6306fa71461e2be2e88c17bae30786",
+        "profile": "/player/20447/heavygod"
+      },
+      {
+        "country": "Slovakia",
+        "fullName": "Matúš 'MATYS' Šimko",
+        "nickname": "MATYS",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/LycsmHFN1_EtxnyywwHtzG.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=124%2C12%2C467%2C467&w=200&s=9e3207afc2242597493920e159f38aaa",
+        "profile": "/player/21062/matys"
+      }
+    ],
+    "points": 1713,
+    "rank": 9,
+    "region": "EU",
+    "teamProfile": "/team/5995/g2"
+  },
+  {
+    "logo": "https://img-cdn.hltv.org/teamlogo/G4ZrdB0-q41USPd_z27IQA.png?ixlib=java-2.1.0&w=50&s=9c15ddf70f9c66399d4a47e0d8e93511",
+    "name": "BetBoom",
+    "players": [
+      {
+        "country": "Russia",
+        "fullName": "Kirill 'Boombl4' Mikhailov",
+        "nickname": "Boombl4",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/n0tPG5RsfX_R0u29lg1_oB.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=2595d0fcb0aedb0d4542a6894ea944cd",
+        "profile": "/player/11840/boombl4"
+      },
+      {
+        "country": "Russia",
+        "fullName": "Aleksandr 'zorte' Zagodyrenko",
+        "nickname": "zorte",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/2cE6sK6aThhCSgSGjA2fKe.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=362c9c8b26643594d9604e2d0a3c584f",
+        "profile": "/player/15662/zorte"
+      },
+      {
+        "country": "Russia",
+        "fullName": "Daniil 'd1Ledez' Kustov",
+        "nickname": "d1Ledez",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/nw95CBsK6htGYvTiy189h3.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=117%2C8%2C467%2C467&w=200&s=a22d892796d07cba0ef46f511020c2dd",
+        "profile": "/player/20357/d1ledez"
+      },
+      {
+        "country": "Russia",
+        "fullName": "Timur 'FL4MUS' Marev",
+        "nickname": "FL4MUS",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/it0iSk01IiBFSbnuAQ8Kcq.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C4%2C467%2C467&w=200&s=2c77a7b115f6b4d8583161417a457041",
+        "profile": "/player/20994/fl4mus"
+      },
+      {
+        "country": "Russia",
+        "fullName": "Kirill 'Magnojez' Rodnov",
+        "nickname": "Magnojez",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/Ga_TmsIBrbYwNSxX_51Qvd.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=117%2C8%2C467%2C467&w=200&s=b1b4bf49ca66623c9be2e827654a1394",
+        "profile": "/player/21667/magnojez"
+      }
+    ],
+    "points": 1705,
+    "rank": 10,
+    "region": "EU",
+    "teamProfile": "/team/12394/betboom"
+  },
+  {
+    "logo": "https://img-cdn.hltv.org/teamlogo/Os71GAOy8KDuQFc0M8HE6O.png?ixlib=java-2.1.0&w=50&s=86f2bded6bcb7c690a42a62250ed69e7",
+    "name": "FUT",
+    "players": [
+      {
+        "country": "Ukraine",
+        "fullName": "Dmytro 'dem0n' Myroshnychenko",
+        "nickname": "dem0n",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/8vdNoQ4bmcWPDmuhCDaJv7.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=d8d438f567f637beb0d9d7642aee0db7",
+        "profile": "/player/20584/dem0n"
+      },
+      {
+        "country": "Romania",
+        "fullName": "Laurențiu 'lauNX' Țârlea",
+        "nickname": "lauNX",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/k_0Ljw_kqwLCaU7B7TNm6R.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C4%2C467%2C467&w=200&s=735ca97a5eb367da140f8e8c31c11696",
+        "profile": "/player/20761/launx"
+      },
+      {
+        "country": "Kosovo",
+        "fullName": "Aulon 'Krabeni' Fazlija",
+        "nickname": "Krabeni",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/kcyl7BuE4C4otOtVCpg5w1.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=616a7d02b562c27c77d28c0800f0c567",
+        "profile": "/player/22203/krabeni"
+      },
+      {
+        "country": "Ukraine",
+        "fullName": "Nikita 'cmtry' Samolotov",
+        "nickname": "cmtry",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/JorVcvfs4eJnOeEASNTJor.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=dcfea76cd077576ff0e9297bc02510f4",
+        "profile": "/player/22674/cmtry"
+      },
+      {
+        "country": "Lithuania",
+        "fullName": "Džiugas 'dziugss' Steponavičius",
+        "nickname": "dziugss",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/eTJu4sdB8MJJ97ixYS1Q8i.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C4%2C467%2C467&w=200&s=3c0df1962692808002bf4f846258ae88",
+        "profile": "/player/23553/dziugss"
+      }
+    ],
+    "points": 1692,
+    "rank": 11,
+    "region": "EU",
+    "teamProfile": "/team/13286/fut"
+  },
+  {
+    "logo": "https://img-cdn.hltv.org/teamlogo/COZDFWOIm41AT0srqOHFhM.png?invert=true&ixlib=java-2.1.0&sat=-100&w=50&s=b00d55fe74b90f91c5b7e2b58bda5afb",
+    "name": "9z",
+    "players": [
+      {
+        "country": "Uruguay",
+        "fullName": "Maximiliano 'max' Gonzalez",
+        "nickname": "max",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/vPT97tKV6UdEu6QPI8oPew.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=124%2C4%2C467%2C467&w=200&s=57fa27dfbb66f7f3e8773b3240715bd3",
+        "profile": "/player/12092/max"
+      },
+      {
+        "country": "Uruguay",
+        "fullName": "Franco 'dgt' Garcia",
+        "nickname": "dgt",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/6WgYZCFU9Si5ZpP8-Mx2Xc.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C0%2C467%2C467&w=200&s=080a7b3192b62429e7f68c7ee478b24e",
+        "profile": "/player/14736/dgt"
+      },
+      {
+        "country": "Argentina",
+        "fullName": "Ignacio 'meyern' Meyer",
+        "nickname": "meyern",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/IChotzP5mVSrqVy4PTHYzK.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C4%2C467%2C467&w=200&s=d119653df1a2f210b5c6e9d44dad91f8",
+        "profile": "/player/14737/meyern"
+      },
+      {
+        "country": "Argentina",
+        "fullName": "Luciano 'luchov' Herrera",
+        "nickname": "luchov",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/wwhGNwbmraJczwS0mGEHv-.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C4%2C467%2C467&w=200&s=05bc60e243c0e309d89734c5cc9e6dab",
+        "profile": "/player/20394/luchov"
+      },
+      {
+        "country": "Chile",
+        "fullName": "Matias 'HUASOPEEK' Ibañez Hernandez",
+        "nickname": "HUASOPEEK",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/-1_hkAFXOtvEwx4rEHfalZ.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C0%2C467%2C467&w=200&s=9cb5f123e11248f5aee01cb73d91df17",
+        "profile": "/player/22613/huasopeek"
+      }
+    ],
+    "points": 1684,
+    "rank": 12,
+    "region": "AM",
+    "teamProfile": "/team/9996/9z"
+  },
+  {
+    "logo": "https://img-cdn.hltv.org/teamlogo/bRk2sh_tSTO6fq1GLhgcal.png?ixlib=java-2.1.0&w=50&s=8b08e53858eb817852ae74b30a30151d",
+    "name": "The MongolZ",
+    "players": [
+      {
+        "country": "Mongolia",
+        "fullName": "Garidmagnai 'bLitz' Byambasuren",
+        "nickname": "bLitz",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/ZLlzc6N0OtwtJs1x8MuVHh.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=124%2C4%2C467%2C467&w=200&s=6604aed8cf30b91385e076f38721d549",
+        "profile": "/player/20194/blitz"
+      },
+      {
+        "country": "Mongolia",
+        "fullName": "Sodbayar 'Techno' Munkhbold",
+        "nickname": "Techno",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/_q8QaDe_h8I9oGLCsERkVZ.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=124%2C0%2C467%2C467&w=200&s=2de40ee00c9914aa7a4291c4a1b6d818",
+        "profile": "/player/20275/techno"
+      },
+      {
+        "country": "Mongolia",
+        "fullName": "Ayush 'mzinho' Batbold",
+        "nickname": "mzinho",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/SHuWiTRiSbb_zxzSJUa57Y.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=117%2C8%2C467%2C467&w=200&s=a3322a5c5b12bfc888bb4e725be8dd07",
+        "profile": "/player/21001/mzinho"
+      },
+      {
+        "country": "Mongolia",
+        "fullName": "Usukhbayar '910' Banzragch",
+        "nickname": "910",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/YUqNPjSiyf80jSpTHDzooI.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=124%2C8%2C467%2C467&w=200&s=fa99f5976d2c93bf2f8ad7e7045cedd4",
+        "profile": "/player/21809/910"
+      },
+      {
+        "country": "Mongolia",
+        "fullName": "Anarbileg 'cobrazera' Uuganbayar",
+        "nickname": "cobrazera",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/Cvsx7uyeznfZm9QKL84T_9.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=117%2C8%2C467%2C467&w=200&s=2b459fce48c2da8bc278ced8138fff42",
+        "profile": "/player/23402/cobrazera"
+      }
+    ],
+    "points": 1644,
+    "rank": 13,
+    "region": "AS",
+    "teamProfile": "/team/6248/the-mongolz"
+  },
+  {
+    "logo": "https://img-cdn.hltv.org/teamlogo/O6nRWTCjUzBAR4pcOcrpSG.png?ixlib=java-2.1.0&w=50&s=305dde82e764725dab7e626800328137",
+    "name": "B8",
+    "players": [
+      {
+        "country": "Ukraine",
+        "fullName": "Alexey 'alex666' Yarmoshchuk",
+        "nickname": "alex666",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/kGubjP-W68zZM7bKB-pq3X.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=8c11d53eae25ad9039c0ca6f89532668",
+        "profile": "/player/20112/alex666"
+      },
+      {
+        "country": "Ukraine",
+        "fullName": "Andrii 'npl' Kukharskyi",
+        "nickname": "npl",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/ikLbsTodutbrStvWokgR_w.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C4%2C467%2C467&w=200&s=c2f5edfce5bb122a93a48f6ed31b1356",
+        "profile": "/player/21708/npl"
+      },
+      {
+        "country": "Ukraine",
+        "fullName": "Artem 'kensizor' Kapran",
+        "nickname": "kensizor",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/ggwJBGqRSPt8irtlNEIo2R.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=117%2C8%2C467%2C467&w=200&s=05df4ee0810cda903955816e5c0185f8",
+        "profile": "/player/22842/kensizor"
+      },
+      {
+        "country": "Ukraine",
+        "fullName": "Dmytro 'esenthial' Tsvir",
+        "nickname": "esenthial",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/MqxnP0w72L9EWsESLPeFoG.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=124%2C8%2C467%2C467&w=200&s=d03d0cb4679d99578d9916356c787035",
+        "profile": "/player/23643/esenthial"
+      },
+      {
+        "country": "Ukraine",
+        "fullName": "Danylo 's1zzi' Vinnyk",
+        "nickname": "s1zzi",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/u17qJ2zrqmk8wP9w9xnM8E.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=28eeb3ba1ea29170864c55d8f7e2ebb7",
+        "profile": "/player/25619/s1zzi"
+      }
+    ],
+    "points": 1563,
+    "rank": 14,
+    "region": "EU",
+    "teamProfile": "/team/11241/b8"
+  },
+  {
+    "logo": "https://img-cdn.hltv.org/teamlogo/9bgXHp-oh1oaXr7F0mTGmd.svg?ixlib=java-2.1.0&s=f567161ab183001be33948b98c4b2067",
+    "name": "Astralis",
+    "players": [
+      {
+        "country": "Denmark",
+        "fullName": "Rasmus 'HooXi' Nielsen",
+        "nickname": "HooXi",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/7-FOeqWjaQpXjANurs4VUx.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=f101f600487122554565f298d0b35cc5",
+        "profile": "/player/10096/hooxi"
+      },
+      {
+        "country": "Sweden",
+        "fullName": "Love 'phzy' Smidebrant",
+        "nickname": "phzy",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/5nOzaTt-TUzlshK2dSlRb6.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C4%2C467%2C467&w=200&s=3ee6e61b69b4e47e73ad4b5613dbde73",
+        "profile": "/player/16726/phzy"
+      },
+      {
+        "country": "Denmark",
+        "fullName": "Jakob 'jabbi' Nygaard",
+        "nickname": "jabbi",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/7bTtwNmavStWwqn7h2Wo7T.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C4%2C467%2C467&w=200&s=8a7769428a63cfabab0d69c33b71dbde",
+        "profile": "/player/17956/jabbi"
+      },
+      {
+        "country": "Denmark",
+        "fullName": "Victor 'Staehr' Staehr",
+        "nickname": "Staehr",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/XggvhWbo2KMe7bOB6AoI86.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C0%2C467%2C467&w=200&s=cfa276e9ffedb34cbc243e65cc506dcf",
+        "profile": "/player/20304/staehr"
+      },
+      {
+        "country": "Lithuania",
+        "fullName": "Gytis 'ryu' Glušauskas",
+        "nickname": "ryu",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/OaN_EwHXMvNUUEggfjAtJI.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=117%2C8%2C467%2C467&w=200&s=caa4db28d1932ba1e0ee1bef200dd644",
+        "profile": "/player/21217/ryu"
+      }
+    ],
+    "points": 1551,
+    "rank": 15,
+    "region": "EU",
+    "teamProfile": "/team/6665/astralis"
+  },
+  {
+    "logo": "https://img-cdn.hltv.org/teamlogo/vN7O46QoQ346WIRZ8D3spC.png?ixlib=java-2.1.0&w=50&s=f139433d31902eea5898c3a63fcc643a",
+    "name": "GamerLegion",
+    "players": [
+      {
+        "country": "Poland",
+        "fullName": "Janusz 'Snax' Pogorzelski",
+        "nickname": "Snax",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/pFKQ-yAzdNYqYTtoRkd00C.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=117%2C8%2C467%2C467&w=200&s=87829981351e2b9d389284aaf1afab46",
+        "profile": "/player/2553/snax"
+      },
+      {
+        "country": "Sweden",
+        "fullName": "Fredrik 'REZ' Sterner",
+        "nickname": "REZ",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/ZtKT_itHAZh67CQ_7H9BQa.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C4%2C467%2C467&w=200&s=c7a5df7b42e906860561e9e913795682",
+        "profile": "/player/9278/rez"
+      },
+      {
+        "country": "Denmark",
+        "fullName": "Sebastian 'Tauson' Tauson Lindelof",
+        "nickname": "Tauson",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/Q5pfim9KMWw5m7jLtW5Ugi.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=124%2C8%2C467%2C467&w=200&s=280c5b348964807ed717d6094744290d",
+        "profile": "/player/20301/tauson"
+      },
+      {
+        "country": "Czech Republic",
+        "fullName": "Oldřich 'PR' Nový",
+        "nickname": "PR",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/xe6EbcFtkVLhaY7KorRf_I.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C4%2C467%2C467&w=200&s=347c96dce360700b491b62fb0c378139",
+        "profile": "/player/22279/pr"
+      },
+      {
+        "country": "Poland",
+        "fullName": "Milan 'hypex' Polowiec",
+        "nickname": "hypex",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/K3ghHJ2-blTh2uEpbhLgpo.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=124%2C4%2C467%2C467&w=200&s=26738a10923e21a2a5c306433b1f354a",
+        "profile": "/player/23766/hypex"
+      }
+    ],
+    "points": 1534,
+    "rank": 16,
+    "region": "EU",
+    "teamProfile": "/team/9928/gamerlegion"
+  },
+  {
+    "logo": "https://img-cdn.hltv.org/teamlogo/2tc9n4fHkiRIX2FiJSkhgt.png?ixlib=java-2.1.0&w=50&s=7334ef0dd24ba5349b404dfd0e8c6148",
+    "name": "Monte",
+    "players": [
+      {
+        "country": "Bulgaria",
+        "fullName": "Aleks 'Rainwaker' Petrov",
+        "nickname": "Rainwaker",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/FxAQoE7Wj2IbO4_DxiA_tk.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C4%2C467%2C467&w=200&s=2844412ad095a5ca685f48d0a750f840",
+        "profile": "/player/17145/rainwaker"
+      },
+      {
+        "country": "Lithuania",
+        "fullName": "Aurimas 'Bymas' Pipiras",
+        "nickname": "Bymas",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/RbNnp0DpRLb5703phEBXDh.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C0%2C467%2C467&w=200&s=0d8a7dedd59ba2b872b4112b62b8636e",
+        "profile": "/player/19015/bymas"
+      },
+      {
+        "country": "France",
+        "fullName": "Aurélien 'afro' Drapier",
+        "nickname": "afro",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/bcqrKzWEiMOw0cZ4v-jhhX.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=0b4b31648cfc7f5fdc31d09d07be9e89",
+        "profile": "/player/19926/afro"
+      },
+      {
+        "country": "United Kingdom",
+        "fullName": "Jack 'Gizmy' von Spreckelsen",
+        "nickname": "Gizmy",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/GrU5oOJaKtw3dQy80x43Cx.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C0%2C467%2C467&w=200&s=4748d671c8dcf8d37a26505fa96ded6a",
+        "profile": "/player/21816/gizmy"
+      },
+      {
+        "country": "United Kingdom",
+        "fullName": "Oscar 'AZUWU' Bell",
+        "nickname": "AZUWU",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/0IH9t5RmINJhyZyzWAQn-8.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=7f8d4bee1a0a1912fdd04cc8fab8a45b",
+        "profile": "/player/22106/azuwu"
+      }
+    ],
+    "points": 1519,
+    "rank": 17,
+    "region": "EU",
+    "teamProfile": "/team/11811/monte"
+  },
+  {
+    "logo": "https://img-cdn.hltv.org/teamlogo/sVnH-oAf1J5TnMwoY4cxUC.png?ixlib=java-2.1.0&w=50&s=b0ef463fa0f1638bce72a89590fbaddf",
+    "name": "MIBR",
+    "players": [
+      {
+        "country": "Sweden",
+        "fullName": "Linus 'LNZ' Holtäng",
+        "nickname": "LNZ",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/c7tcRMt0bkk12_yaIBZTLC.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=150901a5547ce37670b0ae2ad0fb6eab",
+        "profile": "/player/19310/lnz"
+      },
+      {
+        "country": "Brazil",
+        "fullName": "Breno 'brnz4n' Poletto",
+        "nickname": "brnz4n",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/4QxpvFP9PJy70pt7Cjrmnx.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=d419ec51de5b340db9e23e0f1e2a4be4",
+        "profile": "/player/20987/brnz4n"
+      },
+      {
+        "country": "Brazil",
+        "fullName": "Felipe 'insani' Yuji",
+        "nickname": "insani",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/rMLFuDdAsdhOFc2DoQ9n7k.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=aa73559e88e3ca1b7273265cacc2e37c",
+        "profile": "/player/21037/insani"
+      },
+      {
+        "country": "Brazil",
+        "fullName": "Carlos 'venomzera' Eduardo",
+        "nickname": "venomzera",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/BTNEAhe45nPFjEifq-R-sV.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C4%2C467%2C467&w=200&s=1f7882c25a5459018b873e68ee789504",
+        "profile": "/player/21288/venomzera"
+      },
+      {
+        "country": "Russia",
+        "fullName": "Klimentii 'kl1m' Krivosheev",
+        "nickname": "kl1m",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/_EQqLknLcE-6K0XtiEjRH2.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=dad372b5ec84df0f99487481a39bf4d7",
+        "profile": "/player/23192/kl1m"
+      }
+    ],
+    "points": 1518,
+    "rank": 18,
+    "region": "AM",
+    "teamProfile": "/team/9215/mibr"
+  },
+  {
+    "logo": "https://img-cdn.hltv.org/teamlogo/MFcDe-M8wfGOUU6x4sRELR.png?ixlib=java-2.1.0&w=50&s=1d91076a58b354d8c3eaeda3162c292e",
+    "name": "PARIVISION",
+    "players": [
+      {
+        "country": "Russia",
+        "fullName": "Dzhami 'Jame' Ali",
+        "nickname": "Jame",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/poatsoxwv_ne6Col6VJLg7.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C0%2C467%2C467&w=200&s=2282bec392d353a1ef6142118584e05b",
+        "profile": "/player/13776/jame"
+      },
+      {
+        "country": "Russia",
+        "fullName": "Andrey 'BELCHONOKK' Yasinskiy",
+        "nickname": "BELCHONOKK",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/81v4jepP31EBnnQWy1sQ8b.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C4%2C467%2C467&w=200&s=bf056e8badad276a32b0d0aff3e21b23",
+        "profile": "/player/19235/belchonokk"
+      },
+      {
+        "country": "Russia",
+        "fullName": "Vladislav 'xiELO' Lysov",
+        "nickname": "xiELO",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/HIMvZS3P0EL5jlbiX2a-E8.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=d56382acdb9cbedfa945f778846f2bef",
+        "profile": "/player/22471/xielo"
+      },
+      {
+        "country": "Russia",
+        "fullName": "Emil 'nota' Moskvitin",
+        "nickname": "nota",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/gzn8UQp7bc-0Wc6dTo6pVO.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C0%2C467%2C467&w=200&s=24812b8a46b047e414d56127fca894b0",
+        "profile": "/player/22929/nota"
+      },
+      {
+        "country": "Russia",
+        "fullName": "Ivan 'zweih' Gogin",
+        "nickname": "zweih",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/cTLzpQ529TArTb_GRjMofz.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=117%2C0%2C467%2C467&w=200&s=ffb72620516b056b3b26fa896a64c578",
+        "profile": "/player/23685/zweih"
+      }
+    ],
+    "points": 1483,
+    "rank": 19,
+    "region": "EU",
+    "teamProfile": "/team/12467/parivision"
+  },
+  {
+    "logo": "https://img-cdn.hltv.org/teamlogo/KYi27Dm-DVyEUj0WIG5Bdx.png?ixlib=java-2.1.0&w=50&s=d490c0b14e24cbc6ddd70f0534ff3651",
+    "name": "magic",
+    "players": [
+      {
+        "country": "Belarus",
+        "fullName": "Svyatoslav 'MaSvAl' Masko",
+        "nickname": "MaSvAl",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/Vv4y6K8kF0TsFciwZCmIJY.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=116%2C8%2C467%2C467&w=200&s=9ca061ac84964f9e10bfa38f7fed5cd7",
+        "profile": "/player/19874/masval"
+      },
+      {
+        "country": "Ukraine",
+        "fullName": "Vitaliy 'sFade8' Marushka",
+        "nickname": "sFade8",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/EE_HHHi_9E6iAftjtWhFpT.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=116%2C8%2C467%2C467&w=200&s=e60499c3a0378cf8a2842c80c84fed3d",
+        "profile": "/player/22075/sfade8"
+      },
+      {
+        "country": "Russia",
+        "fullName": "Andrey 'AW' Anisimov",
+        "nickname": "AW",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/iNXZbTXdW7oKSmcmVpyxQq.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=116%2C8%2C467%2C467&w=200&s=a8682971f1dadc4119fefa2e0d1e102b",
+        "profile": "/player/22076/aw"
+      },
+      {
+        "country": "Kazakhstan",
+        "fullName": "Abdurakhim 'mo0N' Issa",
+        "nickname": "mo0N",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/5zYVdfzflM7JB7Yt0HMnzR.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=116%2C8%2C467%2C467&w=200&s=1ac35058e9199b3ccfbc4a7af074c751",
+        "profile": "/player/23858/mo0n"
+      },
+      {
+        "country": "Russia",
+        "fullName": "Nikita 'tenzy' Kochenyuk",
+        "nickname": "tenzy",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/3hYN7E67S3HtevFjiN5dE_.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=116%2C8%2C467%2C467&w=200&s=1347757fd729c02015b0f78e892f945d",
+        "profile": "/player/24173/tenzy"
+      }
+    ],
+    "points": 1453,
+    "rank": 20,
+    "region": "EU",
+    "teamProfile": "/team/13592/magic"
+  },
+  {
+    "logo": "https://img-cdn.hltv.org/teamlogo/iUUCFwCOFmOrwhB8q8smMg.svg?ixlib=java-2.1.0&s=1446e1cf3d02deb8190fe6efd14e4ce4",
+    "name": "paiN",
+    "players": [
+      {
+        "country": "Brazil",
+        "fullName": "Vinicius 'vsm' Moreira",
+        "nickname": "vsm",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/9l4fmqtPpnYTVLSpIszftp.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=132%2C12%2C467%2C467&w=200&s=71d404a581f0e83d4e7626df2b933c3c",
+        "profile": "/player/16816/vsm"
+      },
+      {
+        "country": "Brazil",
+        "fullName": "Rodrigo 'biguzera' Bittencourt",
+        "nickname": "biguzera",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/HUy3TltSQxWgWwlTy42u9k.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=124%2C4%2C467%2C467&w=200&s=8c89e47887e42ffb8c5205c4e34bcdcf",
+        "profile": "/player/18141/biguzera"
+      },
+      {
+        "country": "Brazil",
+        "fullName": "Guilherme 'piriajr' Barbosa",
+        "nickname": "piriajr",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/VYJimjFTbcbszh3T6eJsNa.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=124%2C4%2C467%2C467&w=200&s=a09161a05ccbf8c23fd10bf7fd8ea7d8",
+        "profile": "/player/18714/piriajr"
+      },
+      {
+        "country": "Brazil",
+        "fullName": "Rafael 'saffee' Costa",
+        "nickname": "saffee",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/lQlP5UhO9eKgTRo7v4hfj7.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=128%2C8%2C467%2C467&w=200&s=6227626b23db48af559475734b723d77",
+        "profile": "/player/18835/saffee"
+      },
+      {
+        "country": "Brazil",
+        "fullName": "João 'snow' Vinicius",
+        "nickname": "snow",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/l97Ga-CHqlvYGF_y4oTUr5.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C4%2C467%2C467&w=200&s=0a875b02819b6c233abbd218463277d3",
+        "profile": "/player/20171/snow"
+      }
+    ],
+    "points": 1441,
+    "rank": 21,
+    "region": "AM",
+    "teamProfile": "/team/4773/pain"
+  },
+  {
+    "logo": "https://img-cdn.hltv.org/teamlogo/hMPKtNMDxp07n3lrBEHCuq.svg?ixlib=java-2.1.0&s=6d22fc4af07d0cd9d31fcd7f3023af9a",
+    "name": "TYLOO",
+    "players": [
+      {
+        "country": "China",
+        "fullName": "Yi 'JamYoung' Yang",
+        "nickname": "JamYoung",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/U9LkjBLzDU-UTgi7WK74xi.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C0%2C467%2C467&w=200&s=5dd28b71d8b037efd89dfa50090e068b",
+        "profile": "/player/19645/jamyoung"
+      },
+      {
+        "country": "China",
+        "fullName": "Dongkai 'Jee' Ji",
+        "nickname": "Jee",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/CKGClHVyKUNZ6rfGk9l21h.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=124%2C8%2C467%2C467&w=200&s=a1458197a858715b94f7efda13055ff5",
+        "profile": "/player/20702/jee"
+      },
+      {
+        "country": "China",
+        "fullName": "Jingxiang 'Mercury' Wang",
+        "nickname": "Mercury",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/I0zCufrR3LZ9HRJSAPMRed.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C4%2C467%2C467&w=200&s=fb2162022f1aeb26005cd8ea45baea64",
+        "profile": "/player/20895/mercury"
+      },
+      {
+        "country": "China",
+        "fullName": "Qianhao 'Moseyuh' Chen",
+        "nickname": "Moseyuh",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/ACldtIpWV1sgLOPoFrJf6L.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=0908080870a50d19cf16f7900cb0a127",
+        "profile": "/player/21621/moseyuh"
+      },
+      {
+        "country": "China",
+        "fullName": "Su 'Zero' Jingshen",
+        "nickname": "Zero",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/6q-uT0mSJyubUKR7ralrV6.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C4%2C467%2C467&w=200&s=7c530cf7e7e96a56925c7a657b196481",
+        "profile": "/player/24857/zero"
+      }
+    ],
+    "points": 1422,
+    "rank": 22,
+    "region": "AS",
+    "teamProfile": "/team/4863/tyloo"
+  },
+  {
+    "logo": "https://img-cdn.hltv.org/teamlogo/OKLwq88GXjl5GQ48Y5SrvW.png?ixlib=java-2.1.0&w=50&s=0a0d65eeb1b0e82ada20c42c038552fa",
+    "name": "FaZe",
+    "players": [
+      {
+        "country": "Slovakia",
+        "fullName": "David 'frozen' Čerňanský",
+        "nickname": "frozen",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/aFuk-1yq3DatdhVa3kICms.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=124%2C4%2C467%2C467&w=200&s=a712456d5c16b7e88738e52c4e84d63f",
+        "profile": "/player/9960/frozen"
+      },
+      {
+        "country": "Canada",
+        "fullName": "Russel 'Twistzz' Van Dulken",
+        "nickname": "Twistzz",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/djeIpvmdjSQ_cOHzaomwxF.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=117%2C8%2C467%2C467&w=200&s=d78baf1031a0d7213b4bcb81f8b642f8",
+        "profile": "/player/10394/twistzz"
+      },
+      {
+        "country": "Latvia",
+        "fullName": "Helvijs 'broky' Saukants",
+        "nickname": "broky",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/BFk4V5AQs6IsJ9dA7Kcihq.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=117%2C8%2C467%2C467&w=200&s=fb90b382806c9288433b8135aee88298",
+        "profile": "/player/18053/broky"
+      },
+      {
+        "country": "France",
+        "fullName": "Ryan 'Neityu' Aubry",
+        "nickname": "Neityu",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/z7Jeal58NVuDymx4F5O9D6.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=117%2C4%2C467%2C467&w=200&s=f9fbbe3157eed073009c5b84708ad3ae",
+        "profile": "/player/21972/neityu"
+      },
+      {
+        "country": "Poland",
+        "fullName": "Jakub 'jcobbb' Pietruszewski",
+        "nickname": "jcobbb",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/EEnQR7JP45ECDWPxft2zHF.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=117%2C8%2C467%2C467&w=200&s=b232bb995b51d9d5871084fa5e75ee81",
+        "profile": "/player/22383/jcobbb"
+      }
+    ],
+    "points": 1404,
+    "rank": 23,
+    "region": "EU",
+    "teamProfile": "/team/6667/faze"
+  },
+  {
+    "logo": "https://img-cdn.hltv.org/teamlogo/YsaWwP_VrkbHzuhszuANEK.png?ixlib=java-2.1.0&w=50&s=47a8cff375da8242af9137a2a592b97d",
+    "name": "M80",
+    "players": [
+      {
+        "country": "Germany",
+        "fullName": "Fritz 'slaxz-' Dietrich",
+        "nickname": "slaxz-",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/y_IxxTxErUYvRag___p54_.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=31de28a3e18535ece6fa8dd5e605f8f4",
+        "profile": "/player/15370/slaxz"
+      },
+      {
+        "country": "United States",
+        "fullName": "Michael 'Swisher' Schmid",
+        "nickname": "Swisher",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/29ZsyLzmin7ulOnJCcA3wM.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=f95738f40eed36c5c0ef5b787236cd34",
+        "profile": "/player/16599/swisher"
+      },
+      {
+        "country": "Germany",
+        "fullName": "Elias 's1n' Stein",
+        "nickname": "s1n",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/omou6FnIFE6WR1gOsMOUYc.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=117%2C8%2C467%2C467&w=200&s=c8ed5a71f0de613d49491a35452305a0",
+        "profile": "/player/20104/s1n"
+      },
+      {
+        "country": "United States",
+        "fullName": "Josh 'JBa' Barutt",
+        "nickname": "JBa",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/e1F2VxFPrjax_4VC8-tRB0.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=f735f0ef16c3a3a3f569792ffae6b13b",
+        "profile": "/player/21665/jba"
+      },
+      {
+        "country": "United States",
+        "fullName": "Mason 'Lake' Sanderson",
+        "nickname": "Lake",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/fcLbbeY2MoA_9_WCCA-p_R.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=124%2C8%2C467%2C467&w=200&s=4106658a073ac54e3973c2c22dae8e47",
+        "profile": "/player/22921/lake"
+      }
+    ],
+    "points": 1391,
+    "rank": 24,
+    "region": "AM",
+    "teamProfile": "/team/12376/m80"
+  },
+  {
+    "logo": "https://img-cdn.hltv.org/teamlogo/nzJhoae6HI3i1UORM-DBFD.png?ixlib=java-2.1.0&w=50&s=35faf966127b13f4cc4b7250a5aed454",
+    "name": "Inner Circle",
+    "players": [
+      {
+        "country": "Ukraine",
+        "fullName": "Arseniy 'cptkurtka023' Derevinskiy",
+        "nickname": "cptkurtka023",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/Eq_EYESoxFIfztc0guFNPH.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=100792e960bb8f575c8c2cb86f6635a8",
+        "profile": "/player/16147/cptkurtka023"
+      },
+      {
+        "country": "Ukraine",
+        "fullName": "Daniil 'headtr1ck' Valitov",
+        "nickname": "headtr1ck",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/_93y5LVzD7FL1LOcF5NiL6.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=04dc090d5a5faaae907642e072eae078",
+        "profile": "/player/19592/headtr1ck"
+      },
+      {
+        "country": "Ukraine",
+        "fullName": "Eduard 'zeRRoFIX' Petrovskyi",
+        "nickname": "zeRRoFIX",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/ZxP3ucAMyz_-kZ7zy1t3a7.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C4%2C467%2C467&w=200&s=e4d134ba5971abd995dcab72a800e3a3",
+        "profile": "/player/23415/zerrofix"
+      },
+      {
+        "country": "Ukraine",
+        "fullName": "Viktor 'onic' Babii",
+        "nickname": "onic",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/VnxM0dqWslDENfIT8wfYNH.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C0%2C467%2C467&w=200&s=8543e200a28596b7011ea9ca56980197",
+        "profile": "/player/24168/onic"
+      },
+      {
+        "country": "Ukraine",
+        "fullName": "David 'Dawy' Bibik",
+        "nickname": "Dawy",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/TLuq8nprx6Rkmi_2fLHTSj.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=4b91abbc80544e034cdc8e16a6940846",
+        "profile": "/player/24282/dawy"
+      }
+    ],
+    "points": 1372,
+    "rank": 25,
+    "region": "EU",
+    "teamProfile": "/team/13117/inner-circle"
+  },
+  {
+    "logo": "https://img-cdn.hltv.org/teamlogo/OgMRQA35hopXA8kDwMFHIY.svg?ixlib=java-2.1.0&s=ec7bc44165c7acf4224a22a1338ab7d7",
+    "name": "BIG",
+    "players": [
+      {
+        "country": "Germany",
+        "fullName": "Johannes 'tabseN' Wodarz",
+        "nickname": "tabseN",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/vwS2y0prpJzlN-NT6LNU3w.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C0%2C467%2C467&w=200&s=038a636339292471747a148dbbc5324a",
+        "profile": "/player/5794/tabsen"
+      },
+      {
+        "country": "Germany",
+        "fullName": "Jon 'JDC' de Castro",
+        "nickname": "JDC",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/QhA1ifn2L_1lsiR9cZcDmr.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C4%2C467%2C467&w=200&s=ccb6186bbc96595e806d562490ce1732",
+        "profile": "/player/14929/jdc"
+      },
+      {
+        "country": "Germany",
+        "fullName": "Josef 'faveN' Baumann",
+        "nickname": "faveN",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/ZFLh4PLW1WwdSyvehfVomY.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=117%2C0%2C467%2C467&w=200&s=51e9ab9bc1ec3d5b9d5ec61412a62171",
+        "profile": "/player/14932/faven"
+      },
+      {
+        "country": "Denmark",
+        "fullName": "Benjamin 'blameF' Bremer",
+        "nickname": "blameF",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/UKuy5hd_iln5Lye2OZ70XC.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C4%2C467%2C467&w=200&s=051457b329b87b705b99f5d0159003ee",
+        "profile": "/player/15165/blamef"
+      },
+      {
+        "country": "Belarus",
+        "fullName": "Gleb 'gr1ks' Gazin",
+        "nickname": "gr1ks",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/epdYrDhs0XdAwFl_X2-WbO.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=124%2C4%2C467%2C467&w=200&s=f2c624c711a09f914b17dc7a35b18900",
+        "profile": "/player/22884/gr1ks"
+      }
+    ],
+    "points": 1371,
+    "rank": 26,
+    "region": "EU",
+    "teamProfile": "/team/7532/big"
+  },
+  {
+    "logo": "https://img-cdn.hltv.org/teamlogo/xsWK0BtR26rN776qdnWFC1.png?ixlib=java-2.1.0&w=50&s=4aaf659c3855ebf08c78c157a0653352",
+    "name": "Alliance",
+    "players": [
+      {
+        "country": "Sweden",
+        "fullName": "Simon 'twist' Eliasson",
+        "nickname": "twist",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/XSmkEGosY0MWBdtkEX4aEE.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=314858cf60a7aa0e444c3536f172cc7a",
+        "profile": "/player/7443/twist"
+      },
+      {
+        "country": "Sweden",
+        "fullName": "Sean 'eraa' Knutsson",
+        "nickname": "eraa",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/wX7Ir4ixLB7joGvA8orPeW.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=8c70c66b19920e79505db21aeaff538c",
+        "profile": "/player/16487/eraa"
+      },
+      {
+        "country": "Sweden",
+        "fullName": "Jonatan 'bobeksde' Persson",
+        "nickname": "bobeksde",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/SVv4FrwXdboh5H15ID-rHa.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C0%2C467%2C467&w=200&s=d680dabd061b7164c6adb5d49ff4bc22",
+        "profile": "/player/21159/bobeksde"
+      },
+      {
+        "country": "Sweden",
+        "fullName": "Markus 'upE' Johansson",
+        "nickname": "upE",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/nDe7rgO-SPQGE1J8olxgv6.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C4%2C467%2C467&w=200&s=d543eb0e758d9addea90ec93c8427019",
+        "profile": "/player/22760/upe"
+      },
+      {
+        "country": "Sweden",
+        "fullName": "Arvid 'avid' Åberg",
+        "nickname": "avid",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/683HgppoTiDxmFa3n3B-oz.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C0%2C467%2C467&w=200&s=1c1009021fbfebc5a8314647c507fbd8",
+        "profile": "/player/22860/avid"
+      }
+    ],
+    "points": 1365,
+    "rank": 27,
+    "region": "EU",
+    "teamProfile": "/team/12474/alliance"
+  },
+  {
+    "logo": "https://img-cdn.hltv.org/teamlogo/-ttGATBV_P_HcZazxNNtIb.png?ixlib=java-2.1.0&w=50&s=ba94f7812d1f47183a83f3f34ab959eb",
+    "name": "Ninjas in Pyjamas",
+    "players": [
+      {
+        "country": "Denmark",
+        "fullName": "Marco 'Snappi' Pfeiffer",
+        "nickname": "Snappi",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/-ihDkbQ6iZIJpru6isBmkw.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=f318217ce1fa6349b262a0f1179a9c7b",
+        "profile": "/player/922/snappi"
+      },
+      {
+        "country": "Denmark",
+        "fullName": "Martin 'stavn' Lund",
+        "nickname": "stavn",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/qxEOtr88iSDATJo2RyWOeN.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C0%2C467%2C467&w=200&s=9e40035c6ad7556198a59e53729b1c9b",
+        "profile": "/player/10994/stavn"
+      },
+      {
+        "country": "Denmark",
+        "fullName": "Rasmus 'sjuush' Beck",
+        "nickname": "sjuush",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/LI-h-toKvr9SLKJkmUcZ7c.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C4%2C467%2C467&w=200&s=234c51063911cbcadd44b05ec5bd4c9d",
+        "profile": "/player/14148/sjuush"
+      },
+      {
+        "country": "Poland",
+        "fullName": "Kacper 'xKacpersky' Gabara",
+        "nickname": "xKacpersky",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/4ICjUyvBowN1B8nI2ipn1_.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=fa47148a557cc1ff9918c334fe96032b",
+        "profile": "/player/23372/xkacpersky"
+      },
+      {
+        "country": "Ukraine",
+        "fullName": "Artem 'cairne' Mushynskyi",
+        "nickname": "cairne",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/ni1UKsMhFGJ90wvU4Obcot.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=116%2C8%2C467%2C467&w=200&s=3154faf652b7da1205034cefe44e2ea6",
+        "profile": "/player/24283/cairne"
+      }
+    ],
+    "points": 1358,
+    "rank": 28,
+    "region": "EU",
+    "teamProfile": "/team/4411/ninjas-in-pyjamas"
+  },
+  {
+    "logo": "https://img-cdn.hltv.org/teamlogo/DPcHT21uWwK1hDD_3txlL9.png?ixlib=java-2.1.0&w=50&s=4b5d5a187f00caf9bbae2d0fcbca6ff6",
+    "name": "Lynn Vision",
+    "players": [
+      {
+        "country": "China",
+        "fullName": "Zhe 'Westmelon' Niu",
+        "nickname": "Westmelon",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/w9IH6NVwZaEghBrni9KUye.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=128%2C4%2C467%2C467&w=200&s=987da31211508da01f8b2445b1c96f9d",
+        "profile": "/player/16551/westmelon"
+      },
+      {
+        "country": "China",
+        "fullName": "Sike 'z4KR' Zhang",
+        "nickname": "z4KR",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/fcO07i0REvntQD_HarJL6R.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C4%2C467%2C467&w=200&s=5df214ea8a009520538cb4fe44eed3dd",
+        "profile": "/player/18744/z4kr"
+      },
+      {
+        "country": "China",
+        "fullName": "Lizhi 'Starry' Ye",
+        "nickname": "Starry",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/tuGiVdrZEWz7RX-GAhNJIn.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=124%2C4%2C467%2C467&w=200&s=3e7bd6e5a597167884670fc814ddd2fc",
+        "profile": "/player/20254/starry"
+      },
+      {
+        "country": "China",
+        "fullName": "Junjie 'EmiliaQAQ' Tang",
+        "nickname": "EmiliaQAQ",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/KGJ5Waz1a9xx0avH99wf83.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=ea1fb59a1b73c0b9214e5583562d2c17",
+        "profile": "/player/22922/emiliaqaq"
+      },
+      {
+        "country": "China",
+        "fullName": "Qihao 'C4LLM3SU3' Su",
+        "nickname": "C4LLM3SU3",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/l5gxGzlPyAqU3ihCeVYnWS.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C4%2C467%2C467&w=200&s=b2899a5007895120c536f002aa2fad06",
+        "profile": "/player/23100/c4llm3su3"
+      }
+    ],
+    "points": 1350,
+    "rank": 29,
+    "region": "AS",
+    "teamProfile": "/team/8840/lynn-vision"
+  },
+  {
+    "logo": "https://img-cdn.hltv.org/teamlogo/-46lJ-DcmPL_j_5R2WvLiS.png?ixlib=java-2.1.0&w=50&s=3bf750ca209fefcb665134fd61f43ffb",
+    "name": "Wildcard",
+    "players": [
+      {
+        "country": "Serbia",
+        "fullName": "Nemanja 'nEMANHA' Đukić",
+        "nickname": "nEMANHA",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/8C_y-xbgyZKp2mOWHZP2B-.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=117%2C8%2C467%2C467&w=200&s=386d5d494c27c86ff816ba306283560b",
+        "profile": "/player/8311/nemanha"
+      },
+      {
+        "country": "Poland",
+        "fullName": "Miłosz 'mhL' Knasiak",
+        "nickname": "mhL",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/a4qc6RnQ6t0T9VNWsQh2JI.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=bd99d759dab2818430028a3861686987",
+        "profile": "/player/16847/mhl"
+      },
+      {
+        "country": "United States",
+        "fullName": "Danny 'Cxzi' Strzelczyk",
+        "nickname": "Cxzi",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/ehUELnIC00p5pA28-COgrU.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=8d09361b6684352cd5c7aabb14bdffba",
+        "profile": "/player/17353/cxzi"
+      },
+      {
+        "country": "United States",
+        "fullName": "Ethan 'reck' Serrano",
+        "nickname": "reck",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/hoQPxrJhPAiYD1xt41n-I2.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=128%2C4%2C467%2C467&w=200&s=fb99813323437fb6ed75acebf95563d0",
+        "profile": "/player/17378/reck"
+      },
+      {
+        "country": "Canada",
+        "fullName": "Jadan 'HexT' Postma",
+        "nickname": "HexT",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/auJc1D6EgxxhacsKFPWvdB.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=7875bf667f7da57c46a3c70af301c886",
+        "profile": "/player/18838/hext"
+      }
+    ],
+    "points": 1338,
+    "rank": 30,
+    "region": "AM",
+    "teamProfile": "/team/12257/wildcard"
+  },
+  {
+    "logo": "https://img-cdn.hltv.org/teamlogo/xduTwTuydAWc0Dbt-eEjeH.png?ixlib=java-2.1.0&w=50&s=16cdced9e9b1a2b2e771157638f39391",
+    "name": "Sharks",
+    "players": [
+      {
+        "country": "Brazil",
+        "fullName": "Victor 'gafolo' Andrade",
+        "nickname": "gafolo",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/bw-XL6rA-1VNT-IEYvSq3z.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=117%2C8%2C467%2C467&w=200&s=5bf9b042bc337a988f754242f6dc75f6",
+        "profile": "/player/20558/gafolo"
+      },
+      {
+        "country": "Brazil",
+        "fullName": "João 'koala' Pfeffer",
+        "nickname": "koala",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/WOOHUP2FuQY98slSwHOiCh.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=6429a20f0664ca280374c395bf843bc7",
+        "profile": "/player/21170/koala"
+      },
+      {
+        "country": "Argentina",
+        "fullName": "Máximo 'maxxkor' Cortina",
+        "nickname": "maxxkor",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/oQmyXb2zSmLk7wm-MGDBPS.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=5fb02e5b801cba3d267b5ba3e2f90fa7",
+        "profile": "/player/21221/maxxkor"
+      },
+      {
+        "country": "Brazil",
+        "fullName": "Daniel 'rdnzao' Monteiro",
+        "nickname": "rdnzao",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/DdQxqrJtF1HzTRb08-5fhi.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C4%2C467%2C467&w=200&s=ffbc16b7f84193a0031bff29c7d9e10b",
+        "profile": "/player/21921/rdnzao"
+      },
+      {
+        "country": "Brazil",
+        "fullName": "Danilo 'doc' Barros",
+        "nickname": "doc",
+        "portrait": "https://img-cdn.hltv.org/playerbodyshot/Si5nQDIOjm_Ph-cq6G4wrH.png?bg=3e4c54&h=200&ixlib=java-2.1.0&rect=121%2C8%2C467%2C467&w=200&s=37ebd008eb69f187491800f43dfa7731",
+        "profile": "/player/22911/doc"
+      }
+    ],
+    "points": 1316,
+    "rank": 31,
+    "region": "AM",
+    "teamProfile": "/team/8113/sharks"
+  }
+]
